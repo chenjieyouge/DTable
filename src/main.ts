@@ -1,0 +1,473 @@
+interface IColumn {
+  key: string
+  title: string
+  width: number
+}
+
+interface IConfig {
+  container: string
+  tableWidth: number
+  tableHeight: number
+  headerHeight: number
+  summaryHeight: number
+  rowHeight: number
+  totalRows: number
+  frozenColumns: number
+  showSummary: boolean
+
+  pageSize: number // 每页多少行
+  bufferRows: number // 缓冲区行数
+  maxCachedPages: number // 最大缓存页面数 (仅数据)
+
+  columns: IColumn[]
+
+  fetchPageData(pageIndex: number): Promise<Record<string, any>[]>
+  fetchSummaryData?(): Promise<Record<string, any>>
+}
+
+// 全局配置
+const config: IConfig = {
+  container: '#container',
+  tableWidth: 500,
+  tableHeight: 500,
+  headerHeight: 30,
+  summaryHeight: 24,
+  rowHeight: 20,
+  totalRows: 1000000,
+  frozenColumns: 2,
+  showSummary: true,
+
+  pageSize: 200, // 每页显示多少条
+  bufferRows: 50, // 缓冲区行数
+  maxCachedPages: 20, // 最大缓存页数
+
+  columns: [
+    { key: 'name', title: '姓名', width: 100 },
+    { key: 'dept', title: '部门', width: 100 },
+    { key: 'region', title: '区域', width: 100 },
+    { key: 'product', title: '产品', width: 120 },
+    { key: 'sales', title: '销售额', width: 120 },
+    { key: 'cost', title: '成本', width: 120 },
+    { key: 'profit', title: '利润', width: 120 },
+  ],
+
+  fetchPageData(pageIndex) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const rows = []
+        const startRowIdx = pageIndex * this.pageSize
+        for (let i = 0; i < this.pageSize; i++) {
+          const rowIndex = startRowIdx + i
+          if (rowIndex >= this.totalRows) break
+
+          rows.push({
+            name: `员工${(rowIndex + 1).toLocaleString()}`,
+            dept: ['市场部', '销售部', '生产部'][rowIndex % 3],
+            region: ['华南', '华东', '华北'][rowIndex % 3],
+            product: ['Ai智能眼镜', '学习平板'][rowIndex % 2],
+            sales: `¥${(5 + Math.random() * 20).toFixed(1)}万`,
+            cost: `¥${(2 + Math.random() * 10).toFixed(1)}万`,
+            profit: `¥${(1 + Math.random() * 10).toFixed(1)}万`,
+          })
+        }
+        resolve(rows)
+      }, Math.random() * 200 + 50)
+    })
+  },
+
+  fetchSummaryData() {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          name: '合计',
+          sales: '¥85亿',
+          cost: '¥52亿',
+          profit: '¥33亿',
+        })
+      }, 300)
+    })
+  },
+}
+
+// test-fetchPageData
+// config.fetchPageData(4).then((res) => console.log(res))
+
+// ============ VirtualTable 类 ===============
+class VirtualTable {
+  private config: IConfig // 表格全局配置
+  // 关键保障: 性能, 稳定, 用户体验
+  private pageCache = new Map<number, Record<string, any>[]>() // 缓存页面, 仅数据
+  private loadingPagePromises = new Map<
+    number,
+    Promise<Record<string, any>>[]
+  >()
+  private visibleRows = new Set<number>() // 可视区 + 缓冲区的行, 动态增删
+
+  private scrollContainer!: HTMLDivElement // 外层滚动容器
+  private wrapper!: HTMLDivElement // 表格容器 (表头, 总结行, 数据行)
+  private headerElement!: HTMLDivElement // 表头
+
+  private summaryElement!: HTMLDivElement // 总结容器
+  private summaryRow?: HTMLDivElement // 总结行
+  private summaryData?: Record<string, string> // 总行行数据
+
+  private dataContainer!: HTMLDivElement // 数据容器
+  private virtualContent!: HTMLDivElement // 虚拟滚动区域
+
+  private actualScrollHeight = 0 // 撑开滚动条的安全高度
+  private scrollScale = 1 // 缩放比例 = 理想高度 / 安全高度
+  private totalWidth = 0 // 根据列配置计算表格总宽
+
+  constructor(config: IConfig) {
+    this.config = config
+    // 关键保障: 性能, 稳定, 用户体验
+    this.pageCache = new Map() // 数据缓存: 重复加载同一页
+    this.loadingPagePromises = new Map() // 请求去重: 同时间请求同一页
+    this.visibleRows = new Set() // 记录渲染可视区附近的行, 动态增删
+    this.init()
+  }
+
+  init() {
+    // 关键: 比例映射突破浏览器高度限制
+    const MAX_SCROLL_HEIGHT = 10_000_000 // 浏览器极限1600w
+    const idealHeight = this.config.totalRows * this.config.rowHeight
+    // 滚动元素的真实高度 = 理想高度 和 极限高度 取最小
+    this.actualScrollHeight = Math.min(idealHeight, MAX_SCROLL_HEIGHT)
+
+    // 缩放比例 (超过极限) = 理想高度 / 真实高度
+    this.scrollScale = idealHeight / this.actualScrollHeight || 1
+
+    // 创建 DOM 和 绑定事件
+    this.createDOM()
+    this.bindEvents()
+    this.updateVisibleRows()
+  }
+
+  createDOM() {
+    this.scrollContainer = document.createElement('div')
+    this.scrollContainer.className = 'table-container'
+    this.scrollContainer.style.width = `${this.config.tableWidth}px`
+    this.scrollContainer.style.height = `${this.config.tableHeight}px`
+
+    this.wrapper = document.createElement('div')
+    this.wrapper.className = 'table-wrapper'
+    this.totalWidth = this.config.columns.reduce(
+      (sum, col) => sum + col.width,
+      0
+    )
+    this.wrapper.style.width = `${this.totalWidth}px`
+
+    // header
+    this.headerElement = document.createElement('div')
+    this.headerElement.className = 'sticky-header'
+
+    // container -> wrapper -> headerRow -> summaryRow -> dataRow
+    const headerRow = this.createRow('header')
+    console.log('h', headerRow)
+    this.headerElement.appendChild(headerRow)
+    this.wrapper.appendChild(this.headerElement)
+
+    // summary
+    if (this.config.showSummary) {
+      this.summaryElement = document.createElement('div')
+      this.summaryElement.className = 'sticky-summary'
+      this.summaryElement.style.top = `${this.config.headerHeight}px`
+
+      this.summaryRow = this.createRow('summary')
+      this.summaryElement.appendChild(this.summaryRow)
+      this.wrapper.appendChild(this.summaryElement)
+      this.loadSummary()
+    }
+
+    // data
+    this.dataContainer = document.createElement('div')
+    this.dataContainer.className = 'data-container'
+    // 数据容器的高设置超级大来方便滚动
+    this.dataContainer.style.height = `${this.actualScrollHeight}px`
+
+    this.virtualContent = document.createElement('div')
+    this.virtualContent.className = 'virtual-content'
+
+    // 节点挂载
+    this.dataContainer.appendChild(this.virtualContent)
+    this.wrapper.appendChild(this.dataContainer)
+    this.scrollContainer.appendChild(this.wrapper)
+    document
+      .querySelector(this.config.container)
+      ?.appendChild(this.scrollContainer)
+  }
+
+  createRow(rowIndexOrType: number | 'header' | 'summary') {
+    // 根据传入的是表头行, 总结行, 普通数据行 分别渲染
+    let isHeader = false
+    let isSummary = false
+    let actualRowIndex = null
+
+    switch (rowIndexOrType) {
+      case 'header':
+        isHeader = true
+        break
+      case 'summary':
+        isSummary = true
+        break
+      default:
+        actualRowIndex = rowIndexOrType
+    }
+
+    let height = 0
+    if (isHeader) {
+      height = this.config.headerHeight ?? this.config.rowHeight
+      console.log('2', height)
+    } else if (isSummary) {
+      height = this.config.summaryHeight ?? this.config.rowHeight
+    } else {
+      height = this.config.rowHeight
+    }
+
+    const row = document.createElement('div')
+    row.className = 'table-row'
+    row.style.height = `${height}px`
+
+    // 关键! 给数据行加 dataset 行索引; <div data-row-index="123"></div>
+    if (!isHeader && !isSummary) {
+      row.dataset.rowIndex = actualRowIndex!.toString() // 非空断言
+      row.innerHTML = ''
+    }
+
+    // 渲染单元格
+    let leftOffset = 0
+    this.config.columns.forEach((col, index) => {
+      const cell = document.createElement('div')
+      cell.className = 'table-cell'
+      cell.style.width = `${col.width}px`
+
+      // 处理冻结列
+      if (index < this.config.frozenColumns) {
+        cell.classList.add('cell-frozen')
+        cell.style.left = `${leftOffset}px`
+      }
+
+      // 内容填充: 若为表头和合计行, 立刻填充
+      if (isHeader) {
+        cell.textContent = col.title
+      } else if (isSummary) {
+        // 假设 summaryData 已存在
+        cell.textContent = this.summaryData?.[col.key] ?? ''
+      } else {
+        // 数据行: 骨架屏 + 异步加载
+        cell.classList.add('skeleton')
+        cell.textContent = ''
+      }
+
+      leftOffset += col.width
+      row.append(cell)
+    })
+
+    // 数据来啦, 则异步加载真实数据
+    if (!isHeader && !isSummary) {
+      this.getRowData(actualRowIndex).then((data) => {
+        // 1. 先找到对应的行: 可能存在或者移除
+        const existingRow = this.virtualContent.querySelector(
+          `[data-row-index="${actualRowIndex}"]`
+        )
+        // 被滚动移除了就不填了
+        if (!existingRow || !existingRow.isConnected) {
+          return
+        }
+
+        // 找到了行, 就开始填充数据
+        const cells = existingRow.querySelectorAll('.table-cell')
+        cells.forEach((cell, idx) => {
+          cell.classList.remove('skeleton') // 去掉之前的骨架屏占位
+          const col = this.config.columns[idx]
+          cell.textContent = data[col.key] ?? '' // 填上真实数据
+        })
+      })
+    }
+
+    return row
+  }
+
+  // 获取行数据, 根据行索引
+  // 行号 88, 每页 200,  则为 88 / 200 = 0 页, 偏移 88 % 200 = 88
+  // 行号 999, 每页 200, 则为 999 / 200 = 4 页, 偏移 999 % 200 = 199
+  async getRowData(rowIndex: number) {
+    const { pageSize } = this.config // 每页多少条数据
+    const pageIndex = Math.floor(rowIndex / pageSize)
+    const offsetInPage = rowIndex % pageSize
+
+    // 如果该页数据正处于异步加载中, 则进行 await 等待加载完成
+    if (this.loadingPagePromises.has(pageIndex)) {
+      await this.loadingPagePromises.get(pageIndex)
+    }
+
+    // 没有加载则发起请求
+    if (!this.loadingPagePromises.has(pageIndex)) {
+      const promise = this.config
+        .fetchPageData(pageIndex)
+        .then((rows) => {
+          this.pageCache.set(pageIndex, rows) // 先缓存页面数据
+          this.loadingPagePromises.delete(pageIndex) // 记录页面已加载完
+
+          // 控制缓存页面队列动态平衡, 超过设置的阈值, 则清理掉队列头部的
+          // new -> {1: data, 2: data, 10: data} => {2: data, ..., nnew}
+          if (this.pageCache.size > this.config.maxCachedPages) {
+            // Map 的 keys 迭代器是有顺序的, 轻松找到第一个删掉
+            const firstKey = this.pageCache.keys().next().value
+            this.pageCache.delete(firstKey)
+          }
+          //console.log('rows', rows)
+          return rows
+        })
+        .catch((err) => {
+          this.loadingPagePromises.delete(pageIndex)
+          return []
+        })
+
+      this.loadingPagePromises.set(pageIndex, promise)
+      await promise
+    }
+
+    // 从缓存的页面数据中去找, 返回该索引行数据, 没找到拉倒
+    const pageData = this.pageCache.get(pageIndex) || []
+    return pageData[offsetInPage] || { name: '--' }
+  }
+
+  async loadSummary() {
+    try {
+      const data = await this.config.fetchSummaryData()
+      const cells = this.summaryRow.querySelectorAll('.table-cell')
+      cells.forEach((cell, idx) => {
+        const col = this.config.columns[idx]
+        cell.textContent = data[col.key] ?? (idx === 0 ? '合计' : '')
+      })
+    } catch (err) {
+      this.summaryRow.children[0].textContent = '--'
+    }
+  }
+
+  // 虚拟滚动-渲染可视区 + 附近缓冲区 的行, 其他数据均不创建 DOM
+  // 已创建的行, 滚出视野则删掉, 还在则复用不重建
+  renderVisibleRows(start: number, end: number) {
+    const newVisibleSet = new Set() // 记录本次应显示哪些行号
+    const fragment = document.createDocumentFragment()
+
+    for (let rowId = start; rowId <= end; rowId++) {
+      newVisibleSet.add(rowId)
+      // 1. 若已存在且渲染过, 则复用, 并更新 top 位置
+      if (this.visibleRows.has(rowId)) {
+        const row = this.virtualContent.querySelector(
+          `[data-row-index="${rowId}"]`
+        )
+
+        if (row) {
+          // 第 100行, 行高 20; 则第 101行, 行高 20 + 20 ... 视觉顶住
+          row.style.top = `${(rowId - start) * this.config.rowHeight}px`
+        }
+      } else {
+        // 2. 创建过就新建, 然后放进 fragment 等一次性插入
+        const row = this.createRow(rowId)
+        row.style.top = `${(rowId - start) * this.config.rowHeight}px`
+        fragment.appendChild(row)
+      }
+    }
+
+    // 3. 将所有新行插入 DOM
+    if (fragment.children.length > 0) {
+      this.virtualContent.appendChild(fragment)
+    }
+
+    // 4. 清理不需要的旧行, 遍历上次显示的行集合, 不在的就删掉
+    for (const idx of this.visibleRows) {
+      if (!newVisibleSet.has(idx)) {
+        const row = this.virtualContent.querySelector(
+          `[data-row-index="${idx}"]`
+        )
+        if (row) {
+          row.remove()
+        }
+      }
+    }
+
+    // 5. 更新当前显示为最新的行
+    this.visibleRows = newVisibleSet
+  }
+
+  // 虚拟滚动-核心控制器
+  // 用户滚动 -> scrollTop -> scrollScale -> 渲染可见范围 -> 更新
+  updateVisibleRows() {
+    // 1. 获取用户垂直滚动的距离, 可视区高度, 配置的行高, 总行数, 缓存行数等
+    const { scrollTop, clientHeight } = this.scrollContainer
+    const { rowHeight, totalRows, bufferRows } = this.config
+
+    // 2. 将压缩后的滚动位置 * 缩放倍数 = 真实的逻辑位置
+    const logicalScrollTop = scrollTop * this.scrollScale
+
+    // 3. 计算核心可视范围
+    // 当前显示的起始行号 =  (垂直滚动距离 -> 真实数据位置) / 每行高度
+    // 可视区可显示的行数量 = 可视区高度 / 每行高度
+    const startRow = Math.floor(logicalScrollTop / rowHeight)
+    const visibleRowCount = Math.ceil(clientHeight / rowHeight) + 1
+
+    // 4. 拓展为带缓冲的渲染范围, 预加载一些防止用户感受到白屏
+    const visibleStart = Math.max(0, startRow - bufferRows)
+    const visibleEnd = Math.min(
+      totalRows - 1,
+      startRow + visibleRowCount + bufferRows
+    )
+
+    // 5. 设置虚拟内容的位置和高度
+    const translateY = (visibleStart * rowHeight) / this.scrollScale
+    const contentHeight =
+      ((visibleEnd - visibleStart + 1) * rowHeight) / this.scrollScale
+
+    this.virtualContent.style.transform = `translateY(${translateY}px)`
+    this.virtualContent.style.height = `${contentHeight}px`
+
+    // 6. 驱动 DOM 更新
+    this.renderVisibleRows(visibleStart, visibleEnd)
+    // 更新底部显示, 行号转为页码(可选)
+    this.updateIndicatorByPage(visibleStart, visibleEnd)
+  }
+
+  updateIndicatorByPage(startRow: number, endRow: number) {
+    const { pageSize, totalRows } = this.config
+    // 根据配置的, 每页多少行, 总共多少行, 轻松算出页码
+    const totalPages = Math.ceil(totalRows / pageSize)
+    const startPage = Math.floor(startRow / pageSize) + 1
+    const endPage = Math.floor(endRow / pageSize) + 1
+
+    const el = document.getElementById('page-indicator')
+    if (el) {
+      el.textContent = `当前显示 
+              ${startPage}-${endPage} 页 
+              (共 ${totalPages} 页)
+            `
+    }
+  }
+
+  // 绑定滚动事件
+  bindEvents() {
+    let rafId = null // 初始化变量存 帧ID
+    this.scrollContainer.addEventListener(
+      'scroll',
+      () => {
+        if (rafId) {
+          // 若用户还在疯狂滚动, 则不管上一帧, 存最后状态
+          cancelAnimationFrame(rafId)
+        }
+        // 在浏览器执行下一帧之前, 先去更新表格, 这样就很流畅
+        rafId = requestAnimationFrame(() => {
+          this.updateVisibleRows()
+        })
+      },
+      { passive: true }
+    )
+  }
+
+  // 更多方法...
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  new VirtualTable(config)
+})

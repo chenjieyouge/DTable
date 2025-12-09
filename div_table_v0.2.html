@@ -83,6 +83,8 @@
         container: '#container',
         tableWidth: 500,
         tableHeight: 500,
+        headerHeight: 30,
+        summaryHeight: 24,
         rowHeight: 20,
         totalRows: 1000000,
         frozenColumns: 2,
@@ -106,7 +108,7 @@
           return new Promise((resolve) => {
             setTimeout(() => {
               const rows = []
-              startRowIdx = pageIndex * this.pageSize
+              const startRowIdx = pageIndex * this.pageSize
               for (let i = 0; i < this.pageSize; i++) {
                 const rowIndex = startRowIdx + i
                 if (rowIndex >= this.totalRows) break
@@ -189,7 +191,8 @@
           this.headerElement.className = 'sticky-header'
 
           // container -> wrapper -> headerRow -> summaryRow -> dataRow
-          const headerRow = this.createRow(null, true)
+          const headerRow = this.createRow('header')
+          console.log('h', headerRow)
           this.headerElement.appendChild(headerRow)
           this.wrapper.appendChild(this.headerElement)
 
@@ -197,9 +200,9 @@
           if (this.config.showSummary) {
             this.summaryElement = document.createElement('div')
             this.summaryElement.className = 'sticky-summary'
-            this.summaryElement.style.top = `${this.config.rowHeight}px`
+            this.summaryElement.style.top = `${this.config.headerHeight}px`
 
-            this.summaryRow = this.createRow({ name: '加载中...' }, true)
+            this.summaryRow = this.createRow('summary')
             this.summaryElement.appendChild(this.summaryRow)
             this.wrapper.appendChild(this.summaryElement)
             this.loadSummary()
@@ -223,18 +226,45 @@
             .appendChild(this.scrollContainer)
         }
 
-        createRow(rowIndex, isHeaderOrSummary = false) {
+        createRow(rowIndexOrType) {
+          // 根据传入的是表头行, 总结行, 普通数据行 分别渲染
+          let isHeader = false
+          let isSummary = false
+          let actualRowIndex = null
+
+          switch (rowIndexOrType) {
+            case 'header':
+              isHeader = true
+              break
+            case 'summary':
+              isSummary = true
+              break
+            default:
+              actualRowIndex = rowIndexOrType
+          }
+
+          let height = 0
+          if (isHeader) {
+            height = this.config.headerHeight ?? this.config.rowHeight
+            console.log('2', height)
+          } else if (isSummary) {
+            height = this.config.summaryHeight ?? this.config.rowHeight
+          } else {
+            height = this.config.rowHeight
+          }
+
           const row = document.createElement('div')
           row.className = 'table-row'
-          row.style.height = `${this.config.rowHeight}px`
+          row.style.height = `${height}px`
+
           // 关键! 给数据行加 dataset 行索引; <div data-row-index="123"></div>
-          if (!isHeaderOrSummary) {
-            row.dataset.rowIndex = rowIndex
+          if (!isHeader && !isSummary) {
+            row.dataset.rowIndex = actualRowIndex
             row.innerHTML = ''
           }
 
+          // 渲染单元格
           let leftOffset = 0
-          // 单元格处理
           this.config.columns.forEach((col, index) => {
             const cell = document.createElement('div')
             cell.className = 'table-cell'
@@ -244,21 +274,18 @@
             if (index < this.config.frozenColumns) {
               cell.classList.add('cell-frozen')
               cell.style.left = `${leftOffset}px`
-
-              if (isHeaderOrSummary) {
-                // 让冻结列的背景色和整行保持一致
-                cell.style.backgroundColor =
-                  getComputedStyle(row).backgroundColor
-              }
             }
 
             // 内容填充: 若为表头和合计行, 立刻填充
-            if (isHeaderOrSummary) {
-              cell.textContent = rowIndex ? rowIndex[col.key] ?? '' : col.title
+            if (isHeader) {
+              cell.textContent = col.title
+            } else if (isSummary) {
+              // 假设 summaryData 已存在
+              cell.textContent = this.summaryData?.[col.key] ?? ''
             } else {
-              // 若为为数据行, 则初始为骨架屏,避免闪烁, 等下再填
+              // 数据行: 骨架屏 + 异步加载
               cell.classList.add('skeleton')
-              cell.textContent = '' // 先空着占位
+              cell.textContent = ''
             }
 
             leftOffset += col.width
@@ -266,11 +293,11 @@
           })
 
           // 数据来啦, 则异步加载真实数据
-          if (!isHeaderOrSummary) {
-            this.getRowData(rowIndex).then((data) => {
+          if (!isHeader && !isSummary) {
+            this.getRowData(actualRowIndex).then((data) => {
               // 1. 先找到对应的行: 可能存在或者移除
               const existingRow = this.virtualContent.querySelector(
-                `[data-row-index="${rowIndex}"]`
+                `[data-row-index="${actualRowIndex}"]`
               )
               // 被滚动移除了就不填了
               if (!existingRow || !existingRow.isConnected) {
@@ -402,15 +429,16 @@
           const { scrollTop, clientHeight } = this.scrollContainer
           const { rowHeight, totalRows, bufferRows } = this.config
 
-          // 2. 将压缩后的滚动位置 * 缩放因子 = 真实的逻辑位置
+          // 2. 将压缩后的滚动位置 * 缩放倍数 = 真实的逻辑位置
           const logicalScrollTop = scrollTop * this.scrollScale
 
           // 3. 计算核心可视范围
-          // 容器搞 500px, 每行高 20px, 则最多显示 25行
+          // 当前显示的起始行号 =  (垂直滚动距离 -> 真实数据位置) / 每行高度
+          // 可视区可显示的行数量 = 可视区高度 / 每行高度
           const startRow = Math.floor(logicalScrollTop / rowHeight)
           const visibleRowCount = Math.ceil(clientHeight / rowHeight) + 1
 
-          // 4. 拓展为带缓冲的渲染范围
+          // 4. 拓展为带缓冲的渲染范围, 预加载一些防止用户感受到白屏
           const visibleStart = Math.max(0, startRow - bufferRows)
           const visibleEnd = Math.min(
             totalRows - 1,
@@ -449,13 +477,15 @@
 
         // 绑定滚动事件
         bindEvents() {
-          let rafId = null
+          let rafId = null // 初始化变量存 帧ID
           this.scrollContainer.addEventListener(
             'scroll',
             () => {
               if (rafId) {
+                // 若用户还在疯狂滚动, 则不管上一帧, 存最后状态
                 cancelAnimationFrame(rafId)
               }
+              // 在浏览器执行下一帧之前, 先去更新表格, 这样就很流畅
               rafId = requestAnimationFrame(() => {
                 this.updateVisibleRows()
               })

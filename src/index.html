@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>千万数据分页虚拟滚动</title>
+    <style>
+      .table-container {
+        position: relative;
+        overflow: auto;
+        border: 1px solid #ddd;
+        scrollbar-width: thin;
+        scrollbar-color: #c1c1c1 #f1f1f1;
+      }
+
+      .table-wrapper {
+        position: relative;
+      }
+
+      .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: #eee;
+      }
+
+      .sticky-summary {
+        position: sticky;
+        /* top 由配置计算 */
+        background-color: #e6f7ff;
+        z-index: 99;
+      }
+
+      .cell-frozen {
+        position: sticky;
+        background-color: #fff;
+        z-index: 10;
+      }
+
+      .table-row {
+        display: flex;
+        height: 100%;
+      }
+
+      .table-cell {
+        box-sizing: border-box;
+        overflow: hidden;
+        border-right: 1px solid #eee;
+        border-bottom: 1px solid #eee;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        font-size: 13px;
+      }
+
+      .data-container {
+        position: relative;
+      }
+
+      .virtual-content {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        will-change: transform;
+      }
+
+      .page-indicator {
+        margin-top: 10px;
+        color: #666;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>千万数据分页虚拟滚动</h2>
+    <div id="container"></div>
+    <div class="page-indicator" id="page-indicator">加载中...</div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
