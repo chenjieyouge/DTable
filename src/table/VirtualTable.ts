@@ -2,7 +2,8 @@ import { TableConfig } from '@/config/TableConfig'
 import { DataManager } from '@/data/DataManager'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import { IConfig } from '@/types'
+import { IConfig, IUserConfig } from '@/types'
+import { caculatePageRange } from '@/utils/pageUtils'
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
@@ -18,7 +19,7 @@ export class VirtualTable {
   private visibleRows = new Set<number>() // 可见的行
   private rowElementMap = new Map<number, HTMLDivElement>() // 缓存已见的行
 
-  constructor(userConfig: IConfig) {
+  constructor(userConfig: IUserConfig) {
     // 初始化配置
     const tableConfig = new TableConfig(userConfig)
     this.config = tableConfig.getAll()
@@ -91,6 +92,8 @@ export class VirtualTable {
     if (this.config.showSummary) {
       this.summaryRow = this.renderer.createSummaryRow()
       tableWrapper.appendChild(this.summaryRow)
+      // 立即加载合计行数据, 或者延迟到首屏渲染也行
+      this.loadSummaryData()
     }
 
     // 创建数据区域容器 (.dataContainer)
@@ -138,6 +141,15 @@ export class VirtualTable {
     // 计算可视行范围 [startRow, endRow] 及内容高, translateY 等信息
     const { startRow, endRow, translateY, contentHeight } =
       this.scroller.getScrollInfo(scrollTop, viewportHeight)
+
+    // 拓展: 记录页码更新
+    const pageInfo = caculatePageRange(
+      startRow,
+      endRow,
+      this.config.totalRows,
+      this.config.pageSize
+    )
+    this.config.onPageChange?.(pageInfo) // 通知外部, 页面变化啦
 
     // 设置虚拟内容区的位置和高度
     this.virtualContent.style.transform = `translateY(${translateY}px)`
@@ -207,6 +219,22 @@ export class VirtualTable {
       }
     } catch (err) {
       console.warn(`[VirtualTable] Faild to update row ${rowIndex}`, err)
+    }
+  }
+
+  // 加载总结行数据
+  private async loadSummaryData() {
+    if (!this.summaryRow) return
+    const summaryData = await this.dataManager.getSummaryData()
+    if (summaryData && this.summaryRow) {
+      this.renderer.updateSummaryRow(this.summaryRow, summaryData)
+    }
+  }
+
+  // 未来因拓展排序, 筛选,刷新等功能, 则需更新总计行数据
+  public async refreshSummary() {
+    if (this.config.showSummary) {
+      await this.loadSummaryData()
     }
   }
 

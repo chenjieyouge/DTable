@@ -4,6 +4,23 @@ export interface IColumn {
   width: number
 }
 
+export interface IPageInfo {
+  startPage: number
+  endPage: number
+  totalPages: number
+}
+
+// 定义所有可选的回调接口
+export interface ITableCallbacks {
+  // 可视区页面变化时触发
+  onPageChange?: (info: IPageInfo) => void
+
+  // TODO: 添加更多回调
+  // onSortChange?: ...
+  // onFilterChange?: ...
+  // onRowClick?: ...
+}
+
 // 对外: 用户传入的配置 (宽松)
 export interface IUserConfig {
   container?: string
@@ -27,10 +44,11 @@ export interface IUserConfig {
 }
 
 // 对内: 使用严格完整配置
+// 注意: 回调函数保持可选, 因为它们也不是 "必需配置"
 // IConfig 让所有 IUserConfig 变成必填, 除 (fetchSummaryData)
 export interface IConfig
-  extends Required<Omit<IUserConfig, 'fetchSummaryData'>> {
-  fetchSummaryData?: () => Promise<Record<string, any>> // 保持可选
-}
-
-export type RowType = 'header' | 'summary' | number
+  extends Required<
+      Omit<IUserConfig, 'fetchSummaryData' | keyof ITableCallbacks>
+    >,
+    Pick<IUserConfig, 'fetchSummaryData'>,
+    ITableCallbacks {}

@@ -22,16 +22,24 @@ export class DOMRenderer {
   createSummaryRow(summaryData?: Record<string, any>): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'table-row sticky-summary'
-    // row.style.height = `${this.config.summaryHeight}px`
+
     this.renderCells(row, this.config.columns, 'summary', summaryData)
     return row
+  }
+
+  // 更新总结行数据
+  updateSummaryRow(rowElement: HTMLDivElement, data: Record<string, any>) {
+    const cells = rowElement.querySelectorAll('.table-cell')
+    cells.forEach((cell, idx) => {
+      const col = this.config.columns[idx]
+      cell.textContent = data[col.key] ?? (idx === 0 ? '合计' : '')
+    })
   }
 
   // 骨架屏行
   createSkeletonRow(rowIndex: number): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'table-row virtual-row skeleton'
-    // row.style.height = `${this.config.rowHeight}px`
     row.dataset.rowIndex = rowIndex.toString() // 给每行一个行id, 是后续滚动计算的关键
 
     this.renderCells(row, this.config.columns, 'skeleton')

@@ -7,6 +7,7 @@ export class DataManager {
   private pageCache = new Map<number, Record<string, any>[]>()
   private loadingPromises = new Map<number, Promise<Record<string, any>[]>>()
   private config: IConfig
+  private summaryData: Record<string, any> | null = null
 
   constructor(config: IConfig) {
     this.config = config
@@ -63,10 +64,20 @@ export class DataManager {
   }
 
   // 获取总结行数据
-  async getSummaryData() {
+  async getSummaryData(): Promise<Record<string, any> | null> {
+    if (this.summaryData) {
+      return this.summaryData
+    }
+
     if (!this.config.fetchSummaryData) return null
+
+    if (typeof this.config.fetchPageData !== 'function') {
+      return null
+    }
+
     try {
-      return await this.config.fetchSummaryData()
+      this.summaryData = await this.config.fetchSummaryData()
+      return this.summaryData
     } catch (err) {
       console.error('Failed to load summary: ' + err)
       return null

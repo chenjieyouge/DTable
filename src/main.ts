@@ -1,5 +1,6 @@
 // src/main.ts
 import { VirtualTable } from '@/table/VirtualTable'
+import { IPageInfo } from '@/types'
 
 // 全局配置
 const config = {
@@ -63,6 +64,17 @@ const config = {
       }, 300)
     })
   },
+
+  // 回调: 在这里 "消费" 页面变化数据
+  // VirtualTable: this.config.onPageChange?.(pageInfo)
+  onPageChange(pageInfo: IPageInfo) {
+    const el = document.getElementById('page-indicator')
+    if (el) {
+      el.textContent = `当前显示 第 ${pageInfo.startPage}-${pageInfo.endPage} 页 (共 ${pageInfo.totalPages} 页)`
+    }
+  },
+
+  // },
 }
 
 document.addEventListener('DOMContentLoaded', () => {
