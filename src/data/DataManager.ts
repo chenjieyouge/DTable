@@ -13,7 +13,12 @@ export class DataManager {
     this.config = config
   }
 
-  // 异步: 获取某页数据
+  // 缓存整页数据
+  cachePage(pageIndex: number, data: Record<string, any>[]) {
+    this.pageCache.set(pageIndex, data)
+  }
+
+  // 异步: 获取某页数据 (带防重, 缓存)
   async getPageData(pageIndex: number): Promise<Record<string, any>[]> {
     // 若该页面正在请求数据中, 则原地等待, 勿重复请求(防抖)
     if (this.loadingPromises.has(pageIndex)) {
@@ -28,9 +33,9 @@ export class DataManager {
     // 若该页面, 既没在当前请求中, 也没在缓存中, 则请求后端数据
     const promise = this.config
       .fetchPageData(pageIndex)
-      .then((rows) => {
+      .then((res) => {
         // 先缓存页面数据, 并标记该页面已加载完
-        this.pageCache.set(pageIndex, rows)
+        this.pageCache.set(pageIndex, res.list)
         this.loadingPromises.delete(pageIndex)
 
         // 控制缓存页面队列动态平衡, 超过设置的阈值, 则清理掉队列头部的
@@ -39,7 +44,7 @@ export class DataManager {
           const firstKey = this.pageCache.keys().next().value!
           this.pageCache.delete(firstKey) // 满员后, 每后排一个, 则前面处理一个
         }
-        return rows
+        return res.list
       })
       .catch((err) => {
         this.loadingPromises.delete(pageIndex)
@@ -54,7 +59,7 @@ export class DataManager {
   // 假设要获取第 88行数据, 每页20条, 则坐标为: (88 / 20) -> 第4页 + (88 % 20)-> 8 位
   getRowData(rowIndex: number): Record<string, any> | undefined {
     const { pageSize } = this.config // 分页配置的, 每页加载多少条
-    const pageIndex = Math.floor(rowIndex / pageSize) // 数据在第几页
+    const pageIndex = Math.floor(rowIndex / this.config.pageSize) // 数据在第几页
     const offset = rowIndex % pageSize
 
     const pageData = this.pageCache.get(pageIndex) // 只让从缓存中读取
@@ -63,14 +68,10 @@ export class DataManager {
     return pageData[offset]
   }
 
-  // 获取总结行数据
+  // 获取总结行数据 (若有)
   async getSummaryData(): Promise<Record<string, any> | null> {
-    if (this.summaryData) {
-      return this.summaryData
-    }
-
+    if (this.summaryData) return this.summaryData
     if (!this.config.fetchSummaryData) return null
-
     if (typeof this.config.fetchPageData !== 'function') {
       return null
     }

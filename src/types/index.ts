@@ -1,13 +1,7 @@
-export interface IColumn {
-  key: string
-  title: string
-  width: number
-}
-
-export interface IPageInfo {
-  startPage: number
-  endPage: number
-  totalPages: number
+// 标准分页响应
+export interface IPageResponse<T = Record<string, any>> {
+  list: T[]
+  totalRows: number
 }
 
 // 定义所有可选的回调接口
@@ -21,6 +15,18 @@ export interface ITableCallbacks {
   // onRowClick?: ...
 }
 
+export interface IPageInfo {
+  startPage: number
+  endPage: number
+  totalPages: number
+}
+
+export interface IColumn {
+  key: string
+  title: string
+  width: number
+}
+
 // 对外: 用户传入的配置 (宽松)
 export interface IUserConfig {
   container?: string
@@ -29,7 +35,7 @@ export interface IUserConfig {
   headerHeight?: number
   summaryHeight?: number
   rowHeight?: number
-  totalRows?: number
+  totalRows?: number // 这个可不传
   frozenColumns?: number
   showSummary?: boolean
 
@@ -39,7 +45,7 @@ export interface IUserConfig {
 
   columns: IColumn[] // 用户必填
 
-  fetchPageData(pageIndex: number): Promise<Record<string, any>[]>
+  fetchPageData(pageIndex: number): Promise<IPageResponse>
   fetchSummaryData?(): Promise<Record<string, any>>
 }
 

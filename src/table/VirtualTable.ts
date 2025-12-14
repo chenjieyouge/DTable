@@ -2,97 +2,67 @@ import { TableConfig } from '@/config/TableConfig'
 import { DataManager } from '@/data/DataManager'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import { IConfig, IUserConfig } from '@/types'
+import type { IConfig, IUserConfig, IPageResponse } from '@/types'
 import { caculatePageRange } from '@/utils/pageUtils'
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
   private config: IConfig // 内部用完整配置
+
   private dataManager: DataManager
   private renderer: DOMRenderer
   private scroller: VirtualScroller
 
   private scrollContainer!: HTMLDivElement
-  private virtualContent!: HTMLDivElement
+  private virtualContent!: HTMLDivElement // 非虚拟模式下不创建
   private summaryRow?: HTMLDivElement
 
   private visibleRows = new Set<number>() // 可见的行
   private rowElementMap = new Map<number, HTMLDivElement>() // 缓存已见的行
 
   constructor(userConfig: IUserConfig) {
-    // 初始化配置
+    // 初始化配置 (此时的 totalRows 是默认值, 后续会被覆盖)
     const tableConfig = new TableConfig(userConfig)
     this.config = tableConfig.getAll()
 
     this.dataManager = new DataManager(this.config)
     this.renderer = new DOMRenderer(this.config)
     this.scroller = new VirtualScroller(this.config)
-    this.init()
+
+    // 启动异步初始化流程
+    this.initializeAsync()
   }
 
-  // 组装主流程
-  private init() {
-    this.createDOM()
-    this.bindEvents()
-    // 初始加载可视区
+  // 异步初始化
+  private async initializeAsync() {
+    // 请求第一页数据, 获取 totalRows
+    const firstResponse = await this.config.fetchPageData(0)
+    const totalRows = firstResponse.totalRows
+    const firstPageList = firstResponse.list
+    // 更新 config 补充上 totalRows 的值
+    this.config.totalRows = totalRows
+    // 缓存第一页数据
+    this.dataManager.cachePage(0, firstPageList)
+    // 始终虚拟滚动模式, 坚决不降智, 否则得维护两套代码
+    this.createVirtualDOM()
+    this.bindScrollEvents()
     this.updateVisibleRows()
   }
 
-  // 子流程补充
-  private createDOM() {
-    // 创建外层滚动容器, 对应 .table-container
-    this.scrollContainer = document.querySelector(
-      this.config.container
-    ) as HTMLDivElement
-
-    if (!this.scrollContainer) {
-      throw new Error(`Container ${this.config.container} not found`)
-    }
-
-    // 清空并设置容器类名 (样式由 css 控制)
+  private createVirtualDOM() {
+    this.scrollContainer = this.getContainer()
     this.scrollContainer.className = 'table-container'
     this.scrollContainer.innerHTML = ''
-    // 表格宽高需要配置
     this.scrollContainer.style.width = `${this.config.tableWidth}px`
     this.scrollContainer.style.height = `${this.config.tableHeight}px`
-
-    // 注入 css 变量
-    this.scrollContainer.style.setProperty(
-      '--header-height',
-      `${this.config.headerHeight}px`
-    )
-    this.scrollContainer.style.setProperty(
-      '--summary-height',
-      `${this.config.summaryHeight}px`
-    )
-    this.scrollContainer.style.setProperty(
-      '--row-height',
-      `${this.config.rowHeight}px`
-    )
-    this.scrollContainer.style.setProperty(
-      '--summary-height',
-      `${this.config.summaryHeight}px`
-    )
-
-    // 创建 wrapper, 用户包裹表格数据, 横向滚动
-    const tableWrapper = document.createElement('div')
-    tableWrapper.className = 'table-wrapper'
-    // 计算总列宽给到 wrpper 以支持横向滚动
-    const totalWidth = this.config.columns.reduce(
-      (sum, col) => sum + col.width,
-      0
-    )
-    tableWrapper.style.width = `${totalWidth}px`
-
-    // 创建表头行-必有
-    const header = this.renderer.createHeaderRow()
-    tableWrapper.appendChild(header)
-
-    // 创建总结行-可能有
+    this.applyContainerStyles()
+    // 表头
+    const tableWrapper = this.createTableWrapper()
+    tableWrapper.appendChild(this.renderer.createHeaderRow())
+    // 总结行
     if (this.config.showSummary) {
       this.summaryRow = this.renderer.createSummaryRow()
       tableWrapper.appendChild(this.summaryRow)
-      // 立即加载合计行数据, 或者延迟到首屏渲染也行
       this.loadSummaryData()
     }
 
@@ -110,8 +80,47 @@ export class VirtualTable {
     this.scrollContainer.appendChild(tableWrapper)
   }
 
+  // 公共工具方法: 获取容器
+  private getContainer(): HTMLDivElement {
+    const el = document.querySelector(this.config.container)
+    if (!el) throw new Error(`Container ${this.config.container} not found`)
+    return el as HTMLDivElement
+  }
+
+  // 公共工具方法: 给容器注入 css 变量
+  private applyContainerStyles() {
+    this.scrollContainer.style.setProperty(
+      '--header-height',
+      `${this.config.headerHeight}px`
+    )
+    this.scrollContainer.style.setProperty(
+      '--summary-height',
+      `${this.config.summaryHeight}px`
+    )
+    this.scrollContainer.style.setProperty(
+      '--row-height',
+      `${this.config.rowHeight}px`
+    )
+    this.scrollContainer.style.setProperty(
+      '--summary-height',
+      `${this.config.summaryHeight}px`
+    )
+  }
+
+  // 公共工具方法: 创建包裹表格的 wrapper
+  private createTableWrapper(): HTMLDivElement {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'table-wrapper'
+    const totalWidth = this.config.columns.reduce(
+      (sum, col) => sum + col.width,
+      0
+    )
+    wrapper.style.width = `${totalWidth}px`
+    return wrapper
+  }
+
   // 监听 scroll 事件
-  private bindEvents() {
+  private bindScrollEvents() {
     let rafId: number | null = null
     this.scrollContainer.addEventListener(
       'scroll',
