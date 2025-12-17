@@ -13,7 +13,6 @@ export class DOMRenderer {
   createHeaderRow(): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'table-row sticky-header'
-    // row.style.height = `${this.config.headerHeight}px`
     this.renderCells(row, this.config.columns, 'header')
     return row
   }
@@ -22,7 +21,6 @@ export class DOMRenderer {
   createSummaryRow(summaryData?: Record<string, any>): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'table-row sticky-summary'
-
     this.renderCells(row, this.config.columns, 'summary', summaryData)
     return row
   }
@@ -80,7 +78,13 @@ export class DOMRenderer {
 
       // 填充单元格数据
       if (type === 'header') {
+        cell.classList.add('header-cell')
         cell.textContent = col.title
+        // 表头的排序样式
+        if (col.sortable) {
+          cell.dataset.sortable = 'true'
+          cell.dataset.columnKey = col.key
+        }
       } else if (type === 'summary') {
         cell.textContent = data?.[col.key] ?? (index === 0 ? '合计' : '')
       } else {

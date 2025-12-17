@@ -5,12 +5,14 @@ import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
 import type { IConfig, IUserConfig, IPageResponse } from '@/types'
 import { caculatePageRange } from '@/utils/pageUtils'
+import { getPriority } from 'os'
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
   private config: IConfig // 内部用完整配置
 
   private mode: 'client' | 'server' = 'server' // 走全量还是走分页
+  private currentSort: { key: string; direction: 'asc' | 'desc' } | null = null
 
   private dataManager: DataManager
   private renderer: DOMRenderer
@@ -108,7 +110,10 @@ export class VirtualTable {
     this.applyContainerStyles()
     // 表头
     const tableWrapper = this.createTableWrapper()
-    tableWrapper.appendChild(this.renderer.createHeaderRow())
+    const headerRow = this.renderer.createHeaderRow()
+    // 绑定表头事件
+    this.bindHeaderSortEvents(headerRow)
+    tableWrapper.appendChild(headerRow)
     // 总结行
     if (this.config.showSummary) {
       this.summaryRow = this.renderer.createSummaryRow()
@@ -359,10 +364,67 @@ export class VirtualTable {
     }
   }
 
+  private bindHeaderSortEvents(headerRow: HTMLDivElement) {
+    const sortableCells = headerRow.querySelectorAll<HTMLDivElement>(
+      '[data-sortable="true"'
+    )
+    sortableCells.forEach((cell) => {
+      // 防止重复绑定
+      cell.removeEventListener('click', this.onHeaderSortClick)
+      cell.addEventListener('click', this.onHeaderSortClick)
+    })
+  }
+
+  private onHeaderSortClick = (e: MouseEvent) => {
+    const cell = e.target as HTMLDivElement
+    const key = cell.closest<HTMLDivElement>('.header-cell')?.dataset.columnKey
+    if (!key || this.dataManager.getFullDataLength() === 0) {
+      return
+    }
+    // 切换排序
+    this.toggleSort(key)
+  }
+
+  /// 切换排序方法
+  private toggleSort(sortKey: string) {
+    let newDirection: 'asc' | 'desc' | null = 'asc'
+    if (this.currentSort && this.currentSort.key === sortKey) {
+      newDirection = this.currentSort.direction === 'asc' ? 'desc' : 'asc'
+    }
+
+    this.currentSort = { key: sortKey, direction: newDirection }
+    this.sort(sortKey, newDirection)
+  }
+
+  // 添加排序指示器更新方法
+  private updateSortIndecator(sortKey: string, direction: 'asc' | 'desc') {
+    // 清除所有现有排序指示器
+    const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
+    allHeaders.forEach((header) => {
+      const indicator = header.querySelector('.sort-indicator')
+      if (indicator) return
+    })
+
+    // 为当前排序列添加指示器
+    const targetHeader = this.scrollContainer.querySelector(
+      `.header-cell[data-column-key="${sortKey}"]`
+    )
+    if (targetHeader) {
+      let indicator = targetHeader.querySelector('.sort-indicator')
+      if (!indicator) {
+        let indicator = document.createElement('span')
+        indicator.className = 'sort-indecator'
+        targetHeader.appendChild(indicator)
+      }
+      indicator!.textContent = direction === 'asc' ? '↑' : '↓'
+    }
+  }
+
   // 清空
   public destroy() {
     this.scrollContainer.innerHTML = ''
     this.rowElementMap.clear()
     this.visibleRows.clear()
+    
   }
 }

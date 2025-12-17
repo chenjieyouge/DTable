@@ -1,0 +1,95 @@
+.table-container {
+  position: relative;
+  overflow: auto;
+  border: 1px solid #ddd;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.table-wrapper {
+  position: relative;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: #eee;
+}
+
+.header-cell {
+  background-color: #f8f9fa;
+  font-weight: bold;
+}
+
+/* 可排序表头交互 */
+.header-cell[data-sortable='true'] {
+  cursor: pointer;
+}
+
+.header-cell[data-sortable='true']:hover {
+  background-color: #e9ecef;
+}
+
+/* 排序指示器 */
+.sort-indicator {
+  margin-left: 6px;
+  font-size: 12px;
+  color: red;
+  min-width: 12px;
+  text-align: center;
+}
+
+.sticky-summary {
+  position: sticky;
+  top: var(--summary-height, 30px);
+  background-color: #e6f7ff;
+  z-index: 99;
+}
+
+.cell-frozen {
+  position: sticky;
+  background-color: #fff;
+  z-index: 10;
+}
+
+.table-row {
+  display: flex;
+  height: 100%;
+}
+
+.table-cell {
+  box-sizing: border-box;
+  overflow: hidden;
+  border-right: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.data-container {
+  position: relative;
+}
+
+.virtual-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
+/* 虚拟行的绝对定位 */
+.virtual-row {
+  position: absolute;
+  width: 100%;
+  height: var(--row-height, 20px);
+}
+
+.page-indicator {
+  margin-top: 10px;
+  color: #666;
+  font-size: 12px;
+}

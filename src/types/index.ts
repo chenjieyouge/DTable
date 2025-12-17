@@ -32,6 +32,7 @@ export interface IColumn {
   key: string
   title: string
   width: number
+  sortable?: boolean
 }
 
 // 对外: 用户传入的配置 (宽松)

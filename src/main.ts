@@ -1,5 +1,6 @@
 // src/main.ts
 import { VirtualTable } from '@/table/VirtualTable'
+import './style.css'
 import { IPageInfo } from '@/types'
 import { mockFechPageData, mockFechSummaryData } from '@/utils/mockData'
 
@@ -26,7 +27,7 @@ const configSmall = {
     { key: 'dept', title: '部门', width: 80 },
     { key: 'region', title: '区域', width: 100 },
     { key: 'product', title: '产品', width: 140 },
-    { key: 'sales', title: '销售额', width: 120 },
+    { key: 'sales', title: '销售额', width: 120, sortable: 'true' },
     { key: 'cost', title: '成本', width: 120 },
     { key: 'profit', title: '利润', width: 120 },
   ],
