@@ -5,14 +5,19 @@ import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
 import type { IConfig, IUserConfig, IPageResponse } from '@/types'
 import { caculatePageRange } from '@/utils/pageUtils'
-import { getPriority } from 'os'
+import { SortState } from '@/table/core/SortState'
+import type { SortDirection } from '@/table/core/SortState'
+import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
+import { bootstrapTable } from '@/table/data/bootstrapTable'
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
   private config: IConfig // 内部用完整配置
 
   private mode: 'client' | 'server' = 'server' // 走全量还是走分页
-  private currentSort: { key: string; direction: 'asc' | 'desc' } | null = null
+
+  private sortState: SortState = new SortState()
+  private headerSortBinder = new HeaderSortBinder()
 
   private dataManager: DataManager
   private renderer: DOMRenderer
@@ -40,39 +45,8 @@ export class VirtualTable {
 
   // 异步初始化
   private async initializeAsync() {
-    let totalRows: number
-    let firstPageList: Record<string, any>[]
-
-    if (this.config.initialData) {
-      // 用户传了, 全量数据, 用索引获取第一页数据
-      totalRows = this.config.initialData.length
-      firstPageList = this.config.initialData.slice(0, this.config.pageSize)
-    } else {
-      // 走分页接口, 获取第一页数据
-      if (!this.config.fetchPageData) return []
-      const res = await this.config.fetchPageData(0)
-      totalRows = res.totalRows
-      firstPageList = res.list
-    }
-
-    // 智能决策模式, 根据数据量大小, 选走内存模式, 还是大数据模式
-    if (totalRows <= CLIENT_SIDE_MAX_ROWS) {
-      this.mode = 'client'
-      console.log('[VirtualTable] choose all in mode')
-      // 注入全量数据
-      if (this.config.initialData) {
-        this.dataManager.cacheFullData(this.config.initialData)
-      } else {
-        // 需要拉全量, 用循环分页作为兜底方案
-        const allData = await this.loadAllDataByPaging(totalRows)
-        this.dataManager.cachePage(0, firstPageList)
-      }
-    } else {
-      this.mode = 'server'
-      console.log('[VirtualTable] choose pagination mode')
-      this.dataManager.cachePage(0, firstPageList)
-    }
-
+    const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
+    this.mode = mode
     // 统一全局更新 totalRows 防止状态混乱造成滚你滚动卡屏
     this.config.totalRows = totalRows
     // 始终虚拟滚动模式, 坚决不降智, 否则得维护两套代码
@@ -112,7 +86,10 @@ export class VirtualTable {
     const tableWrapper = this.createTableWrapper()
     const headerRow = this.renderer.createHeaderRow()
     // 绑定表头事件
-    this.bindHeaderSortEvents(headerRow)
+    this.headerSortBinder.bind(headerRow, (key) => {
+      if (this.dataManager.getFullDataLength() === 0) return 
+      this.toggleSort(key)
+    })
     tableWrapper.appendChild(headerRow)
     // 总结行
     if (this.config.showSummary) {
@@ -312,7 +289,7 @@ export class VirtualTable {
 
     // 先更新滚动容器高度
     if (dataContainer) {
-      dataContainer.style.height = `${this.scroller.getActualScrollHeight}px`
+      dataContainer.style.height = `${this.scroller.getActualScrollHeight()}px`
     }
     // 再移除所有已存在的行元素
     // for (const rowEl of this.rowElementMap.values()) {
@@ -364,60 +341,34 @@ export class VirtualTable {
     }
   }
 
-  private bindHeaderSortEvents(headerRow: HTMLDivElement) {
-    const sortableCells = headerRow.querySelectorAll<HTMLDivElement>(
-      '[data-sortable="true"'
-    )
-    sortableCells.forEach((cell) => {
-      // 防止重复绑定
-      cell.removeEventListener('click', this.onHeaderSortClick)
-      cell.addEventListener('click', this.onHeaderSortClick)
-    })
-  }
-
-  private onHeaderSortClick = (e: MouseEvent) => {
-    const cell = e.target as HTMLDivElement
-    const key = cell.closest<HTMLDivElement>('.header-cell')?.dataset.columnKey
-    if (!key || this.dataManager.getFullDataLength() === 0) {
-      return
-    }
-    // 切换排序
-    this.toggleSort(key)
-  }
 
   /// 切换排序方法
   private toggleSort(sortKey: string) {
-    let newDirection: 'asc' | 'desc' | null = 'asc'
-    if (this.currentSort && this.currentSort.key === sortKey) {
-      newDirection = this.currentSort.direction === 'asc' ? 'desc' : 'asc'
-    }
-
-    this.currentSort = { key: sortKey, direction: newDirection }
-    this.sort(sortKey, newDirection)
+    const next = this.sortState.toggle(sortKey)
+    if (!next) return 
+    this.sort(next.key, next.direction)
+    this.updateSortIndicator(next.key, next.direction)
   }
 
   // 添加排序指示器更新方法
-  private updateSortIndecator(sortKey: string, direction: 'asc' | 'desc') {
+  private updateSortIndicator(sortKey: string, direction: 'asc' | 'desc') {
     // 清除所有现有排序指示器
     const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
     allHeaders.forEach((header) => {
       const indicator = header.querySelector('.sort-indicator')
-      if (indicator) return
+      if (indicator) indicator.remove()
     })
 
     // 为当前排序列添加指示器
-    const targetHeader = this.scrollContainer.querySelector(
+    const targetHeader = this.scrollContainer.querySelector<HTMLDivElement>(
       `.header-cell[data-column-key="${sortKey}"]`
     )
-    if (targetHeader) {
-      let indicator = targetHeader.querySelector('.sort-indicator')
-      if (!indicator) {
-        let indicator = document.createElement('span')
-        indicator.className = 'sort-indecator'
-        targetHeader.appendChild(indicator)
-      }
-      indicator!.textContent = direction === 'asc' ? '↑' : '↓'
-    }
+    if (!targetHeader) return 
+    const indicator = document.createElement('span')
+    indicator.className = 'sort-indicator'
+    indicator.textContent = direction === 'asc' ? '↑' : '↓'
+    targetHeader.appendChild(indicator)
+
   }
 
   // 清空

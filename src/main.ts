@@ -27,8 +27,8 @@ const configSmall = {
     { key: 'dept', title: '部门', width: 80 },
     { key: 'region', title: '区域', width: 100 },
     { key: 'product', title: '产品', width: 140 },
-    { key: 'sales', title: '销售额', width: 120, sortable: 'true' },
-    { key: 'cost', title: '成本', width: 120 },
+    { key: 'sales', title: '销售额', width: 120, sortable: true },
+    { key: 'cost', title: '成本', width: 120, sortable: true },
     { key: 'profit', title: '利润', width: 120 },
   ],
   onModeChange(mode: 'client' | 'server') {
@@ -88,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 绑定排序按钮
   document.getElementById('sort-small')?.addEventListener('click', () => {
-    console.log('排序给点击啦')
     tableSmall.sort('sales', 'desc')
   })
 })
