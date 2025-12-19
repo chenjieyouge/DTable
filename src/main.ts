@@ -37,6 +37,8 @@ const configSmall = {
 }
 
 // ##### 场景01: 大数据 -> 分页模式 ##########
+const PAGE_SIZE = 200 // 和 mock 表格配置共用
+
 const configLarge = {
   container: '#table-large',
   tableWidth: 600,
@@ -47,7 +49,7 @@ const configLarge = {
   // frozenColumns: 2,
   // showSummary: true,
 
-  // pageSize: 200, // 每页显示多少条
+  pageSize: PAGE_SIZE, // 每页显示多少条
   // bufferRows: 50, // 缓冲区行数
   // maxCachedPages: 20, // 最大缓存页数
 
@@ -64,7 +66,7 @@ const configLarge = {
 
   fetchPageData(pageIndex: number) {
     // 模拟 100 w 行数据(分页)
-    return mockFechPageData(pageIndex, 50, 10_000_000)
+    return mockFechPageData(pageIndex, PAGE_SIZE, 10_000_000)
   },
 
   fetchSummaryData(): Promise<Record<string, any>> {

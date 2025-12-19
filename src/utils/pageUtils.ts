@@ -1,7 +1,7 @@
 import { IPageInfo } from '@/types'
 
 // 根据起始行号和分页配置, 计算当前可视区的, 页面范围
-export function caculatePageRange(
+export function calculatePageRange(
   startRow: number,
   endRow: number,
   totalRows: number,
