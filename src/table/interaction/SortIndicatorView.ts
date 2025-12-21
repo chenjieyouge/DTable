@@ -1,0 +1,26 @@
+export class SortIndicatorView {
+  // 将排序状态映射到 dom, 但不参与任何排序业务
+  constructor(private scrollContainer: HTMLDivElement) {}
+
+  public set(sort: { key: string, direction: 'asc' | 'desc' } | null) {
+    this.clear()
+    if (!sort) return 
+    const targetHeader = this.scrollContainer.querySelector<HTMLDivElement>(
+      `.header-cell[data-column-key="${sort.key}"]`
+    )
+    if (!targetHeader) return 
+
+    const indicator = document.createElement('span')
+    indicator.className = 'sort-indicator'
+    indicator.textContent = sort.direction === 'asc' ? '↑' : '↓'
+    targetHeader.appendChild(indicator)
+  }
+
+  public clear() {
+    const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
+    allHeaders.forEach((header) => {
+      const indicator = header.querySelector('.sort-indicator')
+      if (indicator) indicator.remove()
+    })
+  }
+}

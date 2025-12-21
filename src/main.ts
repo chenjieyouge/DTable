@@ -42,7 +42,7 @@ const configLarge = {
   container: '#table-large',
   tableWidth: 600,
   tableHeight: 500,
-  // headerHeight: 30,
+  // headerHeight: 28,
   // summaryHeight: 24,
   rowHeight: 20,
   // frozenColumns: 2,
@@ -119,9 +119,4 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 
   // test-end ============
-
-  // 绑定排序按钮
-  document.getElementById('sort-small')?.addEventListener('click', () => {
-    tableSmall.sort('sales', 'desc')
-  })
 })

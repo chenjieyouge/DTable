@@ -47,6 +47,10 @@ export class VirtualViewport {
   private async updateVisibleRowsInternal() {
     // 获取当前滚动位置和可视区高度
     const { scrollTop, clientHeight }  = this.scrollContainer
+    // 表头 + 总结行高度要固定住
+    const fixedTopHeight = this.config.headerHeight + (this.config.showSummary? this.config.summaryHeight : 0)
+    // 滚动高度不能小于 0 
+    const contentScrollTop = Math.max(0, scrollTop - fixedTopHeight)
     // 计算可视区高度, 要减去表头和汇总行高度
     const viewportHeight = clientHeight 
       - this.config.headerHeight 
@@ -58,7 +62,7 @@ export class VirtualViewport {
       endRow,
       translateY, 
       contentHeight } 
-      = this.scroller.getScrollInfo(scrollTop, viewportHeight)
+      = this.scroller.getScrollInfo(contentScrollTop, viewportHeight)
     
     // 计算页码范围, 并通知外部 (this.config.onPageChange 消费)
     const pageInfo = calculatePageRange(

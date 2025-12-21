@@ -9,6 +9,7 @@
 .table-wrapper {
   position: relative;
 }
+
 .sticky-header {
   position: sticky;
   top: 0;
@@ -19,6 +20,8 @@
 .header-cell {
   background-color: #f8f9fa;
   font-weight: bold;
+  /* 这个 bug 搞了我好久 !!! 一定要设置行高 */
+  height: var(--header-height, 30px)
 }
 
 /* 可排序表头交互 */
@@ -41,7 +44,7 @@
 
 .sticky-summary {
   position: sticky;
-  top: var(--summary-height, 30px);
+  top: var(--header-height, 30px);
   background-color: #e6f7ff;
   z-index: 99;
 }
@@ -54,7 +57,7 @@
 
 .table-row {
   display: flex;
-  height: 100%;
+  height: auto;
 }
 
 .table-cell {

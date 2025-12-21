@@ -7,11 +7,15 @@ import { SortState } from '@/table/core/SortState'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
 import { bootstrapTable } from '@/table/data/bootstrapTable'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
+import type { ITableShell } from '@/table/TableShell'
+import { mountTableShell } from '@/table/TableShell'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
   private config: IConfig // 内部用完整配置
+
+  private shell!: ITableShell
 
   private mode: 'client' | 'server' = 'server' // 走全量还是走分页
   private sortState: SortState = new SortState()
@@ -23,9 +27,6 @@ export class VirtualTable {
   private dataManager: DataManager
   private renderer: DOMRenderer
   private scroller: VirtualScroller
-  private scrollContainer!: HTMLDivElement
-  private virtualContent!: HTMLDivElement // 非虚拟模式下不创建
-  private summaryRow?: HTMLDivElement
 
   constructor(userConfig: IUserConfig) {
     // 初始化配置 (此时的 totalRows 是默认值, 后续会被覆盖)
@@ -44,135 +45,53 @@ export class VirtualTable {
   private async initializeAsync() {
     const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
     this.mode = mode
-    // 统一全局更新 totalRows 防止状态混乱造成滚你滚动卡屏
     this.config.totalRows = totalRows
-    // 始终虚拟滚动模式, 坚决不降智, 否则得维护两套代码
-    this.createVirtualDOM()
+    // 挂载 TableShell, DOM 表头, 事件等都在 shell 内部处理
+    this.shell = mountTableShell({
+      config: this.config,
+      renderer: this.renderer,
+      headerSortBinder: this.headerSortBinder,
+      onToggleSort: (key) => this.toggleSort(key),
+      onNeedLoadSummary: (summaryRow) => {
+        this.loadSummaryData(summaryRow).catch(console.warn)
+      }
+    })
+
+    // 首次挂载后, 就立刻同步一次滚动高度
+    this.shell.setScrollHeight(this.scroller)
     // 创建 viewport: 将 "可视区更新/骨架行/数据渲染" 的职责下放
     this.viewport = new VirtualViewport({
       config: this.config,
       dataManager: this.dataManager,
       renderer: this.renderer,
       scroller: this.scroller,
-      scrollContainer: this.scrollContainer,
-      virtualContent: this.virtualContent
+      scrollContainer: this.shell.scrollContainer,
+      virtualContent: this.shell.virtualContent
     })
 
-    this.bindScrollEvents()
+    // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
+    this.shell.bindScroll(() => {
+      this.viewport.updateVisibleRows()
+    })
     this.viewport.updateVisibleRows()
-
-    // 通知外部,模式的变化(可选)
-    this.config.onModeChange?.(this.mode)
+    this.config.onModeChange?.(this.mode) // 通知外部,模式的变化(可选)
   }
 
-  private createVirtualDOM() {
-    this.scrollContainer = this.getContainer()
-    this.scrollContainer.className = 'table-container'
-    this.scrollContainer.innerHTML = ''
-    this.scrollContainer.style.width = `${this.config.tableWidth}px`
-    this.scrollContainer.style.height = `${this.config.tableHeight}px`
-    this.applyContainerStyles()
-    // 表头
-    const tableWrapper = this.createTableWrapper()
-    const headerRow = this.renderer.createHeaderRow()
-    // 绑定表头事件
-    this.headerSortBinder.bind(headerRow, (key) => {
-      // client / server 都允许点击表头触发排序, 而是否生效有 sort()/applyServerQuery 决定
-      this.toggleSort(key)
-    })
-    tableWrapper.appendChild(headerRow)
-    // 总结行
-    if (this.config.showSummary) {
-      this.summaryRow = this.renderer.createSummaryRow()
-      tableWrapper.appendChild(this.summaryRow)
-      this.loadSummaryData()
-    }
-
-    // 创建数据区域容器 (.dataContainer)
-    const dataContainer = document.createElement('div')
-    dataContainer.className = 'data-container'
-    dataContainer.style.height = `${this.scroller.getActualScrollHeight()}px`
-
-    // 创建可滚动内容区 (必须 absolute)
-    this.virtualContent = document.createElement('div')
-    this.virtualContent.className = 'virtual-content'
-
-    dataContainer.appendChild(this.virtualContent)
-    tableWrapper.appendChild(dataContainer)
-    this.scrollContainer.appendChild(tableWrapper)
-  }
-
-  // 公共工具方法: 获取容器
-  private getContainer(): HTMLDivElement {
-    const el = document.querySelector(this.config.container)
-    if (!el) throw new Error(`Container ${this.config.container} not found`)
-    return el as HTMLDivElement
-  }
-
-  // 公共工具方法: 给容器注入 css 变量
-  private applyContainerStyles() {
-    this.scrollContainer.style.setProperty(
-      '--header-height',
-      `${this.config.headerHeight}px`
-    )
-    this.scrollContainer.style.setProperty(
-      '--summary-height',
-      `${this.config.summaryHeight}px`
-    )
-    this.scrollContainer.style.setProperty(
-      '--row-height',
-      `${this.config.rowHeight}px`
-    )
-    this.scrollContainer.style.setProperty(
-      '--summary-height',
-      `${this.config.summaryHeight}px`
-    )
-  }
-
-  // 公共工具方法: 创建包裹表格的 wrapper
-  private createTableWrapper(): HTMLDivElement {
-    const wrapper = document.createElement('div')
-    wrapper.className = 'table-wrapper'
-    const totalWidth = this.config.columns.reduce(
-      (sum, col) => sum + col.width,
-      0
-    )
-    wrapper.style.width = `${totalWidth}px`
-    return wrapper
-  }
-
-  // 监听 scroll 事件
-  private bindScrollEvents() {
-    let rafId: number | null = null
-    this.scrollContainer.addEventListener(
-      'scroll',
-      () => {
-        if (rafId !== null) cancelAnimationFrame(rafId)
-        rafId = requestAnimationFrame(() => {
-          this.viewport.updateVisibleRows() // 交给 viewport 统一调度
-        })
-      },
-      {
-        passive: true,
-      }
-    )
-  }
-
-
-  // 加载总结行数据
-  private async loadSummaryData() {
-    if (!this.summaryRow) return
+  // 加载总结行数据 (传参)
+  private async loadSummaryData(summaryRow: HTMLDivElement) {
     const summaryData = await this.dataManager.getSummaryData()
-    if (summaryData && this.summaryRow) {
-      this.renderer.updateSummaryRow(this.summaryRow, summaryData)
+    if (summaryData) {
+      // 值更新传入的那一行, 不再由 VirtualTable 保存 dom 引用
+      this.renderer.updateSummaryRow(summaryRow, summaryData)
     }
   }
 
   // 未来因拓展排序, 筛选,刷新等功能, 则需更新总计行数据
   public async refreshSummary() {
-    if (this.config.showSummary) {
-      await this.loadSummaryData()
-    }
+    if (!this.config.showSummary) return 
+    const row = this.shell?.summaryRow
+    if (!row) return 
+    await this.loadSummaryData(row)
   }
 
   // 对外暴露: 是否为客户端模式
@@ -201,7 +120,7 @@ export class VirtualTable {
     const next = this.sortState.toggle(sortKey)
     // 第三态: next === null 表示清空排序, 数据复原
     if (!next) {
-      this.updateSortIndicator(null) // null 表示清空排序,
+      this.shell.setSortIndicator(null)
       if (this.mode === 'client') {
         // client 清空排序: 恢复原始顺序, 若有筛选, 则回复筛选后的原始顺序
         this.dataManager.resetClientOrder(this.clientFilterText)
@@ -218,38 +137,18 @@ export class VirtualTable {
     }
     // 若还有排序的话, 走正常的 sort 
     this.sort(next.key, next.direction)
-    this.updateSortIndicator(next)
+    this.shell.setSortIndicator(next)
   }
 
-  private clearSortIndicator() {
-    // 清除现有的排序指示器, 用于第三次点击 "复原"
-    const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
-    allHeaders.forEach((header) => {
-      const indicator = header.querySelector('.sort-indicator')
-      if (indicator) indicator.remove()
-    })
-  }
+  // private clearSortIndicator() {
+  //   // 清除现有的排序指示器, 用于第三次点击 "复原"
+  //   const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
+  //   allHeaders.forEach((header) => {
+  //     const indicator = header.querySelector('.sort-indicator')
+  //     if (indicator) indicator.remove()
+  //   })
+  // }
 
-  // 统一更新排序指示器; sort 对象表示更新; 传 null 表示清空
-  private updateSortIndicator(
-    sort: { key: string, direction: 'asc' | 'desc' } | null) {
-    // 不论是更新还是清除, 都先清理掉旧的指示器
-    this.clearSortIndicator()
-    // 当 sort 为 null 则表示看情况, 则不用做啥处理
-    if (!sort) return 
-
-    // 当 sort 有值则表示要更新指示器
-    const targetHeader = this.scrollContainer.querySelector<HTMLDivElement>(
-      `.header-cell[data-column-key="${sort.key}"]`
-    )
-
-    if (!targetHeader) return 
-    // 给要排序的字段表头, 添加一个 红色的小箭头哦
-    const indicator = document.createElement('span')
-    indicator.className = 'sort-indicator'
-    indicator.textContent = sort.direction === 'asc' ? '↑' : '↓'
-    targetHeader.appendChild(indicator)
-  }
 
   // 筛选入口
   public filter(filterText: string) {
@@ -265,11 +164,7 @@ export class VirtualTable {
       this.scroller = new VirtualScroller(this.config)
       this.viewport.setScroller(this.scroller)
       // 同步更新 data-container 高度
-      const dataContainer = this.scrollContainer.querySelector('.data-container') as HTMLDivElement
-      if (dataContainer) {
-        dataContainer.style.height = `${this.scroller.getActualScrollHeight()}px`
-      }
-
+      this.shell.setScrollHeight(this.scroller)
       this.viewport.refresh() // 刷新表格数据
     } else {
       // console.warn('pagination mode need backend and add money')
@@ -292,7 +187,7 @@ export class VirtualTable {
     // 更新 DataManager 的 query, 缓存也会自动清除
     this.dataManager.setQuery(this.serverQuery)
     // 筛选排序后回到顶部, 避免当前滚动位置超出 新 totalRows
-    this.scrollContainer.scrollTop = 0
+    this.shell.scrollContainer.scrollTop = 0
     // 主动来取第 0 页, 让 totalRows 先有值并缓存 page0
     await this.dataManager.getPageData(0)
     const totalRows = this.dataManager.getServerTotalRows()
@@ -303,20 +198,14 @@ export class VirtualTable {
     this.scroller = new VirtualScroller(this.config)
     this.viewport.setScroller(this.scroller)
     // 一定要记得重设滚动容器的高
-    const dataContainer = this.scrollContainer.querySelector('.data-container') as HTMLDivElement
-    if (dataContainer) {
-      dataContainer.style.height = `${this.scroller.getActualScrollHeight()}px`
-    }
+    this.shell.setScrollHeight(this.scroller)
     // 最后再刷新可视区
     this.viewport.refresh()
   }
 
   // 清空
   public destroy() {
-    this.headerSortBinder.unbind(
-      this.scrollContainer.querySelector('.sticky-header') as HTMLDivElement
-    )
-    this.scrollContainer.innerHTML = ''
+    this.shell?.destroy()
     this.viewport?.destroy()
   }
 }
