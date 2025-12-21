@@ -25,7 +25,7 @@ export class SortState {
         this.current = { key, direction: 'asc'}
       } else if (this.current.direction === 'asc') {
         // asc -> null
-        this.current = null
+        this.current = null 
       } 
       } else {
         //新字段, 从 desc 开始

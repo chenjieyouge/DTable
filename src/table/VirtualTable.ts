@@ -12,10 +12,12 @@ import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
   private config: IConfig // 内部用完整配置
+
   private mode: 'client' | 'server' = 'server' // 走全量还是走分页
   private sortState: SortState = new SortState()
   private headerSortBinder = new HeaderSortBinder()
   private serverQuery: ITableQuery = { filterText: '' } // 默认 server 空筛选
+  private clientFilterText = '' // client 下清空筛选排序后恢复原样
   private viewport!: VirtualViewport
 
   private dataManager: DataManager
@@ -178,7 +180,7 @@ export class VirtualTable {
     return this.mode === 'client'
   }
 
-  // 排序入口 (当前仅内存模式实现了)
+  // 排序入口, 兼容 client 和 server 模式
   public sort(sortKey: string, direction: 'asc' | 'desc') {
     if (this.mode === 'client') {
       this.dataManager.sortData(sortKey, direction)
@@ -194,38 +196,65 @@ export class VirtualTable {
     }
   }
 
-
   // 切换排序方法
   private toggleSort(sortKey: string) {
     const next = this.sortState.toggle(sortKey)
-    if (!next) return 
+    // 第三态: next === null 表示清空排序, 数据复原
+    if (!next) {
+      this.updateSortIndicator(null) // null 表示清空排序,
+      if (this.mode === 'client') {
+        // client 清空排序: 恢复原始顺序, 若有筛选, 则回复筛选后的原始顺序
+        this.dataManager.resetClientOrder(this.clientFilterText)
+        this.viewport.refresh()
+        return 
+      }
+      // server 清空排序: 下发 query, 去掉 filterText
+      this.applyServerQuery({
+        ...this.serverQuery,
+        sortKey: undefined,
+        sortDirection: undefined
+      }).catch(console.warn)
+      return 
+    }
+    // 若还有排序的话, 走正常的 sort 
     this.sort(next.key, next.direction)
-    this.updateSortIndicator(next.key, next.direction)
+    this.updateSortIndicator(next)
   }
 
-  // 添加排序指示器更新方法
-  private updateSortIndicator(sortKey: string, direction: 'asc' | 'desc') {
-    // 清除所有现有排序指示器
+  private clearSortIndicator() {
+    // 清除现有的排序指示器, 用于第三次点击 "复原"
     const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
     allHeaders.forEach((header) => {
       const indicator = header.querySelector('.sort-indicator')
       if (indicator) indicator.remove()
     })
+  }
 
-    // 为当前排序列添加指示器
+  // 统一更新排序指示器; sort 对象表示更新; 传 null 表示清空
+  private updateSortIndicator(
+    sort: { key: string, direction: 'asc' | 'desc' } | null) {
+    // 不论是更新还是清除, 都先清理掉旧的指示器
+    this.clearSortIndicator()
+    // 当 sort 为 null 则表示看情况, 则不用做啥处理
+    if (!sort) return 
+
+    // 当 sort 有值则表示要更新指示器
     const targetHeader = this.scrollContainer.querySelector<HTMLDivElement>(
-      `.header-cell[data-column-key="${sortKey}"]`
+      `.header-cell[data-column-key="${sort.key}"]`
     )
+
     if (!targetHeader) return 
+    // 给要排序的字段表头, 添加一个 红色的小箭头哦
     const indicator = document.createElement('span')
     indicator.className = 'sort-indicator'
-    indicator.textContent = direction === 'asc' ? '↑' : '↓'
+    indicator.textContent = sort.direction === 'asc' ? '↑' : '↓'
     targetHeader.appendChild(indicator)
   }
 
   // 筛选入口
   public filter(filterText: string) {
     if (this.mode === 'client') {
+      this.clientFilterText = filterText
       this.dataManager.filterData((row) =>
         Object.values(row).some((val) =>
           String(val).toLowerCase().includes(filterText.toLowerCase())

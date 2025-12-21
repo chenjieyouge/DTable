@@ -147,7 +147,7 @@ export class DataManager {
     }
   }
 
-  // 客户端排序 (仅内存模式用)
+  // 客户端排序 (内存模式), sever 端是端在接口就处理好了的
   public sortData(sortKey: string, direction: 'asc' | 'desc') {
     if (!this.fullData) return
 
@@ -173,6 +173,24 @@ export class DataManager {
   public filterData(predicate: (row: Record<string, any>) => boolean): void {
     if (!this.originalFullData) return
     this.fullData = this.originalFullData.filter(predicate)
+    this.pageCache.clear()
+  }
+
+  public resetClientOrder(filterText: string) {
+    // 恢复 client 模式下的 "自然顺序", 否则用户第三次点击排序字段无法复原
+    if (!this.originalFullData) return 
+    const kw = (filterText ?? '').trim().toLowerCase()
+    if (!kw) {
+      // 无筛选, 则回原始数据顺序, (量大可能回有性能问题呀)
+      this.fullData = [...this.originalFullData]
+    } else {
+      // 有筛选, 则恢复为, 原始状态下的筛选结果
+      this.fullData = this.originalFullData.filter((row) => {
+        Object.values(row).some((val) => 
+          String(val).toLowerCase().includes(kw)
+        )
+      })
+    }
     this.pageCache.clear()
   }
 

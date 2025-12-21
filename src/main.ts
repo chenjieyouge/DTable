@@ -26,7 +26,7 @@ const configSmall = {
     { key: 'name', title: '姓名', width: 120 },
     { key: 'dept', title: '部门', width: 80 },
     { key: 'region', title: '区域', width: 100 },
-    { key: 'product', title: '产品', width: 140 },
+    { key: 'product', title: '产品', width: 140, sortable: true },
     { key: 'sales', title: '销售额', width: 120, sortable: true },
     { key: 'cost', title: '成本', width: 120, sortable: true },
     { key: 'profit', title: '利润', width: 120 },
