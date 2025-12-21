@@ -148,7 +148,7 @@ export class VirtualViewport {
   }
 
   // 销毁: 释放引用 + 清空缓存 
-  public destory() {
+  public destroy() {
     this.visibleRows.clear()
     this.rowElementMap.clear()
   }

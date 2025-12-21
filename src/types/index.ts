@@ -5,6 +5,14 @@ export interface SortFilterParmas {
   filterText: string
 }
 
+// 服务端查询参数, 用于分页接口, 如排序, 筛选等
+// 关键点: 字段要尽量扁平, 方便拼接缓存 key 和后端处理
+export interface ITableQuery {
+  sortKey?: string // 排序字段名 key
+  sortDirection?: 'asc' | 'desc'
+  filterText?: string // 模糊搜索关键词
+}
+
 // 标准分页响应
 export interface IPageResponse<T = Record<string, any>> {
   list: T[]
@@ -53,7 +61,7 @@ export interface IUserConfig {
 
   columns: IColumn[] // 用户必填
 
-  fetchPageData?(pageIndex: number): Promise<IPageResponse>
+  fetchPageData?(pageIndex: number, query?: ITableQuery): Promise<IPageResponse>
   fetchSummaryData?(): Promise<Record<string, any>>
 
   initialData?: Record<string, any>[] // 全量数据

@@ -2,7 +2,7 @@ import { TableConfig } from '@/config/TableConfig'
 import { DataManager } from '@/data/DataManager'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import type { IConfig, IUserConfig } from '@/types'
+import type { IConfig, ITableQuery, IUserConfig } from '@/types'
 import { SortState } from '@/table/core/SortState'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
 import { bootstrapTable } from '@/table/data/bootstrapTable'
@@ -15,6 +15,7 @@ export class VirtualTable {
   private mode: 'client' | 'server' = 'server' // 走全量还是走分页
   private sortState: SortState = new SortState()
   private headerSortBinder = new HeaderSortBinder()
+  private serverQuery: ITableQuery = { filterText: '' } // 默认 server 空筛选
   private viewport!: VirtualViewport
 
   private dataManager: DataManager
@@ -74,7 +75,7 @@ export class VirtualTable {
     const headerRow = this.renderer.createHeaderRow()
     // 绑定表头事件
     this.headerSortBinder.bind(headerRow, (key) => {
-      if (this.dataManager.getFullDataLength() === 0) return 
+      // client / server 都允许点击表头触发排序, 而是否生效有 sort()/applyServerQuery 决定
       this.toggleSort(key)
     })
     tableWrapper.appendChild(headerRow)
@@ -184,35 +185,15 @@ export class VirtualTable {
       // 排序完就刷新表格 (交由 viewport 统一调度), 原始数据还存了一份其实(浅拷贝)
       this.viewport.refresh()
     } else {
-      // TOTO: 分页模式, 得加钱
-      console.warn('pagination mode need backend and add money')
+      // console.warn('pagination mode need backend and add money')
+      this.applyServerQuery({
+        ...this.serverQuery,
+        sortKey,
+        sortDirection: direction
+      }).catch(console.warn)
     }
   }
 
-  // 筛选入口
-  public filter(filterText: string) {
-    if (this.mode === 'client') {
-      this.dataManager.filterData((row) =>
-        Object.values(row).some((val) =>
-          String(val).toLowerCase().includes(filterText.toLowerCase())
-        )
-      )
-      // 更新 totalRows, 注意要同步更新 scroller, 滚动高度也要变哦
-      this.config.totalRows = this.dataManager.getFullDataLength()
-      this.scroller = new VirtualScroller(this.config)
-      this.viewport.setScroller(this.scroller)
-      // 同步更新 data-container 高度
-      const dataContainer = this.scrollContainer.querySelector('.data-container') as HTMLDivElement
-      if (dataContainer) {
-        dataContainer.style.height = `${this.scroller.getActualScrollHeight()}px`
-      }
-
-      this.viewport.refresh() // 刷新表格数据
-    } else {
-      // TOTO: 分页模式, 得加钱
-      console.warn('pagination mode need backend and add money')
-    }
-  }
 
   // 切换排序方法
   private toggleSort(sortKey: string) {
@@ -242,12 +223,71 @@ export class VirtualTable {
     targetHeader.appendChild(indicator)
   }
 
+  // 筛选入口
+  public filter(filterText: string) {
+    if (this.mode === 'client') {
+      this.dataManager.filterData((row) =>
+        Object.values(row).some((val) =>
+          String(val).toLowerCase().includes(filterText.toLowerCase())
+        )
+      )
+      // 更新 totalRows, 注意要同步更新 scroller, 滚动高度也要变哦
+      this.config.totalRows = this.dataManager.getFullDataLength()
+      this.scroller = new VirtualScroller(this.config)
+      this.viewport.setScroller(this.scroller)
+      // 同步更新 data-container 高度
+      const dataContainer = this.scrollContainer.querySelector('.data-container') as HTMLDivElement
+      if (dataContainer) {
+        dataContainer.style.height = `${this.scroller.getActualScrollHeight()}px`
+      }
+
+      this.viewport.refresh() // 刷新表格数据
+    } else {
+      // console.warn('pagination mode need backend and add money')
+      this.applyServerQuery({
+        ...this.serverQuery,
+        filterText,
+      }).catch(console.warn)
+    }
+  }
+
+  // server 模式下的筛选 
+  // 更新 query -> 清缓存 -> 拉取第一页 -> 更新 totalRows \
+  // -> 重建 VirtualScroller -> 通知 viewport.setScroller 和 refresh table
+  private async applyServerQuery(next: ITableQuery) {
+    this.serverQuery = {
+      sortKey: next.sortKey,
+      sortDirection: next.sortDirection,
+      filterText: next.filterText ?? ""
+    }
+    // 更新 DataManager 的 query, 缓存也会自动清除
+    this.dataManager.setQuery(this.serverQuery)
+    // 筛选排序后回到顶部, 避免当前滚动位置超出 新 totalRows
+    this.scrollContainer.scrollTop = 0
+    // 主动来取第 0 页, 让 totalRows 先有值并缓存 page0
+    await this.dataManager.getPageData(0)
+    const totalRows = this.dataManager.getServerTotalRows()
+    if (typeof totalRows === 'number') {
+      this.config.totalRows = totalRows
+    }
+    // totalRows 变化后必须重建 scroller, 否则滚动高度不准
+    this.scroller = new VirtualScroller(this.config)
+    this.viewport.setScroller(this.scroller)
+    // 一定要记得重设滚动容器的高
+    const dataContainer = this.scrollContainer.querySelector('.data-container') as HTMLDivElement
+    if (dataContainer) {
+      dataContainer.style.height = `${this.scroller.getActualScrollHeight()}px`
+    }
+    // 最后再刷新可视区
+    this.viewport.refresh()
+  }
+
   // 清空
   public destroy() {
     this.headerSortBinder.unbind(
       this.scrollContainer.querySelector('.sticky-header') as HTMLDivElement
     )
     this.scrollContainer.innerHTML = ''
-    this.viewport?.destory()
+    this.viewport?.destroy()
   }
 }

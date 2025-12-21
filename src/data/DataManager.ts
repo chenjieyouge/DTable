@@ -1,14 +1,16 @@
-// 数据加载与缓存
-
-import { IConfig } from '@/types'
+import type { IConfig, ITableQuery } from '@/types'
 
 // 剥离数据逻辑, 支持 mock / api 切换
 export class DataManager {
   private config: IConfig
-  private pageCache = new Map<number, Record<string, any>[]>()
-  private loadingPromises = new Map<number, Promise<Record<string, any>[]>>()
-  private summaryData: Record<string, any> | null = null
 
+  private currentQuery: ITableQuery = {}
+  private serverTotalRows: number | null = null 
+  // 缓存 key = `${queryKey}::${pageIndex}`, 避免不同筛选排序条件互相串数据
+  private pageCache = new Map<string, Record<string, any>[]>()
+  private loadingPromises = new Map<string, Promise<Record<string, any>[]>>()
+
+  private summaryData: Record<string, any> | null = null
   // 全量数据 + 原始备份 (用于筛选后还原)
   private fullData: Record<string, any>[] | null = null
   private originalFullData: Record<string, any>[] | null = null // 筛选/排序等用
@@ -17,9 +19,38 @@ export class DataManager {
     this.config = config
   }
 
+  // 外部更新 query, 在 sever 模式排序/筛选变化时调用
+  public setQuery(next: ITableQuery) {
+    this.currentQuery = {
+      sortKey: next.sortKey,
+      sortDirection: next.sortDirection,
+      filterText: next.filterText ?? ''
+    }
+    this.clearCache()
+  }
+
+  // 在 VirtualTAble 刷新 scroller 时获取最新 totalRows 
+  public getServerTotalRows() {
+    return this.serverTotalRows
+  }
+
+  // 手动拼接 queryKey, 避免 JSON.stringify 顺序导致 key 错乱
+  private getQueryKey(query?: ITableQuery) {
+    const q = query ?? this.currentQuery 
+    const sortKey = q.sortKey ?? ''
+    const sortDirection = q.sortDirection ?? ''
+    const filterText = (q.filterText ?? '').toLowerCase()
+    return `${sortKey}:${sortDirection}|f=${filterText}` // ":" 和 "|" 是自定义分隔符
+  }
+
+  private getPageCacheKey(pageIndex: number, query?: ITableQuery) {
+    return `${this.getQueryKey(query)}::${pageIndex}` // "::" 也是自定义分隔符
+  }
+
   // 缓存整页数据-后端分页
   public cachePage(pageIndex: number, data: Record<string, any>[]) {
-    this.pageCache.set(pageIndex, data)
+    const cacheKey = this.getPageCacheKey(pageIndex)
+    this.pageCache.set(cacheKey, data)
   }
 
   // 缓存全量数据 (同时保存原始副本)
@@ -35,27 +66,30 @@ export class DataManager {
   }
 
   // 异步: 获取某页数据 (带防重, 缓存)
-  async getPageData(pageIndex: number): Promise<Record<string, any>[]> {
-    // 若该页面正在请求数据中, 则原地等待, 勿重复请求(防抖)
-    if (this.loadingPromises.has(pageIndex)) {
-      return this.loadingPromises.get(pageIndex)!
+  async getPageData(pageIndex: number, query?: ITableQuery): Promise<Record<string, any>[]> {
+    const cacheKey = this.getPageCacheKey(pageIndex, query)
+    // 同一个 page + query 的请求防重复
+    if (this.loadingPromises.has(cacheKey)) {
+      return this.loadingPromises.get(cacheKey)!
     }
 
     // 若该页面数据已经在缓存池中了, 则取出来即可
-    if (this.pageCache.has(pageIndex)) {
-      return this.pageCache.get(pageIndex)!
+    if (this.pageCache.has(cacheKey)) {
+      return this.pageCache.get(cacheKey)!
     }
 
     // 若该页面, 既没在当前请求中, 也没在缓存中, 则请求后端数据
     if (!this.config.fetchPageData) return []
     const promise = this.config
-      .fetchPageData(pageIndex)
+      .fetchPageData(pageIndex, query ?? this.currentQuery)
       .then((res) => {
+        // server 模式下, totalRows 可能随着筛选变化, 要记录更新
+        this.serverTotalRows = res.totalRows
         // 先缓存页面数据, 并标记该页面已加载完
-        this.pageCache.set(pageIndex, res.list)
-        this.loadingPromises.delete(pageIndex)
+        this.pageCache.set(cacheKey, res.list)
+        this.loadingPromises.delete(cacheKey)
 
-        // 控制缓存页面队列动态平衡, 超过设置的阈值, 则清理掉队列头部的
+        // 缓存队列淘汰策略: 超过阈值, 则就删除最早插入的一条, 先进先出
         // new -> {1: data, 2: data, 10: data} => {2: data, ..., nnew}
         if (this.pageCache.size > this.config.maxCachedPages) {
           const firstKey = this.pageCache.keys().next().value!
@@ -64,11 +98,11 @@ export class DataManager {
         return res.list
       })
       .catch((err) => {
-        this.loadingPromises.delete(pageIndex)
-        throw new Error(`Faild to load page ${pageIndex}, err`)
+        this.loadingPromises.delete(cacheKey)
+        throw new Error(`Faild to load page ${pageIndex}, ${String(err)}`)
       })
-
-    this.loadingPromises.set(pageIndex, promise) // 标记当前页面数据加载OK
+    // 标记当前页面数据加载OK
+    this.loadingPromises.set(cacheKey, promise)
     return promise
   }
 
@@ -89,7 +123,8 @@ export class DataManager {
     const pageIndex = Math.floor(rowIndex / this.config.pageSize) // 数据在第几页
     const offset = rowIndex % pageSize
 
-    const pageData = this.pageCache.get(pageIndex) // 只让从缓存中读取
+    const cacheKey = this.getPageCacheKey(pageIndex)
+    const pageData = this.pageCache.get(cacheKey) // 只让从缓存中读取
     if (!pageData) return undefined // 未加载
 
     return pageData[offset]

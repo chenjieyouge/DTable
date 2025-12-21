@@ -9,7 +9,6 @@
 .table-wrapper {
   position: relative;
 }
-
 .sticky-header {
   position: sticky;
   top: 0;
@@ -93,3 +92,18 @@
   color: #666;
   font-size: 12px;
 }
+
+/* 测试面板样式, 不然有点丑 */
+#server-test-panel {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 12px;
+}
+
+#server-test-panel input {
+  height: 28px;
+  padding: 0 8px;
+  width: 220px;
+}
+

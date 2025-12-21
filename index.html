@@ -8,11 +8,16 @@
   <body>
     <h2>千万数据分页虚拟滚动</h2>
     <h3>内存模式 3w 行测试</h3>
-    <button id="sort-small">按销售额排序</button>
-    <div>111</div>
     <div id="table-small"></div>
 
     <h3>分页模式 100w 行测试</h3>
+    <div id="server-test-panel">
+      <input id="server-filter-input" placeholder="筛选关键字(回车生效)" />
+      <button type="text" id="btn-server-filter-huadong">筛选: 华东</button>
+      <button id="btn-server-filter-clear">清空筛选</button>
+      <button id="btn-server-sort-sales-desc">排序: 销售额 ⬇️</button>
+    </div>
+
     <div id="table-large"></div>
     <div class="page-indicator" id="page-indicator">加载中...</div>
     <script type="module" src="./src/main.ts"></script>
