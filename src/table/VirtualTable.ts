@@ -10,6 +10,12 @@ import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 import type { ITableShell } from '@/table/TableShell'
 import { mountTableShell } from '@/table/TableShell'
 
+import type { TableStore } from '@/table/state/createTableStore'
+import type { TableAction, TableState } from '@/table/state/types'
+import type { IColumn } from '@/types'
+import { createTableStore } from '@/table/state/createTableStore'
+import { assertUniqueColumnKeys, resolveColumns } from '@/table/model/ColumnModel'
+
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
@@ -28,6 +34,10 @@ export class VirtualTable {
   private renderer: DOMRenderer
   private scroller: VirtualScroller
 
+  private store!: TableStore 
+  private originalColumns!: IColumn[]
+  private unsubscribleStore: (() => void) | null = null 
+
   constructor(userConfig: IUserConfig) {
     // 初始化配置 (此时的 totalRows 是默认值, 后续会被覆盖)
     const tableConfig = new TableConfig(userConfig)
@@ -41,17 +51,57 @@ export class VirtualTable {
     this.initializeAsync()
   }
 
+  // 对外暴露当前表格 state 状态, 后续做 vue 封装会很需要
+  public getState() {
+    return this.store.getState()
+  }
+
+  // 对外暴露 dispatch, 后续拽列, 原生 UI 都走它
+  public dispatch(action: TableAction) {
+    return this.store.dispatch(action)
+  }
+
   // 异步初始化
   private async initializeAsync() {
     const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
     this.mode = mode
     this.config.totalRows = totalRows
-    // 挂载 TableShell, DOM 表头, 事件等都在 shell 内部处理
+    // 列 key 必须唯一, 尽早检验, 避免后续列顺序/拖拽状态全乱
+    assertUniqueColumnKeys(this.config.columns)
+    // 保留用户原始列配置, ColumnModel 永远基于它来解析
+    this.originalColumns = [...this.config.columns]
+    // 创建 store (里程碑A: 先非受控模式)
+    this.store = createTableStore({
+      columns: this.originalColumns,
+      mode: this.mode,
+      frozenCount: this.config.frozenColumns
+    })
+
+    // 订阅 state 变化 -> 驱动副作用 (排序/筛选/列变化重建等)
+    this.unsubscribleStore?.()
+    this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
+      this.handleStateChange(next, prev, action)
+    })
+
+    // 首次 mount 前, 将 state 解析出来的列, 应用回 config
+    this.applyColumnsFromState()
+    // 挂载 DOM, 会绑定表头点击事件, 滚动事件等
+    this.mount()
+    // 首次将排序指示器对齐到 state, 默认 null 
+    this.shell.setSortIndicator(this.store.getState().data.sort)
+    this.config.onModeChange?.(this.mode)
+  }
+
+  // 挂载 shell + viewport (暴力 rebuild 会重复调用它)
+  public mount() {
     this.shell = mountTableShell({
       config: this.config,
       renderer: this.renderer,
       headerSortBinder: this.headerSortBinder,
-      onToggleSort: (key) => this.toggleSort(key),
+      // 表头点击排序, 统一走 dispatch
+      onToggleSort: (key) => {
+        this.store.dispatch({ type: 'SORT_TOGGLE', payload: { key }})
+      },
       onNeedLoadSummary: (summaryRow) => {
         this.loadSummaryData(summaryRow).catch(console.warn)
       }
@@ -74,7 +124,6 @@ export class VirtualTable {
       this.viewport.updateVisibleRows()
     })
     this.viewport.updateVisibleRows()
-    this.config.onModeChange?.(this.mode) // 通知外部,模式的变化(可选)
   }
 
   // 加载总结行数据 (传参)
@@ -99,79 +148,97 @@ export class VirtualTable {
     return this.mode === 'client'
   }
 
-  // 排序入口, 兼容 client 和 server 模式
   public sort(sortKey: string, direction: 'asc' | 'desc') {
-    if (this.mode === 'client') {
-      this.dataManager.sortData(sortKey, direction)
-      // 排序完就刷新表格 (交由 viewport 统一调度), 原始数据还存了一份其实(浅拷贝)
-      this.viewport.refresh()
-    } else {
-      // console.warn('pagination mode need backend and add money')
-      this.applyServerQuery({
-        ...this.serverQuery,
-        sortKey,
-        sortDirection: direction
-      }).catch(console.warn)
-    }
+    this.store.dispatch({ type: 'SORT_SET', payload: { sort: { key: sortKey, direction }}})
   }
 
-  // 切换排序方法
-  private toggleSort(sortKey: string) {
-    const next = this.sortState.toggle(sortKey)
-    // 第三态: next === null 表示清空排序, 数据复原
-    if (!next) {
-      this.shell.setSortIndicator(null)
-      if (this.mode === 'client') {
-        // client 清空排序: 恢复原始顺序, 若有筛选, 则回复筛选后的原始顺序
-        this.dataManager.resetClientOrder(this.clientFilterText)
-        this.viewport.refresh()
-        return 
+
+  public filter(filterText: string) {
+    this.store.dispatch(
+      {
+        type: 'SET_FILTER_TEXT',
+        payload: { text: filterText }
       }
-      // server 清空排序: 下发 query, 去掉 filterText
-      this.applyServerQuery({
-        ...this.serverQuery,
-        sortKey: undefined,
-        sortDirection: undefined
-      }).catch(console.warn)
+    )
+  }
+
+  // 将 state 应用到 config (列顺序, 列宽, 冻结列数等)
+  private applyColumnsFromState() {
+    const state = this.store.getState()
+    const resolved = resolveColumns({ originalColumns: this.originalColumns, state})
+    // 让后续 DOMRenderer/Viewport 都使用新列定义
+    this.config.columns = resolved 
+    // 冻结列仍沿用我现有实现的: 前 N 列冻结
+    this.config.frozenColumns = state.columns.frozenCount
+  }
+
+  // state 变化后的统一入口 (里程碑A的 "表格骨架核心")
+  private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
+    // 列相关动作 -> 暴力重建 (最稳, 但性能一般)
+    if (
+      action.type === 'COLUMN_ORDER_SET' || 
+      action.type === 'COLUMN_WIDTH_SET' || 
+      action.type === 'FROZEN_COUNT_SET'
+    ) {
+      this.rebuild()
       return 
     }
-    // 若还有排序的话, 走正常的 sort 
-    this.sort(next.key, next.direction)
-    this.shell.setSortIndicator(next)
+    // 排序指示器永远以 state 为准
+    this.shell?.setSortIndicator(this.store.getState().data.sort)
+    // 排序/筛选变化 -> 根据模式触发数据侧更新
+    const state = this.store.getState()
+    if (state.data.mode === 'client') {
+      void this.applyClientState(state)
+    } else {
+      // server 模式 
+      void this.applyServerQuery(state.data.query).then(() => {
+        // server 筛选/排序后, summary 也可能会变
+        void this.refreshSummary()
+      })
+    }
   }
 
-  // private clearSortIndicator() {
-  //   // 清除现有的排序指示器, 用于第三次点击 "复原"
-  //   const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
-  //   allHeaders.forEach((header) => {
-  //     const indicator = header.querySelector('.sort-indicator')
-  //     if (indicator) indicator.remove()
-  //   })
-  // }
 
+  // client 模式下, 将 state 应用到 DataManager + Scroller + Viewport
+  private async applyClientState(state: TableState) {
+    const filterText: string = state.data.clientFilterText ?? ''
+    const sort = state.data.sort 
+    // 先恢复 原始顺序 + 应用筛选, 保证可回到自然顺序
+    this.clientFilterText = filterText
+    this.dataManager.resetClientOrder(filterText) // 恢复为原始顺序,考虑了筛选动作
+    // 若有排序, 则再处理
+    if (sort) {
+      this.dataManager.sortData(sort.key, sort.direction)
+    }
+    // 监控 totalRow 变化时, 需要重建 scroller 
+    this.config.totalRows = this.dataManager.getFullDataLength()
+    this.scroller = new VirtualScroller(this.config)
+    this.viewport.setScroller(this.scroller)
+    // 同步滚动高度 + 刷新可视区
+    this.shell.setScrollHeight(this.scroller)
+    this.viewport.refresh()
+    await this.refreshSummary() // 总结行也可能刷新
+  }
 
-  // 筛选入口
-  public filter(filterText: string) {
-    if (this.mode === 'client') {
-      this.clientFilterText = filterText
-      this.dataManager.filterData((row) =>
-        Object.values(row).some((val) =>
-          String(val).toLowerCase().includes(filterText.toLowerCase())
-        )
-      )
-      // 更新 totalRows, 注意要同步更新 scroller, 滚动高度也要变哦
-      this.config.totalRows = this.dataManager.getFullDataLength()
-      this.scroller = new VirtualScroller(this.config)
-      this.viewport.setScroller(this.scroller)
-      // 同步更新 data-container 高度
-      this.shell.setScrollHeight(this.scroller)
-      this.viewport.refresh() // 刷新表格数据
+  // 暴力重建 (列变化时用), 最稳但性能不行, 后续里程碑在优化为局部更新
+  private rebuild() {
+    // 先销毁旧 DOM 和 旧 viewport
+    this.shell?.destroy()
+    this.viewport?.destroy()
+    // 重写挂载前, 现将最新列状态, 写回 config (顺序/宽度/冻结列等)
+    this.applyColumnsFromState()
+    // 重新挂载
+    this.mount()
+    // 重建后, 将 UI 与数据状态重新对齐
+    const state = this.store.getState()
+    this.shell.setSortIndicator(state.data.sort)
+
+    if (state.data.mode === 'client') {
+      void this.applyClientState(state)
     } else {
-      // console.warn('pagination mode need backend and add money')
-      this.applyServerQuery({
-        ...this.serverQuery,
-        filterText,
-      }).catch(console.warn)
+      void this.applyServerQuery(state.data.query).then(() => {
+        void this.refreshSummary()
+      })
     }
   }
 
@@ -203,8 +270,11 @@ export class VirtualTable {
     this.viewport.refresh()
   }
 
-  // 清空
+
+  // 清空, 避免内存泄露
   public destroy() {
+    this.unsubscribleStore?.()
+    this.unsubscribleStore = null // 解绑 store 订阅
     this.shell?.destroy()
     this.viewport?.destroy()
   }
