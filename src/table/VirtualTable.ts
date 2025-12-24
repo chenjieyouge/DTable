@@ -106,6 +106,10 @@ export class VirtualTable {
       onColumnResizeEnd: (key, width) => {
         // 列宽变化写入 state, 并触发 rebuild (当前是暴力重建策略)
         this.store.dispatch({ type: 'COLUMN_WIDTH_SET', payload: { key, width}})
+      },
+      onColumnOrderChange: (order) => {
+        // 列顺序变化写入 state, 并触发 rebuild (当前是暴力重建策略)
+        this.store.dispatch({ type: 'COLUMN_ORDER_SET', payload: { order }})
       }
     })
 

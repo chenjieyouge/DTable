@@ -45,7 +45,7 @@ export async function mockFechPageData(
 // 生成模拟数据行, rowIndex 是原始行号, seq 是 "筛选+排序"后的行号
 function generateRow(rowIndex: number, seq: number) {
   const region = ['华南', '华东', '华北'][rowIndex % 3]
-  const detp = ['市场部', '销售部', '生产部'][rowIndex % 3]
+  const dept = ['市场部', '销售部', '生产部'][rowIndex % 3]
   const product = ['AI智能手机', 'AI学习平板', 'AI眼镜'][rowIndex % 3]
   const sales = rowIndex // 约定让它单调递增, 方便模拟 "全局排序后分页"
   const cost = (rowIndex * 16) % 5000 // 成本/利润页做成确定性
@@ -55,7 +55,7 @@ function generateRow(rowIndex: number, seq: number) {
     seq,
     id: rowIndex + 1,
     name: `员工${(rowIndex + 1).toLocaleString()}`,
-    detp,
+    dept,
     region,
     product,
     sales,

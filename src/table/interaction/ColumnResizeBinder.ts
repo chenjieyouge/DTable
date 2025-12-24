@@ -1,3 +1,5 @@
+// 拖拽列宽
+
 export class ColumnResizeBinder {
   private onMouseMove: ((e: MouseEvent) => void) | null = null 
   private onMouseUp: ((e: MouseEvent) => void) | null = null 

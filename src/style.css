@@ -49,8 +49,6 @@
   z-index: 999;
 }
 
-
-
 /* 可排序表头交互 */
 .header-cell[data-sortable='true'] {
   cursor: pointer;
