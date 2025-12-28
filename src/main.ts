@@ -59,10 +59,10 @@ const configLarge: IUserConfig = {
   // 事先已经返回的数据格式,进行列配置
   columns: [
     { key: 'seq', title: '序号(筛选后)', width: 110 },
-    { key: 'id', title: '原始ID', width: 80 },
-    { key: 'name', title: '姓名', width: 150 },
-    { key: 'dept', title: '部门', width: 80 },
-    { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'text'} },
+    { key: 'id', title: '原始ID', width: 80, filter: { enabled: true, type: 'numberRange'}},
+    { key: 'name', title: '姓名', width: 150, filter: { enabled: true, type: 'text'}},
+    { key: 'dept', title: '部门', width: 80, filter: { enabled: true, type: 'set'} },
+    { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'set'} },
     { key: 'product', title: '产品', width: 140 },
     { key: 'sales', title: '销售额', width: 120, sortable: true },
     { key: 'cost', title: '成本', width: 120 },
@@ -72,7 +72,23 @@ const configLarge: IUserConfig = {
   fetchPageData: async (pageIndex: number, query?: ITableQuery) => {
     // 模拟 100 w 行数据(分页), 并带有 query 交给 mock 做“全局筛选排序后分页"
     // console.log('[fetchPageData] ', { pageIndex, query })
-    return mockFechPageData(pageIndex, PAGE_SIZE, 10_000_000, query)
+    return mockFechPageData(pageIndex, PAGE_SIZE, 10_000, query)
+  },
+
+  // mock 下拉框值用, 后续搞个真正接口来测试
+  fetchFilterOptions: async ({ key, query }) => {
+    void query 
+    if (key === 'dept') {
+      return ['市场部', '销售部', '生产部']
+    }
+    if (key === 'region') {
+      return ['华南', '华北', '华东']
+    }
+    if (key === 'region') {
+      return ['AI智能手机', 'AI学习平板', 'AI眼镜']
+    }
+    // 其他字段暂不支持 set 下拉框筛选
+    return []
   },
 
   fetchSummaryData(): Promise<Record<string, any>> {
@@ -92,7 +108,9 @@ const configLarge: IUserConfig = {
 // main
 document.addEventListener('DOMContentLoaded', () => {
   const tableSmall = new VirtualTable(configSmall)
+
   const tableLarge = new VirtualTable(configLarge)
+  // ready 后在绑定时间, 避免初始化前调用 sort/filter/dispatch
 
   // test-start 在 server 下最小手动测试面板绑定 ============
   const input = document.getElementById('server-filter-input') as HTMLInputElement
@@ -100,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnClear = document.getElementById('btn-server-filter-clear')
   const btnSortSalesDesc = document.getElementById('btn-server-sort-sales-desc')
 
-  // 按钮A: 固定筛选 "华东"
+  tableLarge.onReady(() => {
+    // 按钮A: 固定筛选 "华东"
   btnHuadong?.addEventListener('click', () => {
     tableLarge.filter('华东') 
   })
@@ -129,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
       payload: { count: 2 }
     })
   }, 1000);
-
+  })
+  
   // test-end ============
 })

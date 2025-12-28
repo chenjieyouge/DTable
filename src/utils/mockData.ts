@@ -18,29 +18,109 @@ export async function mockFechPageData(
   totalRows: number,
   query?: ITableQuery
 ): Promise<IPageResponse> {
-  // 模拟网络延迟
-  await new Promise((resolve) => setTimeout(resolve, Math.random() * 1000 + 50))
-  // 1. 解析筛选条件, 模拟实现 "全局筛选后分页", 约定按照 rowIndex % 3 分组
-  const remainder = pickRemainderByFilter(query?.filterText)
-  // 2. 计算筛选后的总行数, 避免还是原来的 totalRows, 防滚动空白
-  const filteredTotalRows = calcFilteredTotalRows(totalRows, remainder)
+  // 模拟网络延迟 1s 
+  await new Promise((resolve) => setTimeout(resolve, Math.random() * 1000 + 250))
+  // 1. 生成全量蜀山 (模拟后端全表), 这个会有性能问题吧!
+  const allRows: Record<string, any>[] = []
+  for (let i = 0; i < totalRows; i++) {
+    allRows.push(generateRow(i, i+1))
+  }
+  // 2. 应用列筛选 (模拟后端 where 条件)
+  let filtered = allRows
+  if (query?.columnFilters) {
+    filtered = allRows.filter(row => {
+      for (const key in query.columnFilters!) {
+        const filter = query.columnFilters![key]
+        const cellVal = row[key]
+        if (filter.kind ==='set') {
+          if (filter.values.length === 0) continue 
+          if (!filter.values.includes(String(cellVal ?? ''))) return false
 
-  // 3. 组装改页数据, 注意这里的 "逻辑行号" 是 筛选 + 排序后 的序号 seq
-  const list: Record<string, any>[] = []
-  const start = pageIndex * pageSize 
-  const end = Math.min(start + pageSize, filteredTotalRows)
+        } else if (filter.kind === 'text') {
+          if (!filter.value) continue 
+          if (!String(cellVal ?? '').toLowerCase().includes(filter.value.toLowerCase())) {
+            return false 
+          }
 
-  // 4. 排序, 也要 "全局排序后分页", 约定 sales 与 rowIndex 单调相关, 方便计算
-  const isDesc = query?.sortKey === 'sales' && query.sortDirection === 'desc'
-  for (let logicalIndex = start; logicalIndex < end; logicalIndex++) {
-    // logicalIndex 表示 "筛选+排序" 后的序号
-    const mapped = mapLogicalIndexToRowIndex(logicalIndex, filteredTotalRows, remainder, isDesc)
-    // 痛处返回 seq (筛选后的序号) 与 id (原始行号), 便于俺肉眼验证效果
-    list.push(generateRow(mapped.rowIndex, mapped.seq))
+        } else if (filter.kind === 'dateRange') {
+          const dateStr = String(cellVal ?? '')
+          if (filter.start && dateStr < filter.start) return false 
+          if (filter.end && dateStr > filter.end) return false
+
+        } else if (filter.kind === 'numberRange') {
+          const num = Number(cellVal)
+          if (isNaN(num)) return false 
+          if (filter.min !== undefined && num < filter.min) return false 
+          if (filter.max !== undefined && num > filter.max) return false 
+
+        } // else if 其他值类型
+      }
+      return true 
+    })
   }
 
-  return { list, totalRows }
+  // 3. 应用全局文本筛选
+  if (query?.filterText) {
+    const kw = query.filterText.toLowerCase()
+    filtered = filtered.filter(row =>
+      Object.values(row).some(val => String(val).toLowerCase().includes(kw))
+    )
+  }
+
+  // 4. 应用排序
+  if (query?.sortKey && query.sortDirection) {
+    const key = query.sortKey
+    const dir = query.sortDirection
+    filtered.sort((a, b) => {
+      const aVal = a[key]
+      const bVal = b[key]
+      if (aVal == null && bVal == null) return 0
+      if (aVal == null) return 1
+      if (bVal == null) return -1
+      if (aVal < bVal) return dir === 'asc' ? -1 : 1
+      if (aVal > bVal) return dir === 'asc' ? 1 : -1
+      return 0
+    })
+  }
+
+  // 5. 分页 
+  const filteredTotalRows = filtered.length
+  const start = pageIndex * pageSize
+  const end = Math.min(start + pageSize, filteredTotalRows)
+  const list = filtered.slice(start, end)
+
+  return { list, totalRows: filteredTotalRows }
 }
+
+// export async function mockFechPageData(
+//   pageIndex: number,
+//   pageSize: number,
+//   totalRows: number,
+//   query?: ITableQuery
+// ): Promise<IPageResponse> {
+//   // 模拟网络延迟
+//   await new Promise((resolve) => setTimeout(resolve, Math.random() * 1000 + 50))
+//   // 1. 解析筛选条件, 模拟实现 "全局筛选后分页", 约定按照 rowIndex % 3 分组
+//   const remainder = pickRemainderByFilter(query?.filterText)
+//   // 2. 计算筛选后的总行数, 避免还是原来的 totalRows, 防滚动空白
+//   const filteredTotalRows = calcFilteredTotalRows(totalRows, remainder)
+
+//   // 3. 组装改页数据, 注意这里的 "逻辑行号" 是 筛选 + 排序后 的序号 seq
+//   const list: Record<string, any>[] = []
+//   const start = pageIndex * pageSize 
+//   const end = Math.min(start + pageSize, filteredTotalRows)
+
+//   // 4. 排序, 也要 "全局排序后分页", 约定 sales 与 rowIndex 单调相关, 方便计算
+//   const isDesc = query?.sortKey === 'sales' && query.sortDirection === 'desc'
+//   for (let logicalIndex = start; logicalIndex < end; logicalIndex++) {
+//     // logicalIndex 表示 "筛选+排序" 后的序号
+//     const mapped = mapLogicalIndexToRowIndex(logicalIndex, filteredTotalRows, remainder, isDesc)
+//     // 痛处返回 seq (筛选后的序号) 与 id (原始行号), 便于俺肉眼验证效果
+//     list.push(generateRow(mapped.rowIndex, mapped.seq))
+//   }
+
+//   return { list, totalRows }
+// }
 
 // 生成模拟数据行, rowIndex 是原始行号, seq 是 "筛选+排序"后的行号
 function generateRow(rowIndex: number, seq: number) {
@@ -125,4 +205,4 @@ export function mockFechSummaryData(): Promise<Record<string, any>> {
 }
 
 // test
-// mockFechPageData(1, 100, 1000).then((res) => console.log(res))
+// mockFechPageData(2, 3, 10).then((res) => console.log(res))

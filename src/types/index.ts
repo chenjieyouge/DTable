@@ -1,5 +1,5 @@
 // 列筛选类型 (目前支持 4 种)
-export type ColumnFilterType = 'set' | 'text' | 'datarange' | 'numberRange'
+export type ColumnFilterType = 'set' | 'text' | 'dateRange' | 'numberRange'
 
 // 列筛选配置 (控制某列是否筛选, 以及配置类型)
 export interface IColumnFilterConfig {

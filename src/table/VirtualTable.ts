@@ -36,6 +36,13 @@ export class VirtualTable {
   private originalColumns!: IColumn[]
   private unsubscribleStore: (() => void) | null = null 
 
+  // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
+  public readonly ready: Promise<void> 
+  private resolveReady: (() => void) | null = null 
+  // 初始化完成前的 action 队列, 避免 store 为 undefined 
+  private pendingActions: TableAction[] = []
+  private isReady = false
+
   constructor(userConfig: IUserConfig) {
     // 初始化配置 (此时的 totalRows 是默认值, 后续会被覆盖)
     const tableConfig = new TableConfig(userConfig)
@@ -44,6 +51,11 @@ export class VirtualTable {
     this.dataManager = new DataManager(this.config)
     this.renderer = new DOMRenderer(this.config)
     this.scroller = new VirtualScroller(this.config)
+
+    // 创建 ready Promise, initializeAsync 完成后 resolve 
+    this.ready = new Promise<void>((resolve) => {
+      this.resolveReady = resolve
+    })
 
     // 启动异步初始化流程
     this.initializeAsync()
@@ -54,13 +66,77 @@ export class VirtualTable {
     return this.store.getState()
   }
 
+  // 方便 demo 使用 (减少导出 await)
+  public onReady(cb: () => void) {
+    this.ready.then(cb).catch(console.warn)
+  }
+
   // 对外暴露 dispatch, 后续拽列, 原生 UI 都走它
   public dispatch(action: TableAction) {
+    // 未初始完成时, 不直接 dispatch, 先排队, 避免 store 为 undefined
+    if (!this.isReady || !this.store) {
+      this.pendingActions.push(action)
+      return 
+    }
     return this.store.dispatch(action)
   }
 
   // 异步初始化
   private async initializeAsync() {
+    // server 模式下, 不要 await 首次请求, 否则 mount 被阻塞, 会白屏无数据
+    const isServerBootstrap = !this.config.initialData && typeof this.config.fetchPageData === 'function'
+    try {
+      if (isServerBootstrap) {
+        // 1. 先按 server 模式将 "骨架表格" 挂出来
+        this.mode = 'server'
+        // totalRows 先用默认值, 等有数真实数据再替换回来
+        assertUniqueColumnKeys(this.config.columns) // 列 key 唯一校验
+        this.originalColumns = [...this.config.columns]
+
+        this.store = createTableStore({
+          columns: this.originalColumns,
+          mode: this.mode,
+          frozenCount: this.config.frozenColumns
+        })
+        this.unsubscribleStore?.()
+        this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
+          this.handleStateChange(next, prev, action)
+        })
+
+        this.applyColumnsFromState() 
+        this.mount() // 挂载渲染骨架屏
+
+        this.shell.setSortIndicator(this.store.getState().data.sort)
+        this.config.onModeChange?.(this.mode)
+
+        // 2. ready 可以在 mount 后就 resolve, 此时 dispatch 安全, 数据可能还还在加载
+        this.isReady = true 
+        const pending = this.pendingActions
+        this.pendingActions = []
+        pending.forEach(action => this.store.dispatch(action))
+        this.resolveReady?.()
+        this.resolveReady = null 
+
+        // 3. 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
+        void this.dataManager.getPageData(0).then(() => {
+          const realTotal = this.dataManager.getServerTotalRows()
+          if (typeof realTotal === 'number' && realTotal >= 0 && realTotal !== this.config.totalRows) {
+            // totalRows 更新必须重建 scroller, 否则高度不对
+            this.config.totalRows = realTotal
+            this.scroller = new VirtualScroller(this.config)
+            this.viewport.setScroller(this.scroller)
+            this.shell.setScrollHeight(this.scroller)
+            // 刷新可视区, 骨架屏会重新计算范围, 然后从 cache 拿到 page0 填充
+            this.viewport.refresh()
+          }
+        }).catch(console.warn)
+        return 
+      }
+    // } catch (error) {
+    //   return 
+    // }
+
+    // ======= 原逻辑: client 模式或者 用户传入了 initialData 的情况 ===========
     const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
     this.mode = mode
     this.config.totalRows = totalRows
@@ -88,7 +164,20 @@ export class VirtualTable {
     // 首次将排序指示器对齐到 state, 默认 null 
     this.shell.setSortIndicator(this.store.getState().data.sort)
     this.config.onModeChange?.(this.mode)
+
+    // 标记 ready, 并 flush 初始化前积攒的 action 
+    this.isReady = true 
+    const pending = this.pendingActions
+    this.pendingActions = []
+    pending.forEach(action => this.store.dispatch(action))
+    this.resolveReady?.()
+    this.resolveReady = null 
+
+  } catch (err) {
+    console.warn('[VirtualTable.initializeAsync] faild: ', err)
+    throw err 
   }
+}
 
   // 挂载 shell + viewport (暴力 rebuild 会重复调用它)
   public mount() {
