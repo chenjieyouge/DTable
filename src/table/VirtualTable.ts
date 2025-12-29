@@ -223,7 +223,29 @@ export class VirtualTable {
       },
       getCurrentFilter: (key) => {
         return this.store.getState().data.columnFilters[key]
-      }
+      },
+      onTableResizeEnd: (newWidth) => {
+        // 处理表格宽度变化, 按比例扩张或压缩, 感觉逻辑也可以抽离一下
+        const oldWidth = this.config.tableWidth
+        const ratio = newWidth / oldWidth
+        this.config.tableWidth = newWidth
+
+        const state = this.store.getState()
+        const newWidthOverrides: Record<string, number> = {}
+        // 每列按拓展比例缩放, 类似 flex
+        this.config.columns.forEach(col => {
+          const oldColWidth = state.columns.widthOverrides[col.key] ?? col.width
+          newWidthOverrides[col.key] = Math.round(oldColWidth * ratio) 
+        })
+        // 批量派发事件, 每列都派发计算一次, 高频拓展列宽设置就有性能问题
+        Object.entries(newWidthOverrides).forEach(([key, width]) => {
+          this.store.dispatch({
+            type: 'COLUMN_WIDTH_SET',
+            payload: { key, width }
+          })
+        })
+      },
+      // 后续拓展...
 
     })
 

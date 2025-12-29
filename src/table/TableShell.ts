@@ -9,6 +9,8 @@ import { ColumnResizeBinder } from "@/table/interaction/ColumnResizeBinder";
 import { ColumnDragBinder } from "@/table/interaction/ColumnDragBinder";
 import { ColumnFilterBinder } from "@/table/interaction/ColumnFilterBinder";
 
+import { TableResizeBinder } from "@/table/interaction/TableResizeBinder";
+
 
 export interface ITableShell {
   scrollContainer: HTMLDivElement
@@ -22,6 +24,7 @@ export interface ITableShell {
 
   updateColumnWidths(columns: IConfig['columns']): void  // 增量更新列宽 (css 变量)
   updateColumnOrder(columns: IConfig['columns']): void  // 增量更新列顺序 (dom 重排)
+
 }
 
 export function mountTableShell(params: {
@@ -36,7 +39,9 @@ export function mountTableShell(params: {
 
   onColumnFilterChange?: (key: string, filter: ColumnFilterValue | null ) => void  // 列筛选值回调
   getFilterOptions?: (key: string) => Promise<string[]> // 筛选配置
-  getCurrentFilter?: (key: string) => ColumnFilterValue | undefined
+  getCurrentFilter?: (key: string) => ColumnFilterValue | undefined // 列当前筛选值
+
+  onTableResizeEnd?: (newWidth: number) => void // 表格拖拽后的新总宽度
 
 }): ITableShell {
 
@@ -51,6 +56,7 @@ export function mountTableShell(params: {
     onColumnFilterChange,
     getFilterOptions,
     getCurrentFilter,
+    onTableResizeEnd,
    } = params
 
 
@@ -102,8 +108,16 @@ export function mountTableShell(params: {
     })
   }
 
-  // toto: 更多列功能添加
+  // 绑定正标宽度拖拽
+  const tableResizeBinder = new TableResizeBinder()
+  if (onTableResizeEnd) {
+    tableResizeBinder.bind({
+      scrollContainer,
+      onResizeEnd: onTableResizeEnd,
+    })
+  }
 
+  // toto: 更多列功能添加
   tableWrapper.appendChild(headerRow)
 
   // 3. 总结行
@@ -143,14 +157,6 @@ export function mountTableShell(params: {
     },
     bindScroll(onRafScroll: () => void) {
       scrollBinder.bind(scrollContainer, onRafScroll)
-    },
-    destroy() {
-      headerSortBinder.unbind(headerRow) // 清理表头事件
-      scrollBinder.unbind(scrollContainer) // 清理滚动事件
-      scrollContainer.innerHTML = '' // 清理容器
-      resizeBinder.unbind(headerRow) // 释放列宽拖拽事件
-      dragBinder.unbind(headerRow) // 释放列拖拽改顺序字段
-      filterBinder.unbind()  // 释放列值筛选
     },
     updateColumnWidths(columns) {
       // 只更新变量, 不重建 DOM 
@@ -194,6 +200,18 @@ export function mountTableShell(params: {
       }
     },
     // 其他更多拓展...
+
+
+    // 清理方法放最后来, 不然总是找不到在哪!
+    destroy() {
+      headerSortBinder.unbind(headerRow) // 清理表头事件
+      scrollBinder.unbind(scrollContainer) // 清理滚动事件
+      scrollContainer.innerHTML = '' // 清理容器
+      resizeBinder.unbind(headerRow) // 释放列宽拖拽事件
+      dragBinder.unbind(headerRow) // 释放列拖拽改顺序字段
+      filterBinder.unbind()  // 释放列值筛选
+      tableResizeBinder.unbind() // 释放整表宽度拖拽事件
+    }
   }
 }
 

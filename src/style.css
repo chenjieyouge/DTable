@@ -10,6 +10,7 @@
   position: relative;
 }
 
+
 .sticky-header {
   position: sticky;
   top: 0;
@@ -212,6 +213,22 @@
   margin-bottom: 8px;
   font-size: 13px;
   color: #333;
+}
+
+/* 整表苦读拖拽手柄(右边界) */
+.table-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 1000;
+}
+
+.table-resize-handle:hover {
+  background-color: rgba(250, 0, 0, 0.2);
 }
 
 
