@@ -70,6 +70,7 @@ requestAnimationFrame 优化：滚动事件使用 RAF 优化性能
 纯 TypeScript
 
 ## 🚀 快速开始
+```ts
 import { VirtualTable } from 'virtual-table';
 
 const table = new VirtualTable({
@@ -81,3 +82,4 @@ const table = new VirtualTable({
   data: yourDataArray,
   tableHeight: 400
 });
+```
