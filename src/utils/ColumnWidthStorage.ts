@@ -1,17 +1,23 @@
 // 列宽持久化存储工具类
 export class ColumnWidthStorage {
-  private storageKey: string 
+  private columnsKey: string 
   private tableWidthKey: string 
+
+  // 用来存储到 localStorage 的 key 标识前缀
+  private columnPrefix = 'Dtable-column-widths-'
+  private tablePrefix = 'Dtable-all-width-'
   
   constructor(tableId: string) {
-    this.storageKey = `div_table_column_widths_${tableId}`
-    this.tableWidthKey = `div_table_table_width_${tableId}`
+    this.columnsKey = `${this.columnPrefix}${tableId}`
+    this.tableWidthKey = `${this.tablePrefix}${tableId}`
+    // 自动清理无效的 key 
+    // this.cleanupInvalidKeys()
   }
 
   // 保存列宽到 localstorage
   public saveColumnWidth(widths: Record<string, number>): void {
     try {
-      localStorage.setItem(this.storageKey, JSON.stringify(widths))
+      localStorage.setItem(this.columnsKey, JSON.stringify(widths))
     } catch (err) {
       console.warn('保存列宽失败: ', err)
     }
@@ -20,7 +26,7 @@ export class ColumnWidthStorage {
   // 从 localStorage 恢复列宽
   public loadColumnWidth(): Record<string, number> | null {
     try {
-      const data = localStorage.getItem(this.storageKey)
+      const data = localStorage.getItem(this.columnsKey)
       return data ? JSON.parse(data) : null 
     } catch (err) {
       console.warn('恢复列宽失败: ', err)
@@ -50,10 +56,38 @@ export class ColumnWidthStorage {
   // 清除保存的列宽, 整表宽度
   public clear(): void {
     try {
-      localStorage.removeItem(this.storageKey)
+      localStorage.removeItem(this.columnsKey)
       localStorage.removeItem(this.tableWidthKey)
     } catch (err) {
       console.warn('清除列宽或表格整宽失败: ', err)
+    }
+  }
+
+  // todo: 自动清理无效的 key 防止堆屎山到用户的 localStorage 中 
+  public cleanupInvalidKeys(): void {
+    try {
+      const keysToRemove: string[] = []
+      const currentTableId = this.columnsKey.replace(this.columnPrefix, '')
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key  = localStorage.key(i) 
+
+        if (key && (key.startsWith(this.columnPrefix) || key.startsWith(this.tablePrefix))) {
+          const storedTableId = key.replace(this.columnPrefix, '').replace(this.tablePrefix, '')
+          
+          // 检查对应的容器是否还存在 且 不是当前表格
+          if (storedTableId !== currentTableId && !document.querySelector(storedTableId)) {
+            keysToRemove.push(key)
+          }
+        }
+      }
+      // 删除无效 key 
+      if (keysToRemove.length > 0) {
+        keysToRemove.forEach(key => localStorage.removeItem(key))
+      }
+
+    } catch (err) {
+      console.warn('清理 localStorage key 失败: ', err)
     }
   }
 }

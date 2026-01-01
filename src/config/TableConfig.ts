@@ -2,13 +2,12 @@ import { IUserConfig, IConfig } from '@/types'
 
 type MyDefault = Omit<
   IConfig,
-  'columns' | 'fetchPageData' | 'fetchSummaryData' | 'initialData'
+  'columns' | 'fetchPageData' | 'fetchSummaryData' | 'initialData' | 'tableId'
 >
 
 const DEFAULTS: MyDefault = {
   container: '#container',
   tableWidth: 500,
-  tableId: '',
   tableHeight: 500,
   headerHeight: 30,
   summaryHeight: 24,
@@ -40,7 +39,11 @@ export class TableConfig {
     // ... 其他校验
 
     // 2. 合并默认值 + 用户配置
-    this.config = { ...DEFAULTS, ...userConfig }
+    this.config = { 
+      ...DEFAULTS, 
+      ...userConfig,
+      tableId: userConfig.tableId || this.generateTableId(userConfig)
+     }
   }
 
   get<K extends keyof IConfig>(key: K): IConfig[K] {
@@ -50,4 +53,12 @@ export class TableConfig {
   getAll(): IConfig {
     return this.config
   }
+
+  private generateTableId(userConfig: IUserConfig): string {
+    // 根据人工传递的容器标识, 生成稳定的 tableId
+    const containerId = userConfig.container || 'yougeya'
+    const cleanId = containerId.replace(/[^a-zA-z0-9]/g, '-')
+    return `cj-${cleanId}`
+  }
+
 }

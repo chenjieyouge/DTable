@@ -46,9 +46,10 @@ export class VirtualTable {
     const tableConfig = new TableConfig(userConfig)
     this.config = tableConfig.getAll()
 
-    // 初始化列宽存储, 如果配置了 tableId
-    if (userConfig.tableId) {
-      this.widthStorage = new ColumnWidthStorage(userConfig.tableId)
+    // 初始化列宽存储, 使用最终的 tableId, 自动生成
+    const finalTableId = this.config.tableId
+    if (finalTableId) {
+      this.widthStorage = new ColumnWidthStorage(finalTableId)
       this.restoreColumnWidths() // 恢复保存的列宽
     }
 

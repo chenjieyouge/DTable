@@ -7,6 +7,14 @@ test.html
 test.js
 test.ts
 
+# 忽略本地凭据
+~/.git-credentials
+.git-credentials
+
+# 忽略环境变量
+.env
+.env.local
+secrets.json
 
 # node_modules
 node_modules/
