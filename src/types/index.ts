@@ -61,6 +61,8 @@ export interface IColumn {
   width: number
   sortable?: boolean
   filter?: IColumnFilterConfig  // 列筛选配置 (不配置则表示不可筛选)
+  summaryType?: 'sum' | 'avg' | 'count' | 'none' // 总结行聚合类型
+
 }
 
 // 对外: 用户传入的配置 (宽松)

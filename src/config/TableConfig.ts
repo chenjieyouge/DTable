@@ -8,12 +8,13 @@ type MyDefault = Omit<
 const DEFAULTS: MyDefault = {
   container: '#container',
   tableWidth: 500,
+  tableId: '',
   tableHeight: 500,
   headerHeight: 30,
   summaryHeight: 24,
   rowHeight: 20,
   totalRows: 100000,
-  frozenColumns: 2,
+  frozenColumns: 1,
   showSummary: true,
 
   pageSize: 200, // 每页显示多少条
@@ -38,7 +39,7 @@ export class TableConfig {
 
     // ... 其他校验
 
-    // 2. 合并默认值 +用户配置
+    // 2. 合并默认值 + 用户配置
     this.config = { ...DEFAULTS, ...userConfig }
   }
 

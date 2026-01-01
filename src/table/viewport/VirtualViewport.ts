@@ -151,6 +151,7 @@ export class VirtualViewport {
         if (rowEl) {
           // 关键: 渲染行数据
           this.renderer.updateDataRow(rowEl, rowData)
+          
         }
       }
     } catch (error) {

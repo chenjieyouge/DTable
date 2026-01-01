@@ -28,11 +28,11 @@ const configSmall: IUserConfig = {
   columns: [
     { key: 'name', title: '姓名', width: 120 },
     { key: 'id', title: 'ID', width: 100, filter: { enabled: true, type: 'numberRange'}},
-    { key: 'dept', title: '部门', width: 80, filter: { enabled: true, type: 'text' } },
+    { key: 'dept', title: '部门', width: 80, sortable: true, filter: { enabled: true, type: 'text' } },
     { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'set'} },
-    { key: 'product', title: '产品', width: 140, sortable: true },
-    { key: 'sales', title: '销售额', width: 120, sortable: true },
-    { key: 'cost', title: '成本', width: 120, sortable: true },
+    { key: 'product', title: '产品', width: 140, sortable: true, summaryType: 'count'},
+    { key: 'sales', title: '销售额', width: 120, sortable: true, summaryType: 'sum' },
+    { key: 'cost', title: '成本', width: 120, sortable: true, summaryType: 'avg' },
     { key: 'profit', title: '利润', width: 120 },
   ],
   onModeChange(mode: 'client' | 'server') {
@@ -45,10 +45,11 @@ const configSmall: IUserConfig = {
 const PAGE_SIZE = 200 // 和 mock 表格配置共用
 const configLarge: IUserConfig = {
   container: '#table-large',
+  tableId: 'cj-large-table-001',
   tableWidth: 600,
   tableHeight: 500,
-  // headerHeight: 28,
-  // summaryHeight: 24,
+  headerHeight: 40,
+  summaryHeight: 20,
   rowHeight: 20,
   // frozenColumns: 2,
   // showSummary: true,
@@ -59,8 +60,8 @@ const configLarge: IUserConfig = {
 
   // 事先已经返回的数据格式,进行列配置
   columns: [
-    { key: 'seq', title: '序号(筛选后)', width: 110 },
-    { key: 'id', title: '原始ID', width: 80, filter: { enabled: true, type: 'numberRange'}},
+    { key: 'seq', title: '序号(筛选后)', width: 120 },
+    { key: 'id', title: '原始ID', width: 100, filter: { enabled: true, type: 'numberRange'}},
     { key: 'name', title: '姓名', width: 150, filter: { enabled: true, type: 'text'}},
     { key: 'dept', title: '部门', width: 80, filter: { enabled: true, type: 'set'} },
     { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'set'} },

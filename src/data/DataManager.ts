@@ -304,17 +304,24 @@ export class DataManager {
     this.pageCache.clear()
   }
 
-  // client 模式下, 动态计算总结行, 先做求和 (基于当前筛选/排序后的数据)
+  // client 模式下, 动态计算总结行, 支持 sum, avg, count, max, min, none 聚合
   public computeSummary(columns: IColumn[]): Record<string, any> {
     const summary: Record<string, any> = {}
     // 第一列默认显示 "合计"
     if (columns.length > 0) {
       summary[columns[0].key] = '合计'
     }
-    // 遍历每列, 根据列配置计算聚合值
+    // 从 fullData 中遍历每列, 根据列配置计算聚合值
     columns.forEach((col, index) => {
-      if (index === 0) return  // 第一列已是合计
-      // 从当前 fullData 中提取该列的所有值
+      if (index === 0) return
+
+      // 若列没配置了 summaryType, 或配置为 none 则直接跳过
+      if (!col.summaryType || col.summaryType === 'none') {
+        summary[col.key] = ''
+        return 
+      }
+
+      // 从当前 fullData 中提取该列的所有值, 遍历每行去找, 应该是个耗时操作
       const values = (this.fullData ?? [])
         .map(row => row[col.key])
         .filter(val => val !== null && val !== undefined && val !== '')
@@ -323,20 +330,37 @@ export class DataManager {
         summary[col.key] = ''
         return 
       }
-
-      
+      // 若配置了 count, 则直接返回计数 (不区分数值, 非数值)
+      if (col.summaryType === 'count') {
+        summary[col.key] = values.length + ' 项'
+        return 
+      }
       // 判断是否为数值列, 先强转字符, 在解析为浮点数, 若解析不了则为 NaN, 过滤即可
       const numericValues = values 
         ?.map(v => typeof v === 'number' ? v : parseFloat(String(v)))
         .filter(v =>!isNaN(v))
       
       if (numericValues!.length > 0) {
-        // 数值列计算总和 (后续拓展为 avg, max, min 等)
-        const sum = numericValues?.reduce((acc, val) => acc + val, 0)
-        summary[col.key] = sum.toFixed(2) // 保留两位小数
+        // 根据 summaryType 计算不同聚合值
+        const summaryType = col.summaryType ?? 'sum' // 默认求和
+
+        switch (summaryType) {
+          case 'sum':
+            const sum = numericValues.reduce((acc, val) => acc + val, 0)
+            summary[col.key] = sum.toFixed(2)
+            break
+
+          case 'avg':
+            const avg = numericValues.reduce((acc, val) => acc + val, 0) / numericValues.length
+            summary[col.key] = avg.toFixed(2)
+            break
+        
+          default:
+            summary[col.key] = ''
+        }
       } else {
-        // 非数值列显示计数
-        summary[col.key] = `${values.length} 项`
+        // 非数值列显示空
+        summary[col.key] = ''
       }
     })
     return summary

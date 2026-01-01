@@ -24,7 +24,6 @@ export class VirtualTable {
   private mode: 'client' | 'server' = 'server' 
   private headerSortBinder = new HeaderSortBinder()
   private serverQuery: ITableQuery = { filterText: '' } 
-  private clientFilterText = '' 
   private viewport!: VirtualViewport
 
   private dataManager: DataManager
@@ -228,8 +227,11 @@ export class VirtualTable {
         return this.store.getState().data.columnFilters[key]
       },
       onTableResizeEnd: (newWidth) => {
-
-        // this.config.tableWidth = newWidth 
+        this.config.tableWidth = newWidth 
+        // 保存整表宽度到 localStorage
+        if (this.widthStorage) {
+          this.widthStorage.saveTableWidth(newWidth)
+        }
 
         // 处理表格宽度变化, 按比例扩张或压缩, 感觉逻辑也可以抽离一下
         // const oldWidth = this.config.tableWidth
@@ -350,7 +352,7 @@ export class VirtualTable {
         this.config.columns.forEach(col => {
           widths[col.key] = col.width
         })
-        this.widthStorage.save(widths)
+        this.widthStorage.saveColumnWidth(widths)
       }
       return 
     }
@@ -395,13 +397,11 @@ export class VirtualTable {
     const columnFilters = state.data.columnFilters ?? {}
 
     // 先恢复 原始顺序 + 应用筛选, 保证可回到自然顺序
-    this.clientFilterText = filterText
     this.dataManager.resetClientOrder({ filterText, columnFilters }) // 恢复为原始顺序,考虑了筛选动作
     // 若有排序, 则再处理
     if (sort) {
       this.dataManager.sortData(sort.key, sort.direction)
     }
-
 
     // 监控 totalRow 变化时, 需要重建 scroller 
     this.config.totalRows = this.dataManager.getFullDataLength()
@@ -483,18 +483,21 @@ export class VirtualTable {
   // 从 localStorage 恢复列宽 
   private restoreColumnWidths() {
     if (!this.widthStorage) return
-
-    const saveWidths = this.widthStorage.load()
-    if (!saveWidths) return 
-    // 应用保存的列宽配置
-    this.config.columns.forEach(col => {
-      if (saveWidths[col.key]) {
-        col.width = saveWidths[col.key]
-      }
-    })
-
+    // 恢复列宽
+    const savedColumnWidths = this.widthStorage.loadColumnWidth()
+    if (savedColumnWidths) {
+      this.config.columns.forEach(col => {
+        if (savedColumnWidths[col.key]) {
+          col.width = savedColumnWidths[col.key]
+        }
+      })
+    }
+    // 恢复整表宽度
+    const savedTableWidth = this.widthStorage.loadTableWidth()
+    if (savedTableWidth) {
+      this.config.tableWidth = savedTableWidth
+    }
   }
-
 
 
   // 清空, 避免内存泄露

@@ -15,18 +15,19 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: #eee;
+  background-color: #f9f9fa;
 }
 
 .header-cell {
   position: relative;
   user-select: none;
 
-  background-color: #f8f9fa;
+  background-color: #f9f9fa;
   font-weight: bold;
   /* 这个 bug 搞了我好久 !!! 一定要设置行高 */
   height: var(--header-height, 30px)
 }
+
 
 .col-resize-handle {
   /* 列宽拖拽手柄, 放在表头单元格最右侧 */
@@ -36,7 +37,6 @@
   height: 100%;
   cursor: col-resize;
   width: 2px;
-  /* background-color: red; */
 }
 
 .col-resize-guide {
@@ -50,18 +50,20 @@
   z-index: 999;
 }
 
-/* 可排序表头交互 */
-.header-cell[data-sortable='true'] {
+/* 表头排序字段, 点击文字才排序 */
+.header-text {
+  display: inline;
   cursor: pointer;
+  padding: 0 4px;
 }
 
-.header-cell[data-sortable='true']:hover {
-  background-color: #e9ecef;
+.header-text:hover {
+  color: #1890ff;
 }
 
 /* 排序指示器 */
 .sort-indicator {
-  margin-left: 6px;
+  margin-left: 10px;
   font-size: 12px;
   color: red;
   min-width: 12px;
@@ -71,14 +73,9 @@
 .sticky-summary {
   position: sticky;
   top: var(--header-height, 30px);
-  background-color: #e6f7ff;
-  z-index: 99;
-}
-
-.cell-frozen {
-  position: sticky;
   background-color: #fff;
-  z-index: 10;
+  font-weight: bold;
+  z-index: 99;
 }
 
 .table-row {
@@ -89,12 +86,32 @@
 .table-cell {
   box-sizing: border-box;
   overflow: hidden;
-  border-right: 1px solid #eee;
-  border-bottom: 1px solid #eee;
-  padding: 4px;
+  border-right: 1px solid #d3d3d5;
+  padding: 10px;
   display: flex;
   align-items: center;
   font-size: 16px;
+  /* 用伪元素来模拟下边框, 避免滚动时消失 */
+  position: relative;
+
+}
+
+/* 关键一步: 伪元素模拟底部边框, 且不受滚动时变化 */
+.table-cell::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: #d3d3d5;
+  
+}
+
+.cell-frozen {
+  position: sticky;
+  background-color: #f8f8f9;
+  z-index: 10;
 }
 
 .data-container {
@@ -123,22 +140,33 @@
 }
 
 /* 筛选按钮和弹层样式 */
+/* 筛选按钮样式（漏斗图标） */
 .col-filter-btn {
-  /* 筛选按钮, 放在表头单元格右上角 */
   position: absolute;
-  top: 2px;
+  top: 50%;
   right: 10px;
-  width: 16px;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
   cursor: pointer;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 14px;
+  line-height: 18px;
   text-align: center;
   user-select: none;
+  color: #999;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-
 .col-filter-btn:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
+  color: #1890ff;
+  background-color: rgba(24, 144, 255, 0.1);
+  border-radius: 3px;
+}
+/* 筛选按钮激活状态（有筛选条件时） */
+.col-filter-btn.active {
+  color: #1890ff;
 }
 
 .col-filter-popup {
