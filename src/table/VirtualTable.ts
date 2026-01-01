@@ -103,6 +103,8 @@ export class VirtualTable {
           mode: this.mode,
           frozenCount: this.config.frozenColumns
         })
+        
+        this.syncColumnOrderToState() // 同步顺序到 state
         this.unsubscribleStore?.()
         this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
           this.handleStateChange(next, prev, action)
@@ -196,11 +198,9 @@ export class VirtualTable {
         this.loadSummaryData(summaryRow).catch(console.warn)
       }, 
       onColumnResizeEnd: (key, width) => {
-        // 列宽变化写入 state, 并触发 rebuild (当前是暴力重建策略)
         this.store.dispatch({ type: 'COLUMN_WIDTH_SET', payload: { key, width}})
       },
       onColumnOrderChange: (order) => {
-        // 列顺序变化写入 state, 并触发 rebuild (当前是暴力重建策略)
         this.store.dispatch({ type: 'COLUMN_ORDER_SET', payload: { order }})
       },
       onColumnFilterChange: (key, filter) => {
@@ -363,6 +363,11 @@ export class VirtualTable {
       this.applyColumnsFromState()
       this.shell.updateColumnOrder(this.config.columns)
       this.viewport.updateColumnOrder(this.config.columns)
+      // 直接保存当前列顺序到 localStorage
+      if (this.widthStorage) {
+        const columnKeys = this.config.columns.map(col => col.key)
+        this.widthStorage.saveColumnOrder(columnKeys)
+      }
       return 
     }
 
@@ -481,7 +486,7 @@ export class VirtualTable {
     this.viewport.refresh()
   }
 
-  // 从 localStorage 恢复列宽 
+  // 从 localStorage 恢复列宽, 表格宽, 列顺序
   private restoreColumnWidths() {
     if (!this.widthStorage) return
     // 恢复列宽
@@ -497,6 +502,57 @@ export class VirtualTable {
     const savedTableWidth = this.widthStorage.loadTableWidth()
     if (savedTableWidth) {
       this.config.tableWidth = savedTableWidth
+    }
+
+    // 恢复列顺序 (在列宽恢复之后, 避免影响)
+    const savedColumnOrder = this.widthStorage.loadColumnOrder()
+    if (savedColumnOrder && savedColumnOrder.length > 0) {
+      this.restoreColumnOrder(savedColumnOrder)
+    }
+  }
+
+  // 恢复列顺序
+  public restoreColumnOrder(savedOrder: string[]) {
+    try {
+      // 创建列映射, 方便查找
+      const columnMap = new Map(this.config.columns.map(col => [col.key, col]))
+      // 按保存的顺序查询排列列
+      const newColumns: IColumn[] = []
+      const processedKeys = new Set<string>
+      // 添加保存顺序中的列
+      for (const key of savedOrder) {
+        const col = columnMap.get(key)
+        if (col) {
+          newColumns.push(col)
+          processedKeys.add(key)
+        }
+      }
+      // 添加没有在保存顺序中的列 (新增列)
+      for (const col of this.config.columns) {
+        if (!processedKeys.has(col.key)) {
+          newColumns.push(col)
+        }
+      }
+      // 恢复时, 只恢复列配置, 不同步 state
+      // 初始化后, syncColumnOrderToState 统一同步到 state
+      // 变化时: 保存 loclaStorage
+      this.config.columns = newColumns
+      this.originalColumns = [...newColumns]  // 同步更新原始列配置
+
+    } catch (err) {
+      console.warn('恢复列顺序失败: ', err)
+    }
+  }
+
+  private syncColumnOrderToState() {
+    if (!this.store) return 
+    
+    if (this.config.columns.length > 0) {
+      const columnKeys = this.config.columns.map(col => col.key)
+      this.store.dispatch({
+        type: 'COLUMN_ORDER_SET',
+        payload: { order: columnKeys }
+      })
     }
   }
 
