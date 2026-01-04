@@ -257,15 +257,29 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: 8px;
+  width: 4px;
   height: 100%;
   cursor: col-resize;
   background: transparent;
   z-index: 1000;
+  pointer-events: none;  /* 不阻挡鼠标事件, 由热区触发 */
+  transition: background-color 0.2s ease, width 0.2s ease;
 }
 
-.table-resize-handle:hover {
-  background-color: rgba(250, 0, 0, 0.2);
+/* 鼠标进入热区时高亮 */
+.table-resize-handle.active {
+  background-color: rgba(24, 144, 255, 0.5);
+  width: 6px;
+}
+
+/* 拖拽中的视觉反馈 */
+.table-container .table-resizing {
+  user-select: none;
+}
+
+.table-container .table-resizing .table-resize-handle {
+  background-color: rgba(24, 144, 255, 0.8);
+  width: 6px;
 }
 
 

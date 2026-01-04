@@ -67,6 +67,8 @@ export interface IColumn {
   render?: (value: any, row: Record<string, any>, rowIndex: number) => string | HTMLDivElement
   // 单元格样式制定: 根据值返回 className
   cellClassName?: (value: any, row: Record<string, any>) => string
+  // 单元格行内样式, 支持各种 html 元素 (条件格式更方便)
+  cellStyle?: (value: any, row: Record<string, any>, rowIndex: number) => Partial<CSSStyleDeclaration> | null 
 }
 
 // 对外: 用户传入的配置 (宽松)

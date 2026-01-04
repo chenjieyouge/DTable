@@ -1,5 +1,7 @@
 export class TableResizeBinder {
+  private container: HTMLDivElement | null = null 
   private onMouseDown: ((e: MouseEvent) => void) | null = null 
+  private onMouseMove: ((e: MouseEvent) => void) | null = null 
   private handleEl: HTMLDivElement | null = null 
 
   public bind(params: {
@@ -7,16 +9,24 @@ export class TableResizeBinder {
     onResizeEnd: (newWidth: number) => void  // 给 tableShell 的回调, 将新列宽传出去并派发更新
   }) {
     const { scrollContainer, onResizeEnd } = params
-    // 创建表格容器最右侧边界拖拽条
+    this.container = scrollContainer
+    // 右侧热区宽度 (靠近右边 N px 就能拖拽)
+    const HOTZONE = 20
+    // 创建视觉可视条, 提升用户体验
     this.handleEl?.remove()
     this.handleEl = document.createElement('div')
     this.handleEl.className = 'table-resize-handle'
     scrollContainer.appendChild(this.handleEl)
 
-    this.onMouseDown = (e) => {
+    const startDrag = (e: MouseEvent) => {
       e.preventDefault()
+      e.stopPropagation() // 防误触其他点击事件
       const startX = e.clientX  // 鼠标按下时, 在可视区距离左侧的距离
       const startWidth = scrollContainer.getBoundingClientRect().width // 容器宽
+      // 添加拖拽中的视觉反馈, 提升用户体验
+      scrollContainer.classList.add('table-resizing')
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
       // 开始拖动
       const onMove = (me: MouseEvent) => {
         const dx = me.clientX - startX // 移动距离
@@ -28,6 +38,11 @@ export class TableResizeBinder {
       const onUp = () => {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', onUp)
+        // 移除拖拽中的视觉反馈
+        scrollContainer.classList.remove('table-resizing')
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+
         const finalWidth = scrollContainer.getBoundingClientRect().width
         onResizeEnd(finalWidth)
       }
@@ -35,18 +50,53 @@ export class TableResizeBinder {
       window.addEventListener('mousemove', onMove)
       window.addEventListener('mouseup', onUp)
     }
-    // 拖动条监听鼠标按下事件
-    this.handleEl.addEventListener('mousedown', this.onMouseDown)
+    // mousemove 时: 根据是否进入热区, 动态显示光标和高亮手柄
+    this.onMouseMove = (e: MouseEvent) => {
+      const rect = scrollContainer.getBoundingClientRect()
+      const inHotZone = e.clientX >= (rect.right - HOTZONE) && e.clientX <= rect.right
+      if (inHotZone) {
+        scrollContainer.style.cursor = 'col-resize'
+        this.handleEl?.classList.add('active')
+      } else {
+        scrollContainer.style.cursor = ''
+        this.handleEl?.classList.remove('active')
+      }
+      scrollContainer.style.cursor = inHotZone ? 'col-resize' : ''
+    }
+    // 让大容器监听鼠标移动事件 
+    scrollContainer.addEventListener('mousemove', this.onMouseMove)
+
+    // mousedown 时: 如果鼠标在左右热区, 则直接开始拖拽
+    this.onMouseDown = (e: MouseEvent) => {
+      const rect = scrollContainer.getBoundingClientRect()
+      // 热区范围边界判断, 多了也不行, 少了也不行
+      const inHotZone = e.clientX >= (rect.right - HOTZONE) && e.clientX <= rect.right
+      // 也允许直接点击到 handle 开始拖拽
+      const onHandle = (e.target as HTMLDivElement).closest('.table-resize-handle')
+      if (inHotZone || onHandle) {
+        startDrag(e)
+      }
+    }
+    // 大容器监听鼠标按下事件
+    scrollContainer.addEventListener('mousedown', this.onMouseDown)
   }
 
   public unbind() {
-    if (this.handleEl && this.onMouseDown) {
-      this.handleEl.removeEventListener('mousedown', this.onMouseDown)
+    // 严谨解绑: 移除所有事件监听器
+    if (this.container && this.onMouseMove) {
+      this.container.removeEventListener('mousemove', this.onMouseMove)
     }
-    // 手动解引用, 防止内存泄露
+
+    if (this.container && this.onMouseDown) {
+      this.container.removeEventListener('mousedown', this.onMouseDown)
+    }
+
+    // 清理 dom 元素
     this.handleEl?.remove()
+    // 手动解除引用, 防止内存泄露
     this.handleEl = null 
     this.onMouseDown = null 
+    this.onMouseMove = null 
   }
 
 }

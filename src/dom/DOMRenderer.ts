@@ -46,13 +46,26 @@ export class DOMRenderer {
 
   // 更新数据行, 给 cells 在骨架屏之后, 请求到数据, 则填充上
   updateDataRow(rowElement: HTMLDivElement, data: Record<string, any>, rowIndex?: number) {
-    const cells = rowElement.querySelectorAll('.table-cell')
+    const cells = rowElement.querySelectorAll<HTMLDivElement>('.table-cell')
     cells.forEach((cell, idx) => {
       cell.classList.remove('skeleton')
       const col = this.config.columns[idx]
-      const value = data[col.key] ?? ''
+      const value = data[col.key]
+      // 清理上一轮渲染残留,避免虚拟滚动复用导致样式串行, 注意千万不能暴力全清, 否则样式失效!
+      cell.style.color = ''
+      cell.style.backgroundColor = ''
+      cell.style.fontWeight = ''
+      // 有用到其他的再删吧, 就大致搞一下先
 
-      // 若配置了自定义渲染器, 从进行单元格渲染
+      cell.classList.add('table-cell')
+      // 重复加一次冻结样式, 兜底冻结列不生效
+      if (idx < this.config.frozenColumns) {
+        cell.classList.add('cell-frozen')
+      } else {
+        cell.classList.remove('cell.frozen')
+      }
+
+      // 优先自定义渲染器
       if (col.render) {
         const rendered = col.render(value, data, rowIndex ?? 0)
         // 清空单元格内容, 并判断返回的是 html 字符串还是 dom 元素
@@ -69,7 +82,7 @@ export class DOMRenderer {
         // 默认渲染: 直接显示文本
         cell.textContent = value !== undefined && value !== null ? String(value) : ''
       }
-      // 若配置了单元格样式定制, 则添加 className
+      // 若配置了条件样式类名 class (约定返回单个 class 或者空字符)
       if (col.cellClassName) {
         const className = col.cellClassName(value, data)
         if (className) {
@@ -79,6 +92,11 @@ export class DOMRenderer {
             cell.classList.add('cell-frozen')
           }
         }
+      }
+      // 若配置了 条件 style (约定返回 style 对象)
+      if (col.cellStyle) {
+        const styleObj = col.cellStyle(value, data, rowIndex ?? 0)
+        if (styleObj) Object.assign(cell.style, styleObj) // 浅拷贝哈
       }
     })
   }

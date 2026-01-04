@@ -74,7 +74,19 @@ const configSmall: IUserConfig = {
       title: '利润', 
       width: 120,
       sortable: true,
-      // 自定义渲染: 利润带进度条
+      // 条件格式化 (背景, 字体)
+      cellStyle: (value, row) => {
+        const num = Number(value)
+        if (isNaN(num)) return null
+        return {
+          color: num >= 1000 ? '#ef4444' : '#16a34a',
+          fontWeight: '700',
+          // flexDirection: 'column',
+          // alignSelf: 'flex-end'
+          justifyContent: 'flex-end'
+        }
+      },
+      // 内置组件雏形: 进图条 + 文本
       render: (value, row) => {
         const profit = parseFloat(value)
         const sales = parseInt(row.sales)
