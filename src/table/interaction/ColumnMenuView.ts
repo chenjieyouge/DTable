@@ -3,7 +3,7 @@ import type { IColumn } from "@/types";
 export interface IColumnMenuConfig {
   column: IColumn
   currentSort?: { key: string; direction: 'asc' | 'desc' } | null 
-  onSort?: (direction: 'asc' | 'desc' | null) => void 
+  handleSort?: (direction: 'asc' | 'desc' | null) => void 
   onPin?: (postion: 'left' | 'right' | null) => void 
   onAutoSize?: (mode: 'this' | 'all') => void
   onHide?: () => void
@@ -16,15 +16,16 @@ export class ColumnMenuView {
   public render(config: IColumnMenuConfig, anchorEl: HTMLElement, container: HTMLElement): HTMLDivElement {
     // 创建前先清理一波
     this.destroy()
-    const { column, currentSort, onSort } = config
-    const isSorted = currentSort?.key === column.key
+    const { column, currentSort, handleSort } = config
+    const isSorted = currentSort?.key === column.key  // 判断当前列是否正在排序
     // 创建弹窗容器
     this.popupEl = document.createElement('div')
     this.popupEl.className = 'col-menu-popup'
-    // 计算位置 (在按钮下方)
-    const rect = anchorEl.getBoundingClientRect()
-    const containerRect = container.getBoundingClientRect()
-    this.popupEl.style.left = `${rect.left - containerRect.left}px` // 主要不要漏掉单位 'px'
+    // 计算弹窗位置 (在按钮下方)
+    const rect = anchorEl.getBoundingClientRect() // "三点"按钮的位置
+    const containerRect = container.getBoundingClientRect() // 表格容器位置
+    // 注意不要漏掉单位 'px'
+    this.popupEl.style.left = `${rect.left - containerRect.left}px` 
     this.popupEl.style.top = `${rect.bottom - containerRect.top + 6}px`
     // 菜单列表项
     const menuItems: Array<{
@@ -39,13 +40,13 @@ export class ColumnMenuView {
       menuItems.push({
         icon: '↑',
         label: '升序',
-        action: () => onSort?.('asc'),
-        active: isSorted && currentSort?.direction === 'asc'
+        action: () => handleSort?.('asc'),  // 点击时调用 onSort('asc')
+        active: isSorted && currentSort?.direction === 'asc' // 当前升序, 则高亮
       })
       menuItems.push({
         icon: '↓',
         label: '降序',
-        action: () => onSort?.('desc'),
+        action: () => handleSort?.('desc'),
         active: isSorted && currentSort?.direction === 'desc'
       })
 
@@ -53,7 +54,7 @@ export class ColumnMenuView {
         menuItems.push({
           icon: '✕',
           label: '取消',
-          action: () => onSort?.(null)
+          action: () => handleSort?.(null)
         })
       }
     }
@@ -63,7 +64,7 @@ export class ColumnMenuView {
       const menuItem = document.createElement('div')
       menuItem.className = 'col-menu-item'
 
-      if(item.active) menuItem.classList.add('active')
+      if(item.active) menuItem.classList.add('active') // 高亮当前激活菜单项
       if (item.disabled) menuItem.classList.add('disabled')
 
       menuItem.innerHTML = `
@@ -80,6 +81,7 @@ export class ColumnMenuView {
       // 挂载
       this.popupEl?.appendChild(menuItem)
     })
+    // 表格容器挂载上弹出
     container.appendChild(this.popupEl)
     return this.popupEl
   }

@@ -356,14 +356,13 @@ export class VirtualTable {
     this.config.frozenColumns = state.columns.frozenCount
   }
 
-  // state 变化后的统一入口 (里程碑A的 "表格骨架核心")
+  // state 变化后的统一入口 (里程碑A的 "表格骨架核心"), 作为触发动作执行的最后一步
   private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
     // 拦截每个动作判断是 increamental update, 还是只能 rebuild
     if (action.type === 'COLUMN_WIDTH_SET') {
       // 拖拽列宽调整, 不用 rebuild, 增量更新即可
       this.applyColumnsFromState()
       this.shell.updateColumnWidths(this.config.columns)
-
       // 保存列宽到 localStorage
       if (this.widthStorage) {
         const widths: Record<string, number> = {}

@@ -122,6 +122,7 @@ export function mountTableShell(params: {
     menuBinder.bind({
       scrollContainer,
       headerRow,
+      columns: config.columns,
       getCurrentSort,
       onSort: onMenuSort
     })

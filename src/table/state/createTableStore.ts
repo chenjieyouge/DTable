@@ -96,6 +96,7 @@ export function createTableStore(params: {
       }
 
       case 'SORT_SET': {
+        // { key: 'sales', direction: 'acs' }
         const sort: SortValue = action.payload.sort
         const nextQuery: ITableQuery = {
           ...prev.data.query,

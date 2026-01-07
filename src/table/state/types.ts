@@ -11,7 +11,6 @@ export interface TableState {
     clientFilterText: string // client下, 全局关键字搜索
     sort: SortValue  // 排序三态:  desc->asc-null
     columnFilters: Record<string, ColumnFilterValue> // 列值筛选 (升级为联合类型)
-    columnOrder: string[] // 只存储列 key 的顺序数组
   }
   // 列域状态: 当前只做顺序, 冻结前 N 列, 宽度覆写, 不做隐藏列
   columns: {
