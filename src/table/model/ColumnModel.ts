@@ -21,24 +21,26 @@ export function resolveColumns(params: {
   originalColumns: IColumn[]
   state: TableState
 }): ResolvedColumn[] {
+
   const { originalColumns, state } = params
-  // key -> column 映射
+  const { order, widthOverrides, hiddenKeys, frozenCount } = state.columns
+
+  // 先过滤掉隐藏的列, 技巧就是: 先过滤, 后排序
+  const visibleColumns = originalColumns.filter(col => !hiddenKeys.includes(col.key))
+  // 构建 key -> column 映射, 只包含可见列
   const map = new Map<string, IColumn>()
+  visibleColumns.forEach(c => map.set(c.key, c))  
 
-  originalColumns.forEach(c => map.set(c.key, c)) // 列初始列顺序, 就是配置顺序
-  const orderKeys = state.columns.order
-  const frozenCount = state.columns.frozenCount
-  const widthOverrides = state.columns.widthOverrides
-
-  // 按 state 的 order 生成最终列数组 (先不用支持隐藏列)
-  const ordered = orderKeys
+  // 按 state.order 排序, 只包含可见的 key 
+  const visibleOrder = order.filter(key => !hiddenKeys.includes(key))
+  const ordered = visibleOrder
     .map(key => map.get(key))
     .filter((c): c is IColumn => Boolean(c))
 
-  // 若 orderKeys 少了某些列, 用户少传, 则将缺失列放到末尾, 保证稳定
-  if (ordered.length !== originalColumns.length) {
+  // 若 order 中 缺少某些可见列, 则补充到末尾
+  if (ordered.length !== visibleColumns.length) {
     const orderedKeySet = new Set(ordered.map(c => c.key))
-    for (const c of originalColumns) {
+    for (const c of visibleColumns) {
       if (!orderedKeySet.has(c.key)) {
         ordered.push(c) // 找出少的列补充到后面即可
       }

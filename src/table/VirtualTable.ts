@@ -393,6 +393,12 @@ export class VirtualTable {
       return 
     }
 
+    if (action.type === 'COLUMN_HIDE' || action.type === 'COLUMN_SHOW') {
+      // 隐藏列相关操作, 也暴力重建得了
+      this.rebuild()
+      return 
+    }
+
     // 排序指示器永远以 state 为准
     this.shell?.setSortIndicator(this.store.getState().data.sort)
     // 排序/筛选变化 -> 根据模式触发数据侧更新

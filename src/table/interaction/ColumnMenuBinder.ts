@@ -5,6 +5,7 @@ export class ColumnMenuBinder {
   private menuView = new ColumnMenuView()
   private onClickOutSide: ((e: MouseEvent) => void) | null = null 
   private onScroll: ((e: Event) => void) | null = null  // 监听滚动
+  private scrollContainer: HTMLDivElement | null = null  // 保存大容器引用
 
   public bind(params: {
     scrollContainer: HTMLDivElement,
@@ -15,6 +16,8 @@ export class ColumnMenuBinder {
 
   }) {
     const { scrollContainer, headerRow, columns, getCurrentSort, onSort } = params
+    this.scrollContainer = scrollContainer // 保存引用
+
     // 表头行上事件委托, 监听 click 事件, 并找到最近的 "三点" 按钮
     headerRow.addEventListener('click', (e: MouseEvent) => {
       const target = e.target as HTMLDivElement
@@ -72,10 +75,12 @@ export class ColumnMenuBinder {
         }
       }
       // 将点击外部事件的回调函数, 放到下一个事件循环, 即宏任务队列中
+      // requestAnimationFrame 比 setTimeout 要更可靠一些
       // 等先执行完点击事件后, 再执行关闭回调, 否则就出现 "刚打开弹窗就关闭了"
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         document.addEventListener('click', this.onClickOutSide!)
-      }, 0)
+      })
+      
     })
   }
 
@@ -88,9 +93,8 @@ export class ColumnMenuBinder {
 
     // 移除滚动监听, 以免滚动时弹出就不见了, 然后点击有没有反应 (在顶部)
     // 滚动就直接关闭弹窗, 等用户点击要看, 再打开即可
-    if (this.onScroll) {
-      const container = document.querySelector('.table-container') as HTMLDivElement
-      container?.removeEventListener('scroll', this.onScroll)
+    if (this.onScroll && this.scrollContainer) {
+      this.scrollContainer.removeEventListener('scroll', this.onScroll)
       this.onScroll = null 
     }
 
@@ -103,5 +107,6 @@ export class ColumnMenuBinder {
   // 解绑
   public unbind() {
     this.closeMenu()
+    this.scrollContainer = null  // 清理引用
   }
 }

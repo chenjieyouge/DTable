@@ -17,6 +17,7 @@ export interface TableState {
     order: string[] // 列 key 的顺序, 未来拖拽列就靠它
     frozenCount: number // 冻结前 N 列
     widthOverrides: Record<string, number>  // 列宽重写(px 数值), 未设置用默认配置
+    hiddenKeys: string[] // 隐藏的列 key 数组
   }
 }
 
@@ -33,3 +34,5 @@ export type TableAction =
   | { type: 'FROZEN_COUNT_SET'; payload: { count: number }}  // 冻结前 N 列设置
   | { type: 'COLUMN_FILTER_SET'; payload: { key: string; filter: ColumnFilterValue } } // 列值筛选
   | { type: 'COLUMN_FILTER_CLEAR'; payload: { key: string } } // 清空筛选
+  | { type: 'COLUMN_HIDE'; payload: { key: string } }  // 隐藏列
+  | { type: 'COLUMN_SHOW'; payload: { key: string } }  // 显示列

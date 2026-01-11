@@ -21,13 +21,11 @@ export class ColumnMenuView {
     // 创建弹窗容器
     this.popupEl = document.createElement('div')
     this.popupEl.className = 'col-menu-popup'
-    // 计算弹窗位置 (在按钮下方)
+    // 菜单弹窗使用 fixed 不受容器滚动影响
     const rect = anchorEl.getBoundingClientRect() // "三点"按钮的位置
-    const containerRect = container.getBoundingClientRect() // 表格容器位置
-    // 注意不要漏掉单位 'px'
-    this.popupEl.style.left = `${rect.left - containerRect.left}px` 
-    this.popupEl.style.top = `${rect.bottom - containerRect.top + 6}px`
-    // 菜单列表项
+    this.popupEl.style.left = `${rect.left}px`
+    this.popupEl.style.top = `${rect.bottom + 6}px`
+
     const menuItems: Array<{
       icon: string
       label: string 

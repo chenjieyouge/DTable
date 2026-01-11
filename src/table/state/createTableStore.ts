@@ -1,4 +1,4 @@
-import type { IColumn, ITableQuery, ColumnFilterValue } from "@/types";
+import type { IColumn, ITableQuery } from "@/types";
 import type { TableAction, TableState, TableMode, SortValue } from "@/table/state/types";
 
 export type StateListener = (next: TableState, prev: TableState, action: TableAction) => void 
@@ -31,7 +31,8 @@ export function createTableStore(params: {
     columns: {
       order: columns.map((c) => c.key),
       frozenCount,
-      widthOverrides: {}
+      widthOverrides: {},
+      hiddenKeys: [] // 初始无隐藏列
     }
   }
 
@@ -163,6 +164,21 @@ export function createTableStore(params: {
           ...prev,
           data: { ...prev.data, columnFilters: nextFilters, query: nextQuery }
         }
+      }
+
+      case 'COLUMN_HIDE': {
+        const { key } = action.payload
+        const hiddenKeys = [...prev.columns.hiddenKeys]
+        if (!hiddenKeys.includes(key)) {
+          hiddenKeys.push(key)
+        }
+        return { ...prev, columns: { ...prev.columns, hiddenKeys} }
+      }
+
+      case 'COLUMN_SHOW': {
+        const { key } = action.payload
+        const hiddenKeys = prev.columns.hiddenKeys.filter(k => k !== key)
+        return { ...prev, columns: { ...prev.columns, hiddenKeys }}
       }
 
       default:

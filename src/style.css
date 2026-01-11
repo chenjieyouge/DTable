@@ -311,7 +311,7 @@
 
 /* 列菜单弹窗 */
 .col-menu-popup {
-  position: absolute;
+  position: fixed; /* 固定定位让弹窗不受滚动影响 */
   background-color: #fff;
   border: 1px solid #d9d9d9;
   border-radius: 4px;
