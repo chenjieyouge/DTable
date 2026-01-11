@@ -1,4 +1,4 @@
-import type { IConfig, ColumnFilterValue } from "@/types";
+import type { IConfig, ColumnFilterValue, IColumn } from "@/types";
 import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { HeaderSortBinder } from "@/table/interaction/HeaderSortBinder";
@@ -10,6 +10,7 @@ import { ColumnDragBinder } from "@/table/interaction/ColumnDragBinder";
 import { ColumnFilterBinder } from "@/table/interaction/ColumnFilterBinder";
 import { TableResizeBinder } from "@/table/interaction/TableResizeBinder";
 import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
+import { ColumnManagerBinder } from "@/table/interaction/ColumnManagerBinder";
 
 
 export interface ITableShell {
@@ -45,7 +46,13 @@ export function mountTableShell(params: {
   // 列菜单相关回调
   getCurrentSort?: () => { key: string; direction: 'asc' | 'desc' } | null 
   onMenuSort?: (key: string, direction: 'asc' | 'desc' | null) => void 
-
+  // 列管理相关回调
+  getAllColumns?: () => IColumn[]
+  getHiddenKeys?: () => string[]
+  onColumnToggle?: (key: string, visible: boolean) => void 
+  onShowAllColumns?: () => void 
+  onHideAllColumns?: () => void 
+  onResetColumns?: () => void 
 
 }): ITableShell {
 
@@ -62,7 +69,15 @@ export function mountTableShell(params: {
     getCurrentFilter,
     onTableResizeEnd,
     getCurrentSort,
-    onMenuSort
+    onMenuSort,
+    // 列管理相关
+    getAllColumns,
+    getHiddenKeys,
+    onColumnToggle,
+    onShowAllColumns,
+    onHideAllColumns,
+    onResetColumns,
+
    } = params
 
 
@@ -74,6 +89,18 @@ export function mountTableShell(params: {
   scrollContainer.style.width = `${config.tableWidth}px`
   scrollContainer.style.height = `${config.tableHeight}px`
   applyContainerStyles(scrollContainer, config)
+
+  // 创建表格列管理按钮, 横向3个点, toto: 小齿轮(右上角)
+  const columnManagerBtn = document.createElement('button')
+  columnManagerBtn.className = 'column-manager-trigger'
+  columnManagerBtn.innerHTML = `
+   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM8 15a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" transform="rotate(90 8 8)"/>
+  </svg>
+  `
+
+  columnManagerBtn.title = '列管理'
+  scrollContainer.appendChild(columnManagerBtn)
 
   // 2. 表格包裹层 wrapper -> header
   const tableWrapper = createTableWrapper(config)
@@ -134,6 +161,21 @@ export function mountTableShell(params: {
     tableResizeBinder.bind({
       scrollContainer,
       onResizeEnd: onTableResizeEnd,
+    })
+  }
+
+  // 绑定列管理面板
+  const columnManagerBinder = new ColumnManagerBinder()
+  if (getAllColumns && getHiddenKeys && onColumnToggle) {
+    columnManagerBinder.bind({
+      container: scrollContainer,
+      triggerBtn: columnManagerBtn,
+      getAllColumns,
+      getHiddenKeys,
+      onToggle: onColumnToggle,
+      onShowAll: onShowAllColumns || (() => {}),
+      onHideAll: onHideAllColumns || (() => {}),
+      onReset: onResetColumns || (() => {})
     })
   }
 
@@ -245,7 +287,8 @@ export function mountTableShell(params: {
       dragBinder.unbind(headerRow) // 释放列拖拽改顺序字段
       filterBinder.unbind()  // 释放列值筛选
       tableResizeBinder.unbind() // 释放整表宽度拖拽事件
-      menuBinder.unbind // 解绑列菜单
+      menuBinder.unbind() // 解绑列菜单
+      columnManagerBinder.unbind() // 解绑整表列管理面板
     }
   }
 }

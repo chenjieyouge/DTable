@@ -271,8 +271,43 @@ export class VirtualTable {
             }
           })
         }
+      },
+      // 列管理面板-相关回调
+      getAllColumns: () => {
+        return this.originalColumns // 包含隐藏列都要有
+      },
+      getHiddenKeys: () => {
+        return this.store.getState().columns.hiddenKeys
+      },
+      onColumnToggle: (key, visible) => {
+        if (visible) {
+          this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
+        } else {
+          this.store.dispatch({ type: 'COLUMN_HIDE', payload: { key } })
+        }
+      },
+      onShowAllColumns: () => {
+        // 将隐藏的字段都显示出来
+        const hiddenKeys = this.store.getState().columns.hiddenKeys
+        hiddenKeys.forEach(key => {
+          this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
+        })
+      },
+      onHideAllColumns: () => {
+        // 所有列都不显示, 现在这种写法是否会带来性能问题?
+        this.originalColumns.forEach(col => {
+          this.store.dispatch({ type: 'COLUMN_HIDE', payload: { key: col.key } })
+        })
+      },
+      onResetColumns: () => {
+        // 重置, 显示所有列, 摘个和 onShowAllColumns 好像是一样的 ?
+        const hiddenKeys = this.store.getState().columns.hiddenKeys
+        hiddenKeys.forEach(key => {
+          this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
+        })
       }
-      // 后续拓展...
+
+      // 后续更多回调拓展... virtual -> shell -> binder -> view 
 
     })
 
@@ -394,8 +429,21 @@ export class VirtualTable {
     }
 
     if (action.type === 'COLUMN_HIDE' || action.type === 'COLUMN_SHOW') {
-      // 隐藏列相关操作, 也暴力重建得了
-      this.rebuild()
+      // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
+      // this.rebuild()
+      this.applyColumnsFromState()
+      this.shell.updateColumnOrder(this.config.columns)
+      this.viewport.updateColumnOrder(this.config.columns)
+      // 保存隐藏列状态到 localStorage 
+      if (this.widthStorage) {
+        const hiddenKeys = this.store.getState().columns.hiddenKeys
+        // 可选: 持久化 (当前感觉没有必要)
+        
+        // localStorage.setItem(`table_hidden_keys_${this.config.tableHeight} || 'default`,
+        //   JSON.stringify(hiddenKeys)
+        // )
+
+      }
       return 
     }
 
