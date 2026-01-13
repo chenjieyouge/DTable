@@ -81,14 +81,27 @@ export function mountTableShell(params: {
    } = params
 
 
-  // 1. 创建大容器 scrollContainer
-  const scrollContainer = getContainer(config.container)
-  // 设置大容器的固定宽高, 样式等
+  // 1. 获取用户指定的容器
+  const userContainer = getContainer(config.container)
+  userContainer.innerHTML = ''
+
+  // 2. 创建 Portal 容器 (包裹层), 用来给一些功能做定位父元素参考
+  const portalContainer = document.createElement('div')
+  portalContainer.className = 'table-portal-container'
+  portalContainer.style.position = 'relative'
+  portalContainer.style.width = `${config.tableWidth}px`
+  portalContainer.style.height = `${config.tableHeight}px`
+
+  // 3.创建滚动容器 (原来的 scrollContainer)
+  const scrollContainer = document.createElement('div')
   scrollContainer.className = 'table-container'
-  scrollContainer.innerHTML = ''
-  scrollContainer.style.width = `${config.tableWidth}px`
-  scrollContainer.style.height = `${config.tableHeight}px`
+  scrollContainer.style.width = '100%'
+  scrollContainer.style.height = '100%'
   applyContainerStyles(scrollContainer, config)
+
+  // 4. 挂载关系: userContainer -> portalContainer -> scrollContainer
+  portalContainer.appendChild(scrollContainer)
+  userContainer.appendChild(portalContainer)
 
   // 创建表格列管理按钮, 横向3个点, toto: 小齿轮(右上角)
   const columnManagerBtn = document.createElement('button')
@@ -98,9 +111,9 @@ export function mountTableShell(params: {
     <path d="M8 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM8 15a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" transform="rotate(90 8 8)"/>
   </svg>
   `
-
   columnManagerBtn.title = '列管理'
-  scrollContainer.appendChild(columnManagerBtn)
+  // 挂载到 portalContainer 就不会跟随滚动了, 就固定住啦!
+  portalContainer.appendChild(columnManagerBtn)
 
   // 2. 表格包裹层 wrapper -> header
   const tableWrapper = createTableWrapper(config)
@@ -155,11 +168,12 @@ export function mountTableShell(params: {
     })
   }
 
-  // 绑定正标宽度拖拽
+  // 绑定整表宽度拖拽
   const tableResizeBinder = new TableResizeBinder()
   if (onTableResizeEnd) {
     tableResizeBinder.bind({
       scrollContainer,
+      portalContainer, 
       onResizeEnd: onTableResizeEnd,
     })
   }
@@ -168,7 +182,7 @@ export function mountTableShell(params: {
   const columnManagerBinder = new ColumnManagerBinder()
   if (getAllColumns && getHiddenKeys && onColumnToggle) {
     columnManagerBinder.bind({
-      container: scrollContainer,
+      container: portalContainer,  // 传个相对定位不动的容器去参考位置
       triggerBtn: columnManagerBtn,
       getAllColumns,
       getHiddenKeys,

@@ -1,15 +1,19 @@
 export class TableResizeBinder {
   private container: HTMLDivElement | null = null 
+  private portalContainer: HTMLDivElement | null = null 
   private onMouseDown: ((e: MouseEvent) => void) | null = null 
   private onMouseMove: ((e: MouseEvent) => void) | null = null 
   private handleEl: HTMLDivElement | null = null 
 
   public bind(params: {
     scrollContainer: HTMLDivElement,
+    portalContainer?: HTMLDivElement
     onResizeEnd: (newWidth: number) => void  // 给 tableShell 的回调, 将新列宽传出去并派发更新
   }) {
-    const { scrollContainer, onResizeEnd } = params
+    const { scrollContainer, portalContainer, onResizeEnd } = params
     this.container = scrollContainer
+    this.portalContainer = portalContainer || null  // 保存引用
+
     // 右侧热区宽度 (靠近右边 N px 就能拖拽)
     const HOTZONE = 20
     // 创建视觉可视条, 提升用户体验
@@ -33,6 +37,10 @@ export class TableResizeBinder {
         // 最小表格宽度保护暂定 300, 后面拓展为初始配置即可
         const next = Math.max(300, startWidth + dx) 
         scrollContainer.style.width = `${next}px` 
+        // 也要同步更新 portalcontainer 宽度才能看到拖动跟随
+        if (this.portalContainer) {
+          this.portalContainer.style.width = `${next}px`
+        }
       }
 
       const onUp = () => {
@@ -94,6 +102,7 @@ export class TableResizeBinder {
     // 清理 dom 元素
     this.handleEl?.remove()
     // 手动解除引用, 防止内存泄露
+    this.portalContainer = null 
     this.handleEl = null 
     this.onMouseDown = null 
     this.onMouseMove = null 

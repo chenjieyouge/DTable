@@ -228,32 +228,17 @@ export class VirtualTable {
         return this.store.getState().data.columnFilters[key]
       },
       onTableResizeEnd: (newWidth) => {
+        // 更新 portalContainer 宽度
+        const portalContainer = this.shell.scrollContainer.parentElement as HTMLDivElement
+        if (portalContainer && portalContainer.classList.contains('table-portal-container')) {
+          portalContainer.style.width = `${newWidth}px`
+        }
+
         this.config.tableWidth = newWidth 
         // 保存整表宽度到 localStorage
         if (this.widthStorage) {
           this.widthStorage.saveTableWidth(newWidth)
         }
-
-        // 处理表格宽度变化, 按比例扩张或压缩, 感觉逻辑也可以抽离一下
-        // const oldWidth = this.config.tableWidth
-        // const ratio = newWidth / oldWidth
-      
-        // 考虑, 表格列宽拓展, 列是否不应该做自适应, 因为已经有列拖拽功能了!
-      
-        // const state = this.store.getState()
-        // const newWidthOverrides: Record<string, number> = {}
-        // // 每列按拓展比例缩放, 类似 flex
-        // this.config.columns.forEach(col => {
-        //   const oldColWidth = state.columns.widthOverrides[col.key] ?? col.width
-        //   newWidthOverrides[col.key] = Math.round(oldColWidth * ratio) 
-        // })
-        // // 批量派发事件, 每列都派发计算一次, 高频拓展列宽设置就有性能问题
-        // Object.entries(newWidthOverrides).forEach(([key, width]) => {
-        //   this.store.dispatch({
-        //     type: 'COLUMN_WIDTH_SET',
-        //     payload: { key, width }
-        //   })
-        // })
       },
       getCurrentSort: () => {
         // 列菜单回调

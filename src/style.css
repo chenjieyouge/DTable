@@ -1,3 +1,9 @@
+/* portal 容器, 用来承载浮动面板 */
+.table-portal-container {
+  position: relative;
+  overflow: hidden;
+}
+
 .table-container {
   position: relative;
   overflow: auto;
@@ -365,7 +371,7 @@
 
 /* 表格列管理面板触发按钮 (右上角) */
 .column-manager-trigger {
-  position: sticky;  /* sticky 跟随滚动, 但保持在视口内 */
+  position: absolute; 
   top: 8px;
   right: 8px;
   float: right;  
@@ -393,11 +399,11 @@
 
 /* 列管理面板 */
 .column-manager-panel {
-  position: absolute; /* 基于表格容器定位, 而非浏览器 */
+  position: absolute;
   top: 0;
   right: 0;
-  width: 280px;
-  height: 100%;
+  width: 250px;
+  height: 100%; /* 占满 portalContainer 高度 */
   background-color: #fff;
   border-left: 1px solid #d9d9d9;
   box-shadow: -2px 0px 8px rgba(0, 0, 0, 0.1);
