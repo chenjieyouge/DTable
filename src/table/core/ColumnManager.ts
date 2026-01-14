@@ -46,6 +46,9 @@ export class ColumnManager {
       dataRows?: HTMLDivElement[]
     }
   ): void {
+    // 性能监控 
+    const startTime = performance.now()
+
     const { headerRow, summaryRow, dataRows } = targets
     // 批量更新前, 先清除缓存
     this.clearCache()
@@ -61,6 +64,12 @@ export class ColumnManager {
 
     if (dataRows && dataRows.length > 0) {
       this.updateDataRows(dataRows, columns)
+    }
+
+    const endTime = performance.now()
+    const timeUsed = (endTime - startTime)
+    if (timeUsed > 10) {
+      console.warn(`[ColumnManager] 列更新耗时: ${timeUsed.toFixed(2)}ms`)
     }
   }
 

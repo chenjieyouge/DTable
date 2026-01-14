@@ -427,7 +427,7 @@ export class VirtualTable {
       this.columnManager.updateColumns(this.config.columns, {
         headerRow: this.shell.headerRow, 
         summaryRow: this.shell.summaryRow,
-        dataRows: Array.from(this.shell.virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row'))
+        dataRows: this.viewport.getVisibleRows()
       })
       // 更新列宽, 同时会设置 css 变量
       this.shell.updateColumnWidths(this.config.columns)
@@ -455,7 +455,7 @@ export class VirtualTable {
       this.columnManager.updateColumns(this.config.columns, {
         headerRow: this.shell.headerRow,
         summaryRow: this.shell.summaryRow,
-        dataRows: Array.from(this.shell.scrollContainer.querySelectorAll<HTMLDivElement>('.virtual-row'))
+        dataRows: this.viewport.getVisibleRows()
       })
       // 更新列宽 
       this.shell.updateColumnWidths(this.config.columns)
@@ -472,7 +472,7 @@ export class VirtualTable {
       this.columnManager.updateColumns(this.config.columns, {
         headerRow: this.shell.headerRow,
         summaryRow: this.shell.summaryRow,
-        dataRows: Array.from(this.shell.scrollContainer.querySelectorAll<HTMLDivElement>('.virtual-row'))
+        dataRows: this.viewport.getVisibleRows()
       })
       // 更新列宽 
       this.shell.updateColumnWidths(this.config.columns)

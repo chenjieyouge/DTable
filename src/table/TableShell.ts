@@ -23,9 +23,7 @@ export interface ITableShell {
   setSortIndicator(sort: { key: string, direction: 'asc' | 'desc' } | null): void // 统一控制排序箭头
   bindScroll(onRafScroll: () => void): void // 绑定滚动, 内部 raf, 外部只传要做什么
   destroy(): void // 释放所有事件, 清空 dom 
-
   updateColumnWidths(columns: IConfig['columns']): void  // 增量更新列宽 (css 变量)
-  updateColumnOrder(columns: IConfig['columns']): void  // 专门给列拖拽顺序用的
 
 }
 
@@ -264,67 +262,7 @@ export function mountTableShell(params: {
         })
       }
     },
-    updateColumnOrder(columns) {
-      // 保留这个方法, 就专门为 列拖拽排序用, 但逻辑已和 ColumnManager 对齐
-      // 重排 header 顺序, 根据传入的新 columns 
-      const headerRow = scrollContainer.querySelector('.sticky-header') as HTMLDivElement | null
-      const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
-      const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
-      
-      if (headerRow) {
-        const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.table-cell'))
-        const map = new Map<string, HTMLDivElement>()
-        
-        cells.forEach(cell => {
-          const key = cell.dataset.columnKey 
-          if (key) map.set(key, cell)
-        })
-
-        headerRow.innerHTML = ''
-        columns.forEach((col, index) => {
-          let cell = map.get(col.key)
-          if (!cell) {
-            cell = renderer.createHeaderCell(col, index)
-          }
-          headerRow.appendChild(cell)
-        })
-        // 重新应用冻结列样式
-        renderer.applyFrozenStyles(headerRow)
-      }
-
-      if (summaryRow) {
-        const cells = Array.from(summaryRow.querySelectorAll<HTMLDivElement>('.table-cell'))
-        const map = new Map<string, HTMLDivElement>()
-
-        cells.forEach(cell => {
-          const key = cell.dataset.columnKey
-          if (key) map.set(key, cell)
-        })
-        summaryRow.innerHTML = ''        
-        columns.forEach((col, index) => {
-          let cell = map.get(col.key)
-          if (!cell) {
-           cell = renderer.createSummaryCell(col, index)
-          }
-          summaryRow.appendChild(cell)
-        })
-        // 重新应用冻结列样式
-        renderer.applyFrozenStyles(summaryRow)
-      }
-
-      // 数据行只需重新应用冻结列样式
-      if (config.frozenColumns > 0) {
-        requestAnimationFrame(() => {
-          dataRows.forEach(row => {
-            renderer.applyFrozenStyles(row)
-          })
-        })
-      }
-      // 4. 更新表格总宽度
-      const totalWidth = columns.reduce((sum, col) => sum + col.width, 0)
-      tableWrapper.style.width = `${totalWidth}px`
-    },
-    // 其他更多拓展...
+    // 其他更多回调函数拓展...
 
 
     // 清理方法放最后来, 不然总是找不到在哪!
@@ -367,18 +305,4 @@ function createTableWrapper(config: IConfig): HTMLDivElement {
   const totalWidth = config.columns.reduce((sum, col) => sum + col.width, 0)
   wrapper.style.width = `${totalWidth}px`
   return wrapper
-}
-
-// 最简单的方案:直接读取 DOM 实际宽度
-function updateFrozenLeft(row: HTMLDivElement, frozenCount: number) {
-  if (!row) return
-  const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
-  let leftOffset = 0
-  
-  for (let i = 0; i < frozenCount && i < cells.length; i++) {
-    const cell = cells[i]
-    cell.style.left = `${leftOffset}px`
-    // 直接读取实际渲染宽度(包含 border、padding 等)
-    leftOffset += cell.getBoundingClientRect().width
-  }
 }

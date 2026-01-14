@@ -38,42 +38,15 @@ export class VirtualViewport {
     this.scroller = scroller
   }
 
-  // 对外入口: 更新可视区 (给 scroll 事件初始化时调用)
+  // 更新可视区 (给 scroll 事件初始化时调用)
   public updateVisibleRows() {
     void this.updateVisibleRowsInternal()
   }
 
-  // 更新列顺序, 给可视区的所有行数据 dom 重排
-  public updateColumnOrder(columns: IConfig['columns']) {
-    const rows = this.virtualContent.querySelectorAll<HTMLDivElement>('.table-row')
-    rows.forEach(row => {
-      const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
-      const map = new Map<string, HTMLDivElement>()
-      cells.forEach(cell => {
-        const key = cell.dataset.columnKey
-        if (key) map.set(key, cell)
-      })
-
-      // 获取当前行的数据
-      const rowIndex = parseInt(row.dataset.rowIndex || '0', 10)
-      const rowData = this.dataManager.getRowData(rowIndex)
-
-      row.innerHTML = ''
-      columns.forEach((col, index) => {
-        let cell = map.get(col.key)
-        // 若单元格不存在则创建
-        if (!cell && rowData) {
-          cell = this.renderer.createDataCell(col, rowData, rowIndex, index)
-        }
-        if (cell) {
-          row.append(cell)
-        }
-      })
-      // 重新应用冻结列样式
-      this.renderer.applyFrozenStyles(row)
-    })
+  // 获取当前可视区的数据行, 给外部 dom 引用, 避免重复查询
+  public getVisibleRows(): HTMLDivElement[] {
+    return Array.from(this.rowElementMap.values())
   }
-
 
   // 核心调度方法: 计算可简化 -> 创建骨架 -> 加载数据 -> 更新可视区
   private async updateVisibleRowsInternal() {
