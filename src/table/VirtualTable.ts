@@ -16,6 +16,8 @@ import { assertUniqueColumnKeys, resolveColumns } from '@/table/model/ColumnMode
 import { ColumnWidthStorage } from '@/utils/ColumnWidthStorage'
 import { ColumnManager } from '@/table/core/ColumnManager'
 import { PerformanceMonitor } from '@/utils/PerformanceMonitor'
+import { actionHandlers, handleDataChange } from '@/table/handlers/ActionHandlers'
+import type { ActionContext } from '@/table/handlers/ActionHandlers'
 
 
 
@@ -422,71 +424,15 @@ export class VirtualTable {
 
   // state 变化后的统一入口 (里程碑A的 "表格骨架核心"), 作为触发动作执行的最后一步
   private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
-    // 拦截每个动作判断是 increamental update, 还是只能 rebuild
-    if (action.type === 'COLUMN_WIDTH_SET') {
-      // 拖拽列宽调整, 不用 rebuild, 增量更新即可
-      this.applyColumnsFromState()
-      // 更新列宽 css 变量
-      this.shell.updateColumnWidths(this.config.columns, this.viewport.getVisibleRows())
-      
-      // 保存列宽到 localStorage
-      if (this.widthStorage) {
-        const widths: Record<string, number> = {}
-        this.config.columns.forEach(col => {
-          widths[col.key] = col.width
-        })
-        this.widthStorage.saveColumnWidth(widths)
-      }
-      return 
-    }
+    // 使用策略模式, 路由到 ActionHandler 处理器
+    const handler = actionHandlers.get(action.type)
 
-    if (action.type === 'COLUMN_ORDER_SET') {
-      // 拖拽列顺序调整, 不用 rebuild, 增量更新即可
-      this.updateColumnUI()
-      // 保存当前列顺序到 localStorage
-      if (this.widthStorage) {
-        const columnKeys = this.config.columns.map(col => col.key)
-        this.widthStorage.saveColumnOrder(columnKeys)
-      }
-      return 
-    }
-
-    if (action.type === 'FROZEN_COUNT_SET') {
-      // todo: 冻结列调整, 是否也可以增量更新, 这里先暴力重建吧, 这操作比较低频
-      this.rebuild()
-      return 
-    }
-
-    // 单列-显示隐藏操作
-    if (action.type === 'COLUMN_HIDE' || action.type === 'COLUMN_SHOW') {
-      // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
-      this.updateColumnUI()
-      return 
-    }
-
-    // 批量-列显示隐藏操作
-    if (action.type === 'COLUMN_BATCH_HIDE' || 
-       action.type === 'COLUMN_BATCH_SHOW' ||
-       action.type === 'COLUMNS_RESET_VISIBILITY') {
-      // 更新最新配置
-      this.updateColumnUI()
-      return 
-    }
-
-    // 排序指示器永远以 state 为准
-    this.shell?.setSortIndicator(this.store.getState().data.sort)
-    // 排序/筛选变化 -> 根据模式触发数据侧更新
-    const state = this.store.getState()
-
-    if (state.data.mode === 'client') {
-      void this.applyClientState(state)
-      void this.refreshSummary()
+    if (handler) {
+      const context: ActionContext = { table: this }
+      handler(action, context) // 动作名称, 响应视图逻辑
     } else {
-      // server 模式 
-      void this.applyServerQuery(state.data.query).then(() => {
-        // server 筛选/排序后, summary 也可能会变
-        void this.refreshSummary()
-      })
+      // 默认处理: 排序, 筛选等数据变化
+      handleDataChange(action, { table: this })
     }
   }
 

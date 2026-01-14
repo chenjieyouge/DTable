@@ -1,3 +1,55 @@
+/* 布局容器 */
+.table-layout-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.table-layout-main {
+  flex: 1;
+  min-width: 0; /* 防止 flex 子项溢出 */
+  position: relative;
+}
+
+.table-layout-side {
+  flex-shrink: 0;
+  border-left: 1px solid #e0e0e0;
+  background-color: #fafafa;
+  overflow-y: auto;
+  transition: width 0.3s ease;
+}
+
+/* 响应式布局 */
+.table-layout-container[data-layout-mode="mobile"] {
+  width: 100% !important;
+  border-left: none;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* 动画 */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+
 /* portal 容器, 用来承载浮动面板 */
 .table-portal-container {
   position: relative;
