@@ -32,6 +32,8 @@ export function mountTableShell(params: {
   config: IConfig,
   renderer: DOMRenderer 
   headerSortBinder: HeaderSortBinder
+  container?: HTMLDivElement | string 
+
   onToggleSort: (key: string) => void 
   onNeedLoadSummary?: (summaryRow: HTMLDivElement) => void
 
@@ -60,6 +62,7 @@ export function mountTableShell(params: {
     config, 
     renderer, 
     headerSortBinder, 
+    container,
     onToggleSort, 
     onNeedLoadSummary, 
     onColumnResizeEnd, 
@@ -80,11 +83,21 @@ export function mountTableShell(params: {
 
    } = params
 
+  // 1. 处理最外层大容器参数, 优先使用传入的 container 
+  const containerEl = container 
+   ? (typeof container === 'string'
+      ? document.querySelector<HTMLDivElement>(container)
+      : container)
+   : (typeof config.container === 'string'
+     ? document.querySelector<HTMLDivElement>(config.container)
+     : config.container
+   )
 
-  // 1. 获取用户指定的容器
-  const userContainer = getContainer(config.container)
-  userContainer.innerHTML = ''
+   if (!containerEl) {
+    throw new Error(`[TableShell] 容器未找到: ${container || config.container}`)
+   }
 
+  containerEl.innerHTML = ''
   // 2. 创建 Portal 容器 (包裹层), 用来给一些功能做定位父元素参考
   const portalContainer = document.createElement('div')
   portalContainer.className = 'table-portal-container'
@@ -101,7 +114,7 @@ export function mountTableShell(params: {
 
   // 4. 挂载关系: userContainer -> portalContainer -> scrollContainer
   portalContainer.appendChild(scrollContainer)
-  userContainer.appendChild(portalContainer)
+  containerEl.appendChild(portalContainer)
 
   // 创建表格列管理按钮, 横向3个点, toto: 小齿轮(右上角)
   const columnManagerBtn = document.createElement('button')

@@ -2,7 +2,7 @@ import { TableConfig } from '@/config/TableConfig'
 import { DataManager } from '@/data/DataManager'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import type { IConfig, ITableQuery, IUserConfig } from '@/types'
+import type { ColumnFilterValue, IConfig, ITableQuery, IUserConfig } from '@/types'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
 import { bootstrapTable } from '@/table/data/bootstrapTable'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
@@ -18,6 +18,10 @@ import { ColumnManager } from '@/table/core/ColumnManager'
 import { PerformanceMonitor } from '@/utils/PerformanceMonitor'
 import { actionHandlers, handleDataChange } from '@/table/handlers/ActionHandlers'
 import type { ActionContext } from '@/table/handlers/ActionHandlers'
+// 重构布局 + 右侧菜单栏
+import { LayoutManager } from '@/table/layout/LayoutManager'
+import { SidePanelManager } from '@/table/panel/SidePanelManager'
+import type { IPanelConfig } from '@/table/panel/IPanel'
 
 
 
@@ -40,6 +44,10 @@ export class VirtualTable {
   private widthStorage: ColumnWidthStorage | null = null  // 列宽存储
 
   private columnManager!: ColumnManager // 列统一管理器, 这个很强大
+
+  // 布局管理器 + 右侧面板管理器
+  private layoutManager: LayoutManager | null = null 
+  private sidePanelManager: SidePanelManager | null = null 
 
   // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
   public readonly ready: Promise<void> 
@@ -195,34 +203,48 @@ export class VirtualTable {
 }
 
   // 挂载 shell + viewport (暴力 rebuild 会重复调用它)
-  public mount() {
-    this.shell = mountTableShell({
+  public mount(containerSelector?: string): void {
+    // 1. 确认容器存在
+    const selector = containerSelector || this.config.container
+    const containerEl = typeof selector === 'string'
+      ? document.querySelector<HTMLDivElement>(selector)
+      : selector 
+    
+    if (!containerEl) {
+      throw new Error(`[VirtualTable] 容器未找到: ${selector}`)
+    }
+    // 2. 判断是否启用右侧面板, !! 强制转为 boolean
+    const hasSidePanel = !!(
+      this.config.sidePanel?.enabled &&
+      this.config.sidePanel?.panels &&
+      this.config.sidePanel.panels.length > 0 
+    )
+    // 3. 提取公共的 mountTableShell 参数, 减少代码重复
+    const commonShellParams = {
       config: this.config,
       renderer: this.renderer,
       headerSortBinder: this.headerSortBinder,
-      // 表头点击排序, 统一走 dispatch
-      onToggleSort: (key) => {
-        this.store.dispatch({ type: 'SORT_TOGGLE', payload: { key }})
+      // 回调函数
+      onToggleSort: (key: string) => {
+        this.store.dispatch({type: 'SORT_TOGGLE', payload: {key}})
       },
-      onNeedLoadSummary: (summaryRow) => {
-        // 针对 server 模式
-        this.loadSummaryData(summaryRow).catch(console.warn)
+      onNeedLoadSummary: (summaryRow: HTMLDivElement) => {
+          this.loadSummaryData(summaryRow).catch(console.warn)
       }, 
-      onColumnResizeEnd: (key, width) => {
+      onColumnResizeEnd: (key: string, width: number) => {
         this.store.dispatch({ type: 'COLUMN_WIDTH_SET', payload: { key, width}})
       },
-      onColumnOrderChange: (order) => {
+      onColumnOrderChange: (order: string[]) => {
         this.store.dispatch({ type: 'COLUMN_ORDER_SET', payload: { order }})
       },
-      onColumnFilterChange: (key, filter) => {
-        // filter 为 null 则表示清空
+      onColumnFilterChange: (key: string, filter: ColumnFilterValue | null) => {
         if (!filter) {
           this.store.dispatch({type: 'COLUMN_FILTER_CLEAR', payload: { key } })
         } else {
           this.store.dispatch({ type: 'COLUMN_FILTER_SET', payload: {key, filter } })
         }
       },
-      getFilterOptions: async (key) => {
+      getFilterOptions: async (key: string) => {
         // client 模式 从 originalFullData 推导出可选值 (topN 避免百万次枚举)
         if (this.mode === 'client') {
           return this.getClientFilterOptions(key)
@@ -235,10 +257,10 @@ export class VirtualTable {
         // 未提供或者没有数据, 则返回空数组 (UI 仍可打开, 但没有选项)
         return []
       },
-      getCurrentFilter: (key) => {
+      getCurrentFilter: (key: string) => {
         return this.store.getState().data.columnFilters[key]
       },
-      onTableResizeEnd: (newWidth) => {
+      onTableResizeEnd: (newWidth: number) => {
         // 更新 portalContainer 宽度
         const portalContainer = this.shell.scrollContainer.parentElement as HTMLDivElement
         if (portalContainer && portalContainer.classList.contains('table-portal-container')) {
@@ -256,7 +278,7 @@ export class VirtualTable {
         const state = this.store.getState()
         return state.data.sort
       },
-      onMenuSort: (key, direction) => {
+      onMenuSort: (key: string, direction: 'asc' | 'desc' | null) => {
         if (direction === null) {
           this.store.dispatch({ type: 'SORT_SET', payload: { sort: null }})
         } else {
@@ -275,17 +297,15 @@ export class VirtualTable {
       getHiddenKeys: () => {
         return this.store.getState().columns.hiddenKeys
       },
-      onColumnToggle: (key, visible) => {
+      onColumnToggle: (key: string, visible: boolean) => {
         // 检查是否冻结列 
         const colIndex = this.originalColumns.findIndex(c => c.key === key)
         const isFrozen = colIndex < this.config.frozenColumns 
-
         if (isFrozen && !visible) {
           // 冻结列不让隐藏
           console.warn('冻结列不允许隐藏')
           return 
         }
-
         if (visible) {
           this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
         } else {
@@ -316,37 +336,87 @@ export class VirtualTable {
       }
 
       // 后续更多回调拓展... virtual -> shell -> binder -> view 
+    }
 
-    })
+    if (hasSidePanel) {
+      // 类型守卫 和用 ?? 来提供默认值
+      const sp = this.config.sidePanel!
 
-    // 首次挂载后, 就立刻同步一次滚动高度
-    this.shell.setScrollHeight(this.scroller)
-    // 创建 viewport: 将 "可视区更新/骨架行/数据渲染" 的职责下放
-    this.viewport = new VirtualViewport({
-      config: this.config,
-      dataManager: this.dataManager,
-      renderer: this.renderer,
-      scroller: this.scroller,
-      scrollContainer: this.shell.scrollContainer,
-      virtualContent: this.shell.virtualContent
-    })
+      // ======== 有右侧面板: 使用 LayoutManager 布局 =============
+      this.layoutManager = new LayoutManager(this.config, {
+        mode: 'desktop',
+        sidePanel: {
+          position: sp.position ?? 'right',
+          width: sp.width ?? 250,
+          collapsible: true,
+          defaultOpen: sp.defaultOpen ?? true
+        }
+      })
+      // 渲染布局容器
+      const layoutContainer = this.layoutManager.render()
+      containerEl.appendChild(layoutContainer)
+      // 创建右侧面板管理器, sp.panels 就一定存在
+      this.sidePanelManager = new SidePanelManager(
+        this.store,
+        sp.panels
+      )
+      // 将面板管理器挂载到右侧区域
+      const sideArea = this.layoutManager.getSideArea()
+      if (sideArea) {
+        sideArea.appendChild(this.sidePanelManager.getContainer())
+      }
+      // 显示默认面板
+      if (sp.defaultPanel) {
+        this.sidePanelManager.showPanel(sp.defaultPanel)
 
-    // 初始化 ColumnManager 统一列管理
-    this.columnManager = new ColumnManager(
-      this.config,
-      this.renderer,
-      this.dataManager
-    )
+      } else if (sp.panels.length > 0) {
+        this.sidePanelManager.showPanel(sp.panels[0].id)
+      }
+      // 关键: TableShell 挂载到主区域, 并传入所有回调
+      const mainArea = this.layoutManager.getMainArea()!
+      this.shell = mountTableShell({
+        ...commonShellParams, // 展开所有公共参数
+        container: mainArea // 指定容器为主区域
+      })
+      console.log('[VirtualTable] 已启用右侧面板布局')
 
-    // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
-    this.shell.bindScroll(() => {
+    } else {
+      // ========= 无右侧面板: 标准布局 ===========
+      this.shell = mountTableShell({
+        ...commonShellParams, // 展开所有公共参数
+        container: containerEl
+      })
+
+      // ============ 后续逻辑: (两种模式都需要) ==============
+      // 首次挂载后, 就立刻同步一次滚动高度
+      this.shell.setScrollHeight(this.scroller)
+      // 创建 viewport: 将 "可视区更新/骨架行/数据渲染" 的职责下放
+      this.viewport = new VirtualViewport({
+        config: this.config,
+        dataManager: this.dataManager,
+        renderer: this.renderer,
+        scroller: this.scroller,
+        scrollContainer: this.shell.scrollContainer,
+        virtualContent: this.shell.virtualContent
+      })
+
+      // 初始化 ColumnManager 统一列管理
+      this.columnManager = new ColumnManager(
+        this.config,
+        this.renderer,
+        this.dataManager
+      )
+
+      // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
+      this.shell.bindScroll(() => {
+        this.viewport.updateVisibleRows()
+      })
       this.viewport.updateVisibleRows()
-    })
-    this.viewport.updateVisibleRows()
 
-    // 首次挂载后, 立即刷新一次总结行数据
-    if (this.config.showSummary) {
-      this.refreshSummary().catch(console.warn)
+      // 首次挂载后, 立即刷新一次总结行数据
+      if (this.config.showSummary) {
+        this.refreshSummary().catch(console.warn)
+      }
     }
   }
 
@@ -598,6 +668,21 @@ export class VirtualTable {
     }
   }
 
+  // 切换右侧面板显示/隐藏
+  public toggleSidePanel(show?: boolean): void {
+    this.layoutManager?.toggleSidePanel(show)
+  }
+
+  // 切换到指定的面板
+  public showPanel(panelId: string): void {
+    this.sidePanelManager?.showPanel(panelId)
+  }
+
+  // 获取当前激活面板的 id 
+  public getActivePanel(): string | null {
+    return this.sidePanelManager?.getActivePanel() ?? null 
+  }
+
 
   // 清空, 避免内存泄露
   public destroy() {
@@ -605,5 +690,11 @@ export class VirtualTable {
     this.unsubscribleStore = null // 解绑 store 订阅
     this.shell?.destroy()
     this.viewport?.destroy()
+    // 清空布局管理器
+    this.layoutManager?.destroy()
+    this.layoutManager = null 
+    // 清理面板管理器
+    this.sidePanelManager?.destroy()
+    this.sidePanelManager = null 
   }
 }

@@ -589,7 +589,7 @@
   background-color: #f5f5f5;
 }
 
-.side-panel-tab .active {
+.side-panel-tab.active {
   border-bottom-color: #1890ff;
   color: #1890ff;
 }

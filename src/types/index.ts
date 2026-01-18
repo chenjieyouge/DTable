@@ -1,22 +1,20 @@
 import type { IPanelConfig } from "@/table/panel/IPanel"
 
-// 列筛选类型 (目前支持 4 种)
+// ======== 基础类型 ==========
+
+// 列筛选值的联合类型 (统一表达四种筛选)
 export type ColumnFilterType = 'set' | 'text' | 'dateRange' | 'numberRange'
 
-// 列筛选配置 (控制某列是否筛选, 以及配置类型)
 export interface IColumnFilterConfig {
   enabled: boolean // 是否允许出现 "筛选" 按钮
   type: ColumnFilterType // 筛选的列值类型, 决定弹窗层渲染形态和 query 结构
 }
 
-// 列筛选值的联合类型 (统一表达四种筛选)
 export type ColumnFilterValue = 
   | { kind: 'set', values: string[] }
-  | { kind: 'text', value: string } // 先做 contains, 后扩展 op 
+  | { kind: 'text', value: string } 
   | { kind: 'dateRange', start?: string, end?: string } // yyyy-MM-dd
   | { kind: 'numberRange', min?: number, max?: number }
-
-
 
 // 拓展排序, 筛选参数
 export interface SortFilterParmas {
@@ -34,12 +32,59 @@ export interface ITableQuery {
   columnFilters?: Record<string, ColumnFilterValue> // 列值筛选 (key -> 筛选值结构)
 }
 
-// 标准分页响应
+// sever模式: 标准分页响应
 export interface IPageResponse<T = Record<string, any>> {
   list: T[]
   totalRows: number
 }
 
+// server模式: 页码展示
+export interface IPageInfo {
+  startPage: number
+  endPage: number
+  totalPages: number
+}
+
+// 列字段配置, 文档约定必传哦!
+export interface IColumn {
+  key: string
+  title: string
+  width: number
+  sortable?: boolean
+  filter?: IColumnFilterConfig  // 列筛选配置 (不配置则表示不可筛选)
+  summaryType?: 'sum' | 'avg' | 'count' | 'none' // 总结行聚合类型
+  // 自定义渲染器: 支持返回 html 字符串或 dom 元素
+  render?: (value: any, row: Record<string, any>, rowIndex: number) => string | HTMLDivElement
+  // 单元格样式制定: 根据值返回 className
+  cellClassName?: (value: any, row: Record<string, any>) => string
+  // 单元格行内样式, 支持各种 html 元素 (条件格式更方便)
+  cellStyle?: (value: any, row: Record<string, any>, rowIndex: number) => Partial<CSSStyleDeclaration> | null 
+}
+
+// ======= 右侧面板配置 =========
+// 用户输入版本: panels 必填, 其他可选 
+export interface SidePanelConfig {
+  enabled: boolean // 是否启用右侧面板
+   panels: IPanelConfig[] // 要启用的面板列表, 必填!
+  position?: 'left' | 'right'  // 面板位置默认 right
+  width?: number // 面板宽度, 默认 250px
+  defaultPanel?: string // 默认显示面板 id 
+  defaultOpen?: boolean // 默认是否展开, 默认 true
+ 
+}
+
+// 内部运行版本, 所有字段必填
+export interface SidePanelConfigInternal {
+  enabled: boolean 
+  position: 'left' | 'right'  
+  width: number 
+  defaultPanel?: string 
+  defaultOpen: boolean 
+  panels: IPanelConfig[] 
+}
+
+
+// ======= 回调函数类型 ===========
 // 定义所有可选的回调接口
 export interface ITableCallbacks {
   // 可视区页面变化时触发
@@ -51,87 +96,44 @@ export interface ITableCallbacks {
   // onRowClick?: ...
 }
 
-export interface IPageInfo {
-  startPage: number
-  endPage: number
-  totalPages: number
-}
-
-export interface IColumn {
-  key: string
-  title: string
-  width: number
-  sortable?: boolean
-  filter?: IColumnFilterConfig  // 列筛选配置 (不配置则表示不可筛选)
-  summaryType?: 'sum' | 'avg' | 'count' | 'none' // 总结行聚合类型
-  
-  // 自定义渲染器: 支持返回 html 字符串或 dom 元素
-  render?: (value: any, row: Record<string, any>, rowIndex: number) => string | HTMLDivElement
-  // 单元格样式制定: 根据值返回 className
-  cellClassName?: (value: any, row: Record<string, any>) => string
-  // 单元格行内样式, 支持各种 html 元素 (条件格式更方便)
-  cellStyle?: (value: any, row: Record<string, any>, rowIndex: number) => Partial<CSSStyleDeclaration> | null 
-}
-
-// 对外: 用户传入的配置 (宽松)
-export interface IUserConfig extends Partial<ITableCallbacks> {
-  container?: string
-  tableId?: string // 表格的唯一标识, 用于 localstorage 存储
-  tableWidth?: number
-  tableHeight?: number
-  headerHeight?: number
-  summaryHeight?: number
-  rowHeight?: number
-  totalRows?: number // 这个可不传
-  frozenColumns?: number
-  showSummary?: boolean
-
-  pageSize?: number // 每页多少行
-  bufferRows?: number // 缓冲区行数
-  maxCachedPages?: number // 最大缓存页面数 (仅数据)
-
-  columns: IColumn[] // 用户必填
-
+// =========== 内部配置 (运行时, 所有字段必填) ===========
+export interface IConfig extends ITableCallbacks {
+  // 容器
+  container: string | HTMLDivElement
+  tableId: string // 表格的唯一标识, 用于 localstorage 存储等
+  // 尺寸
+  tableWidth: number
+  tableHeight: number
+  headerHeight: number
+  summaryHeight: number
+  rowHeight: number
+  // 数据
+  totalRows: number 
+  columns: IColumn[] // 约定必填
+  // 功能
+  frozenColumns: number
+  showSummary: boolean
+  // 分页
+  pageSize: number // 每页多少行
+  bufferRows: number // 缓冲区行数
+  maxCachedPages: number // 最大缓存页面数 (仅数据)
+  // 可选功能-右侧管理面板
+  sidePanel?: SidePanelConfig
+  // 数据源配置(可选)
+  initialData?: Record<string, any>[] // 全量数据
+  fetchAllData?: () => Promise<Record<string, any>[]>
   fetchPageData?(pageIndex: number, query?: ITableQuery): Promise<IPageResponse>
   fetchSummaryData?(query?: ITableQuery): Promise<Record<string, any>>
   fetchFilterOptions?: (params: { // server 模式下拉取某列的可选筛选值
     key: string 
     query: ITableQuery
   }) => Promise<string[]>
-
-  initialData?: Record<string, any>[] // 全量数据
-  fetchAllData?: () => Promise<Record<string, any>[]>
-  sidePanel?: Partial<SidePanelConfig> // 右侧面板配置 (可选)
+  
 }
 
-// 右侧面板配置
-export interface SidePanelConfig {
-  enabled: boolean // 是否启用右侧面板
-  position?: 'left' | 'right'  // 面板位置默认 right
-  width?: number // 面板宽度, 默认 250px
-  defaultPanel?: string // 默认显示面板 id 
-  panels: IPanelConfig[] // 要启用的面板列表
+// ======== 用户配置(几乎全部可选, 约定大于配置) ========
+export type IUserConfig = Partial<IConfig> & {
+  columns: IColumn[]  // 列配置要必填哦!
 }
 
-
-// 对内: 使用严格完整配置
-// 注意: 回调函数保持可选, 因为它们也不是 "必需配置", 可选都放在 Omit 中
-// IConfig 让所有 IUserConfig 变成必填, 除 (fetchSummaryData)
-export interface IConfig
-  extends Required<
-      Omit<
-        IUserConfig,
-        | 'fetchSummaryData'
-        | 'fetchPageData'
-        | 'initialData'
-        | 'fetchAllData'
-        | 'fetchFilterOptions'
-        | keyof ITableCallbacks
-      >
-    >,
-    Pick<
-      IUserConfig,
-      'fetchSummaryData' | 'fetchPageData' | 'initialData' | 'fetchAllData' | 'fetchFilterOptions'
-    >,
-    ITableCallbacks {}
 
