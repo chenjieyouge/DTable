@@ -23,15 +23,16 @@ import type { IPanelConfig } from '@/table/panel/IPanel'
 import { ShellCallbacks } from '@/table/handlers/ShellCallbacks' // 回调
 import { createColumnPanel } from '@/table/panel/panels/ColumnPanel'
 import { 
-  actionHandlers, 
-  COLUMN_EFFTECT_ACTIONS, 
-  DATA_EFFECT_ACTIONS, 
-  handleDataChange, 
+  actionHandlers, COLUMN_EFFTECT_ACTIONS, DATA_EFFECT_ACTIONS, handleDataChange, 
   STATE_ONLY_ACTIONS, 
   STRUCTURAL_EFFECT_ACTIONS } from '@/table/handlers/ActionHandlers'
 import type { ActionContext } from '@/table/handlers/ActionHandlers'
 import { SortState } from '@/table/core/SortState'
 import { RenderMethod, RenderProtocalValidator, RenderScenario } from '@/table/viewport/RenderProtocol'
+// 数据策略
+import type { DataStrategy } from '@/table/data/DataStrategy'
+import { ClientDataStrategy } from '@/table/data/ClientDataStrategy'
+import { ServerDataStrategy } from '@/table/data/ServerDataStrategy'
 
 
 
@@ -45,6 +46,7 @@ export class VirtualTable {
   private viewport!: VirtualViewport
 
   private dataManager: DataManager
+  private dataStrategy!: DataStrategy
   private renderer: DOMRenderer
   private scroller: VirtualScroller
 
@@ -130,7 +132,12 @@ export class VirtualTable {
         // totalRows 先用默认值, 等有数真实数据再替换回来
         assertUniqueColumnKeys(this.config.columns) // 列 key 唯一校验
         this.originalColumns = [...this.config.columns]
-
+        // 创建 ServerDataStrategy, 在 mount 之前搞定
+        this.dataStrategy = new ServerDataStrategy(
+          this.config.fetchPageData!,
+          this.config.pageSize,
+          this.config.fetchSummaryData
+        )
         // 1. 创建 store
         this.store = createTableStore({
           columns: this.originalColumns,
@@ -161,8 +168,7 @@ export class VirtualTable {
         this.resolveReady = null 
 
         // 8. 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
-        void this.dataManager.getPageData(0).then(() => {
-          const realTotal = this.dataManager.getServerTotalRows()
+        void this.dataStrategy.bootstrap().then(({ totalRows: realTotal }) => {
           if (typeof realTotal === 'number' && realTotal >= 0) {
             // 先判断是否需要重建 scroller, 在 修改 config 之前
             const needRebuild = realTotal !== this.config.totalRows
@@ -197,6 +203,18 @@ export class VirtualTable {
     const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
     this.mode = mode 
     this.config.totalRows = totalRows
+    // 根据 mode 创建对应的 DataStrategy, client 也可能走 server 哦, 当数据量小直接全拉
+    if (mode === 'client') {
+      const fullData = this.dataManager.getOriginalFullData()
+      this.dataStrategy = new ClientDataStrategy(fullData, this.config.columns)
+    } else {
+      // server 模式 bootstrapTable 也可能走这里
+      this.dataStrategy = new ServerDataStrategy(
+        this.config.fetchPageData!,
+        this.config.pageSize,
+        this.config.fetchSummaryData
+      )
+    }
 
     // 1. 创建 全局 store 
     this.store = createTableStore({
@@ -384,7 +402,7 @@ export class VirtualTable {
     // 创建 viewport: 将 "可视区更新/骨架行/数据渲染" 的职责下放
     this.viewport = new VirtualViewport({
       config: this.config,
-      dataManager: this.dataManager,
+      dataStrategy: this.dataStrategy,
       renderer: this.renderer,
       scroller: this.scroller,
       scrollContainer: this.shell.scrollContainer,
@@ -500,18 +518,15 @@ export class VirtualTable {
     }
   }
 
-  // client / server 刷新总结行数据
+  // client / server 刷新总结行数据, 统一走 dataStrategy
   public async refreshSummary() {
     if (!this.config.showSummary) return 
     const row = this.shell?.summaryRow
     if (!row) return 
-    // client 模式: 动态计算总结行
-    if (this.mode === 'client') {
-      const summaryData = this.dataManager.computeSummary(this.config.columns)
+    // 统一走 dataStrategy 
+    const summaryData = await this.dataStrategy.getSummary(this.serverQuery)
+    if (summaryData) {
       this.renderer.updateSummaryRow(row, summaryData)
-    } else {
-      // server 模式: 调用接口拉取
-      await this.loadSummaryData(row)
     }
     
   }

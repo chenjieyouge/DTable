@@ -1,4 +1,4 @@
-import type { ITableQuery } from "@/types";
+import type { IPageResponse, ITableQuery } from "@/types";
 
 /**
  * 数据策略接口
@@ -60,16 +60,12 @@ export interface DataStrategy {
 export interface DataStrategyFactoryParams {
   mode: 'client' | 'server'
 
-  initialData?: Record<string, any>[]
+  initialData?: Record<string, any>[]  // clinet 模式下会直接配置上数据
 
-  pageSize: number // 配置每页多少数据
-
+  pageSize: number // server 分页下, 配置每页多少数据
   columns: any[]  // 用于 client 模式计算总结行
 
-  fetchPageData?: (pageIndex: number, query: ITableQuery) => Promise<{
-    rows: Record<string, any>[]
-    total: number
-  }>
+  fetchPageData?: (pageIndex: number, query: ITableQuery) => Promise<IPageResponse>
 
   fetchSummaryData?: (query: ITableQuery) => Promise<Record<string, any>>
 }

@@ -1,4 +1,4 @@
-import { DataManager } from "@/data/DataManager";
+import type { DataStrategy } from "@/table/data/DataStrategy";
 import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { IConfig, IPageInfo } from "@/types";
@@ -8,7 +8,7 @@ import { RenderScenario, RenderMethod, RenderProtocalValidator } from "@/table/v
 
 export class VirtualViewport {
   private config: IConfig
-  private dataManager: DataManager
+  private dataStrategy: DataStrategy
   private renderer: DOMRenderer
   private scroller: VirtualScroller
 
@@ -21,7 +21,7 @@ export class VirtualViewport {
 
   constructor(params: {
     config: IConfig;
-    dataManager: DataManager;
+    dataStrategy: DataStrategy,
     renderer: DOMRenderer;
     scroller: VirtualScroller;
     scrollContainer: HTMLDivElement 
@@ -30,7 +30,7 @@ export class VirtualViewport {
   }) {
     // 初始化时, 值由 VirtaulTable 传递过来
     this.config = params.config;
-    this.dataManager = params.dataManager;
+    this.dataStrategy = params.dataStrategy;
     this.renderer = params.renderer;
     this.scroller = params.scroller;
     this.scrollContainer = params.scrollContainer
@@ -50,7 +50,7 @@ export class VirtualViewport {
    * - 初始化填充
    * - 数据补充
    * 
-   * 不会清空 DOM, 曾辉增量更新
+   * 不会清空 DOM, 只会增量更新
    */
   public updateVisibleRows(): void {
     requestAnimationFrame(() => {
@@ -154,12 +154,12 @@ export class VirtualViewport {
     }
     
     try {
-      let rowData = this.dataManager.getRowData(rowIndex)
+      let rowData = this.dataStrategy.getRow(rowIndex)
       if (!rowData) {
         // 缓存页中没有该行数据, 则触发异步数据加载 (分页模式)
         const pageIndex = Math.floor(rowIndex / this.config.pageSize)
-        await this.dataManager.getPageData(pageIndex)
-        rowData = this.dataManager.getRowData(rowIndex)
+        await this.dataStrategy.ensurePageForRow(pageIndex)
+        rowData = this.dataStrategy.getRow(rowIndex)
       }
       if (rowData !== undefined) {
         const rowEl = this.rowElementMap.get(rowIndex) // 从缓存中找到更新行

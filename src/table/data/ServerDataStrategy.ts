@@ -1,5 +1,5 @@
 import type { DataStrategy } from "@/table/data/DataStrategy";
-import type { ITableQuery } from "@/types";
+import type { IPageResponse, ITableQuery } from "@/types";
 
 /**
  * Server 数据策略
@@ -17,19 +17,13 @@ export class ServerDataStrategy implements DataStrategy {
   private totalRows: number = 0
   private pageSize: number 
 
-  private fetchPageData: (pageIndex: number, query: ITableQuery) => Promise<{
-    rows: Record<string, any>[]
-    total: number
-  }>
+  private fetchPageData: (pageIndex: number, query: ITableQuery) => Promise<IPageResponse>
 
   private fetchSummaryData?: (query: ITableQuery) => Promise<Record<string, any>>
 
   // 初始化, 用户需要传入的参数: fetchData, pageSize, fetchSummaryData 可选 
   constructor(
-    fetchPageData: (pageIndex: number, query: ITableQuery) => Promise<{
-      rows: Record<string, any>[]
-      total: number
-    }>,
+    fetchPageData: (pageIndex: number, query: ITableQuery) => Promise<IPageResponse>,
     pageSize: number,
     fetchSummaryData?: (query: ITableQuery) => Promise<Record<string, any>>
   ) {
@@ -120,8 +114,9 @@ export class ServerDataStrategy implements DataStrategy {
   private async loadPage(pageIndex: number): Promise<void> {
     try {
       const result = await this.fetchPageData(pageIndex, this.currentQuery)
-      this.pageCache.set(pageIndex, result.rows)
-      this.totalRows = result.total
+      // 适配统一的分页返回结构: IPageResponse: { list totalRows } 
+      this.pageCache.set(pageIndex, result.list)
+      this.totalRows = result.totalRows
       
     } catch (err) {
       console.error(`[ServerDataStrategy] 加载第 ${pageIndex} 页失败:`, err)

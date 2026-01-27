@@ -88,13 +88,18 @@ export class DataManager {
     this.pageCache.clear() // 清理分页缓存
   }
 
+  // 获取全量数据
+  public getOriginalFullData(): Record<string, any>[] {
+    return this.originalFullData ?? []
+  }
+
   // 获取全量长度, 拥有更新 totalRows
   public getFullDataLength(): number {
     return this.fullData?.length || 0
   }
 
   // 异步: 获取某页数据 (带防重, 缓存)
-  async getPageData(pageIndex: number, query?: ITableQuery): Promise<Record<string, any>[]> {
+  public async getPageData(pageIndex: number, query?: ITableQuery): Promise<Record<string, any>[]> {
     const cacheKey = this.getPageCacheKey(pageIndex, query)
     // 同一个 page + query 的请求防重复
     if (this.loadingPromises.has(cacheKey)) {
@@ -136,7 +141,7 @@ export class DataManager {
 
   // 同步: 仅从缓存中读取某行, 不触发网络请求
   // 假设要获取第 88行数据, 每页20条, 则坐标为: (88 / 20) -> 第4页 + (88 % 20)-> 8 位
-  getRowData(rowIndex: number): Record<string, any> | undefined {
+  public getRowData(rowIndex: number): Record<string, any> | undefined {
     if (rowIndex < 0 || !this.config.totalRows) {
       return undefined
     }
