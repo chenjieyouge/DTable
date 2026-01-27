@@ -87,6 +87,20 @@ export class ClientDataStrategy implements DataStrategy {
     return this.filteredData.length
   }
 
+  /** 获取列的筛选选项 */
+  public getFilterOptions(columnKey: string): string[] {
+    const valSet = new Set<string>()
+    const limit = 1000 // 最多取前 1000 个不同值
+    
+    // 从全量数据中提取
+    for (const row of this.fullData) {
+      if (valSet.size >= limit) break 
+      const val = String(row[columnKey] ?? '')
+      if (val) valSet.add(val)
+    }
+    return Array.from(valSet).sort()
+  }
+
   /** 应用筛选条件 */
   private applyFilters(data: Record<string, any>[], query: ITableQuery): Record<string, any>[] {
     let result = [...data]
@@ -97,26 +111,6 @@ export class ClientDataStrategy implements DataStrategy {
         return Object.values(row).some(val => String(val).toLowerCase().includes(text))
       })
     }
-
-    // // 列筛选
-    // if (query.columnFilters) {
-    //   for (const [key, filterValue] of Object.entries(query.columnFilters)) {
-    //     if (!filterValue) continue 
-
-    //     if (Array.isArray(filterValue)) {
-    //       // 多选筛选
-    //       result = result.filter(row => {
-    //         return filterValue.includes(String(row[key]))
-    //       })
-
-    //     } else {
-    //       // 单值筛选
-    //       result = result.filter(row => {
-    //         String(row[key]) === String(filterValue)
-    //       })
-    //     }
-    //   }
-    // }
 
     // 列筛选 
     if (query.columnFilters) {

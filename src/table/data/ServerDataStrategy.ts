@@ -110,6 +110,12 @@ export class ServerDataStrategy implements DataStrategy {
     return this.totalRows
   }
 
+  /** Server 模式下暂不支持前端推导筛选框选项 */
+  public getFilterOptions(columnKey: string): string[] {
+    console.warn('[ServerDataStrategy] Server 模式下应该通过 fetchFilterOptions 获取筛选选项')
+    return []
+  }
+
   /** 异步加载某一页数据 */
   private async loadPage(pageIndex: number): Promise<void> {
     try {

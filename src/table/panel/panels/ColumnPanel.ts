@@ -15,11 +15,13 @@ export class ColumnPanel implements IPanel {
   private unsubscribe: (() => void) | null = null 
   private searchInput: HTMLInputElement | null = null 
   private listContainer: HTMLDivElement | null = null 
+  private allColumnKeys: string[] = [] // 保存所有列的 key, 包括隐藏的
 
   constructor(
     private store: TableStore,
     private originalColumns: IColumn[]
   ) {
+    this.allColumnKeys = originalColumns.map(col => col.key)
     this.container = this.render()
   }
 
@@ -129,18 +131,30 @@ export class ColumnPanel implements IPanel {
     if (!this.listContainer || !this.store) return 
 
     const state = this.store.getState()
-    const allColumnKeys = state.columns.order // 所有列的 key 顺序
+    const currentOrder = state.columns.order // 当前列顺序, 拖拽后会变化
     const hiddenKeys = state.columns.hiddenKeys // 隐藏的列 key
+
+    // 合并可见列和隐藏列, 保持完整列表
+    // 先按 currentOrder 排列; 再最佳隐藏列 (按原始顺序)
+    const allKeys = [
+      ...currentOrder,
+      ...this.allColumnKeys.filter(key => !currentOrder.includes(key))
+    ]
     // 清空列表
     this.listContainer.innerHTML = ''
-    // 遍历所有列
-    allColumnKeys.forEach(key => {
+    // 按拖拽操作后的最新顺序展示, 并将隐藏列也显示出来
+    allKeys.forEach(key => {
       const col = this.originalColumns.find(c => c.key === key)
       if (!col) return 
+
       const isVisible = !hiddenKeys.includes(key)
       // 每个列表项
       const item = document.createElement('div')
       item.className = 'column-panel-item'
+      // 给隐藏列添加样式提示
+      if (!isVisible) {
+        item.classList.add('column-panel-item--hidden')
+      }
       // 单选框
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox'

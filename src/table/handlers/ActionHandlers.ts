@@ -1,5 +1,6 @@
 import type { TableAction } from "@/table/state/types";
 import type { VirtualTable } from "@/table/VirtualTable";
+import { ITableQuery } from "@/types";
 
 // ActionHandlers 策略模式, 搞成类似 vue 的风格了
 
@@ -153,30 +154,29 @@ export function handleFrozenCountSet(action: TableAction, ctx: ActionContext): v
   ctx.table['rebuild']() // 就用了一次暴力重建, 感觉增量更新都搞完了
 }
 
-// 数据变化: 筛选/排序等处理器
+// 数据变化统一处理: 筛选/排序等处理器
 export function handleDataChange(action: TableAction, ctx: ActionContext): void {
   // 白名单校验
   if (!DATA_EFFECT_ACTIONS.has(action.type)) {
-    console.error(`[handleDataChange] action "${action.type}" 不再数据副作用名单中!`)
-    return // 直接返回, 不执行副作用
+    console.error(`[handleDataChange] action "${action.type}" 不在数据副作用名单中!`)
+    return 
   }
 
   const shell = ctx.table['shell']
   const store = ctx.table['store']
+  const state = store.getState()
   // 排序指示器永远以 state 为准
   shell?.setSortIndicator(store.getState().data.sort)
-   // 排序/筛选变化 -> 根据模式(cleint, server) 触发数据侧更新
-   const state = store.getState()
-   if (state.data.mode === 'client') {
 
-    void ctx.table['applyClientState'](state)
-    void ctx.table['refreshSummary']()  // 更新总结行会自动判断是 client 还是 server
+  // 统一走 applyQuery, 不再区分 client/server
+  const query: ITableQuery = {
+    sortKey: state.data.sort?.key,
+    sortDirection: state.data.sort?.direction,
+    filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
+    columnFilters: state.data.columnFilters
+  }
 
-   } else {
-    // 走服务端 api 模式, 后端处理好筛选, 排序等逻辑, 前端直接渲染即可
-    void ctx.table['applyServerQuery'](state.data.query)
-    void ctx.table['refreshSummary']()
-   }
+  void ctx.table['applyQuery'](query)
 }
 
 // 空处理器, 用于更新 state, 不触发副作用的 action 

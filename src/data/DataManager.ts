@@ -90,7 +90,7 @@ export class DataManager {
 
   // 获取全量数据
   public getOriginalFullData(): Record<string, any>[] {
-    return this.originalFullData ?? []
+    return this.originalFullData || []
   }
 
   // 获取全量长度, 拥有更新 totalRows

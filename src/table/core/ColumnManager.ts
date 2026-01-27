@@ -1,6 +1,6 @@
 import type { IColumn, IConfig } from "@/types";
 import { DOMRenderer } from "@/dom/DOMRenderer";
-import { DataManager } from "@/data/DataManager";
+import { DataStrategy } from "@/table/data/DataStrategy";
 
 /**
  * 列管理器: 统一管理列的增删改查 和 DOM 更新
@@ -19,12 +19,13 @@ import { DataManager } from "@/data/DataManager";
 export class ColumnManager {
   private config: IConfig 
   private renderer: DOMRenderer
-  private dataManager: DataManager
+  private dataStratety: DataStrategy
 
-  constructor(config: IConfig, renderer: DOMRenderer, dataManager: DataManager) {
+
+  constructor(config: IConfig, renderer: DOMRenderer, dataStrategy: DataStrategy) {
     this.config = config 
     this.renderer = renderer
-    this.dataManager = dataManager
+    this.dataStratety = dataStrategy
   }
   /**
    * 统一的更新入口
@@ -137,7 +138,7 @@ export class ColumnManager {
       })
       // 获取将要更新的行索引, 行数据
       const rowIndex = parseInt(row.dataset.rowIndex || '0', 10)
-      const rowData = this.dataManager.getRowData(rowIndex)
+      const rowData = this.dataStratety.getRow(rowIndex)
 
       // 移除不需要的节点, 也用 DocumentFragment 容器先装, 后批量插入
       const neededKeys = new Set(columns.map(col => col.key))

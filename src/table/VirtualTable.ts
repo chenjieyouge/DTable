@@ -1,10 +1,9 @@
 import { TableConfig } from '@/config/TableConfig'
-import { DataManager } from '@/data/DataManager'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
 import type { ColumnFilterValue, IConfig, ITableQuery, IUserConfig } from '@/types'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
-import { bootstrapTable } from '@/table/data/bootstrapTable'
+import { bootstrapStrategy } from '@/table/data/bootstrapStrategy'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 import type { ITableShell } from '@/table/TableShell'
 import { mountTableShell } from '@/table/TableShell'
@@ -45,7 +44,6 @@ export class VirtualTable {
   private serverQuery: ITableQuery = { filterText: '' } 
   private viewport!: VirtualViewport
 
-  private dataManager: DataManager
   private dataStrategy!: DataStrategy
   private renderer: DOMRenderer
   private scroller: VirtualScroller
@@ -80,7 +78,6 @@ export class VirtualTable {
       this.restoreColumnWidths() // 恢复保存的列宽
     }
 
-    this.dataManager = new DataManager(this.config)
     this.renderer = new DOMRenderer(this.config)
     this.scroller = new VirtualScroller(this.config)
 
@@ -200,21 +197,10 @@ export class VirtualTable {
     // ======= client 模式或者 用户传入了 initialData 的情况 ===========
 
     // 0. client 模式下, 渲染前准备工作处理
-    const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
+    const { strategy, mode, totalRows } = await bootstrapStrategy(this.config)
+    this.dataStrategy = strategy
     this.mode = mode 
     this.config.totalRows = totalRows
-    // 根据 mode 创建对应的 DataStrategy, client 也可能走 server 哦, 当数据量小直接全拉
-    if (mode === 'client') {
-      const fullData = this.dataManager.getOriginalFullData()
-      this.dataStrategy = new ClientDataStrategy(fullData, this.config.columns)
-    } else {
-      // server 模式 bootstrapTable 也可能走这里
-      this.dataStrategy = new ServerDataStrategy(
-        this.config.fetchPageData!,
-        this.config.pageSize,
-        this.config.fetchSummaryData
-      )
-    }
 
     // 1. 创建 全局 store 
     this.store = createTableStore({
@@ -426,7 +412,7 @@ export class VirtualTable {
     this.columnManager = new ColumnManager(
       this.config,
       this.renderer,
-      this.dataManager
+      this.dataStrategy
     )
 
     // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
@@ -613,58 +599,10 @@ export class VirtualTable {
 
   }
 
-
-  // client 模式下, 将 state 应用到 DataManager + Scroller + Viewport
-  private async applyClientState(state: TableState) {
-    
-    const filterText: string = state.data.clientFilterText ?? ''
-    const sort = state.data.sort 
-    const columnFilters = state.data.columnFilters ?? {}
-
-    // 先恢复 原始顺序 + 应用筛选, 保证可回到自然顺序
-    this.dataManager.resetClientOrder({ filterText, columnFilters }) // 恢复为原始顺序,考虑了筛选动作
-    // 若有排序, 则再处理
-    if (sort) {
-      this.dataManager.sortData(sort.key, sort.direction)
-    }
-
-    // 监控 totalRow 变化时, 需要重建 scroller 
-    this.config.totalRows = this.dataManager.getFullDataLength()
-    // 更新 store 中的 totalRows 
-    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: this.config.totalRows } })
-    this.scroller = new VirtualScroller(this.config)
-    this.viewport.setScroller(this.scroller)
-    this.updateStatusBar() // 更新底部状态栏
-    // 同步滚动高度 + 刷新可视区
-    this.shell.setScrollHeight(this.scroller)
-
-    // ======== 规则1: query 变化是结构性变化, 可以调用 refresh() ========
-    if (process.env.NODE_ENV === 'development') {
-      RenderProtocalValidator.validate(
-        RenderScenario.QUERY_CHANGE,
-        RenderMethod.REFRESH,
-        'VirtaulTable.applyClientState'
-      )
-    }
-
-    this.viewport.refresh()
-    await this.refreshSummary() // 总结行也可能刷新
-  }
-
-
   // client 模式下, 推导列可选值 (topN 或全量去重, 避免百万枚举卡死)
   private getClientFilterOptions(key: string): string[] {
-    const fullData= (this.dataManager as any).originalFullData as Record<string, any>[] | null 
-    if (!fullData) return []
-
-    const valSet = new Set<string>()
-    const limit = 1000 // 最多取前 1000 个不同值, 避免卡顿
-    for (const row of fullData) {
-      if (valSet.size >= limit) break 
-      const val = String(row[key] ?? '')
-      if (val) valSet.add(val)
-    }
-    return Array.from(valSet).sort() // Array.from 和 [...] 谁性能高?
+    // 暂不支持 server 哦
+    return this.dataStrategy.getFilterOptions(key)
   }
 
   // 暴力重建 (列变化时用), 最稳但性能不行, 后续里程碑在优化为局部更新
@@ -679,60 +617,51 @@ export class VirtualTable {
     // 重建后, 将 UI 与数据状态重新对齐
     const state = this.store.getState()
     this.shell.setSortIndicator(state.data.sort)
-
-    if (state.data.mode === 'client') {
-      void this.applyClientState(state)
-    } else {
-      void this.applyServerQuery(state.data.query).then(() => {
-        void this.refreshSummary()
-      })
+    // 统一走 applyQuery
+    const query: ITableQuery = {
+      sortKey: state.data.sort?.key,
+      sortDirection: state.data.sort?.direction,
+      filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
+      columnFilters: state.data.columnFilters
     }
+    void this.applyQuery(query)
   }
 
-  // ========== 规则3: applyServerQuery 只能在 query 真变化时调用 ======
+
   /**
-   * 应用服务端查询
-   * - 只能在 query 真变化时调用 (排序/筛选等)
-   * - 禁止 被 SET_TOTAL_ROWS 这种 action 间接触发
-   * - 会清空缓存, 并重新加载第一页数据
+   * 统一的查询应用入口 
+   * - 不关心 mode, 完全交由 dataStrategy 处理
+   * - 根据 strategy 返回值统一更新 scroller/viewport
    * 
    * @param query 查询条件
    */
-  private async applyServerQuery(next: ITableQuery) {
-    this.serverQuery = {
-      sortKey: next.sortKey,
-      sortDirection: next.sortDirection,
-      filterText: next.filterText ?? "",
-      columnFilters: next.columnFilters ?? {}  // server 模式也必须带上列筛选
-    }
-    // 更新 DataManager 的 query, 缓存也会自动清除
-    this.dataManager.setQuery(this.serverQuery)
-    // 筛选排序后回到顶部, 避免当前滚动位置超出 新 totalRows
-    this.shell.scrollContainer.scrollTop = 0
-    // 主动来取第 0 页, 让 totalRows 先有值并缓存 page0
-    await this.dataManager.getPageData(0)
-    const totalRows = this.dataManager.getServerTotalRows()
-    if (typeof totalRows === 'number') {
-      this.config.totalRows = totalRows
-      this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows } })
-    }
-    // totalRows 变化后必须重建 scroller, 否则滚动高度不准
+  private async applyQuery(query: ITableQuery) {
+    // 1. 调用 strategy 应用策略
+    const result = await this.dataStrategy.applyQuery(query)
+    // 2. 更新 totals 和 scroller
+    this.config.totalRows = result.totalRows
+    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: result.totalRows } })
     this.scroller = new VirtualScroller(this.config)
     this.viewport.setScroller(this.scroller)
-    // 一定要记得重设滚动容器的高
     this.shell.setScrollHeight(this.scroller)
-
-    // ====== 整个数据变化了, 调用 refresh() 是合法的 ======= 
+    // 3. 若需要回到顶部
+    if (result.shouldResetScroll) {
+      this.shell.scrollContainer.scrollTop = 0
+    }
+    // 4. 协议校验
     if (process.env.NODE_ENV === 'development') {
       RenderProtocalValidator.validate(
         RenderScenario.QUERY_CHANGE,
         RenderMethod.REFRESH,
-        'VirtualTable.applyServerQuery'
+        'VirtualTable.applyQuery'
       )
     }
-
+    // 5. 刷新可视区
     this.viewport.refresh()
-    this.updateStatusBar() // 底部状态栏也要更新
+    this.updateStatusBar()
+    // 6. 刷新总结行
+    await this.refreshSummary()
+
   }
 
   // 从 localStorage 恢复列宽, 表格宽, 列顺序

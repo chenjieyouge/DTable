@@ -51,6 +51,13 @@ export interface DataStrategy {
    * 获取当前总行数 (同步)
    */
   getTotalRows(): number 
+
+  /**
+   * 获取列的筛选选项 (用于下拉列表)
+   * @param columnKey - 列 key 
+   * @returns 该列所有的可选值 (去重后)
+   */
+  getFilterOptions(columnKey: string): string[]
   
 }
 
