@@ -32,7 +32,10 @@ import { RenderMethod, RenderProtocalValidator, RenderScenario } from '@/table/v
 import type { DataStrategy } from '@/table/data/DataStrategy'
 import { ClientDataStrategy } from '@/table/data/ClientDataStrategy'
 import { ServerDataStrategy } from '@/table/data/ServerDataStrategy'
-
+//  3个核心类
+import { TableLifecycle } from '@/table/core/TableLifecycle'
+import { TableQueryCoordinator } from '@/table/core/TableQueryCoordinator'
+import { TableStateSync } from '@/table/core/TableStateSync'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -59,6 +62,10 @@ export class VirtualTable {
   private layoutManager: LayoutManager | null = null 
   private sidePanelManager: SidePanelManager | null = null 
   private scrollStopTimer?: number // 滚动停止检测定时器
+
+  private lifecycle!: TableLifecycle
+  private queryCoordinator!: TableQueryCoordinator
+  private stateSync!: TableStateSync
 
   // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
   public readonly ready: Promise<void> 
@@ -118,7 +125,7 @@ export class VirtualTable {
   // 异步初始化
   private async initializeAsync() {
     // ======= server 模式 渲染流程 ===========
-    // 0. server 模式渲染准备前期工作
+    // server 模式渲染准备前期工作
 
     // server 模式下, 不要 await 首次请求, 否则 mount 被阻塞, 会白屏无数据
     const isServerBootstrap = !this.config.initialData && typeof this.config.fetchPageData === 'function'
@@ -135,28 +142,41 @@ export class VirtualTable {
           this.config.pageSize,
           this.config.fetchSummaryData
         )
-        // 1. 创建 store
+        // 创建 store
         this.store = createTableStore({
           columns: this.originalColumns,
           mode: this.mode,
           frozenCount: this.config.frozenColumns
         })
-        // 2. 同步列顺序 到 state
-        this.syncColumnOrderToState()
-        // 3. 订阅 state 变化
-        this.unsubscribleStore?.()
-        this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
-          this.handleStateChange(next, prev, action) 
+
+        this.stateSync = new TableStateSync({
+          config: this.config,
+          store: this.store,
+          originalColumns: this.originalColumns
         })
-        // 4. 应用列配置
-        this.applyColumnsFromState()
-        // 5. 挂载 DOM (会创建 ColumnManager)
+
+        // 同步列到 state
+        this.stateSync.syncColumnOrderToState()
+        // 初始化 TableLifecycle (server 模式)
+        this.lifecycle = new TableLifecycle({
+          config: this.config,
+          dataStrategy: this.dataStrategy,
+          store: this.store,
+          originalColumns: this.originalColumns
+        })
+
+        // 将 lifecycle 中的组件引用 同步到 VirtalTable
+        this.renderer = this.lifecycle.renderer
+        this.scroller = this.lifecycle.scroller
+        this.headerSortBinder = this.lifecycle.headerSortBinder
+
+        // 挂载 DOM (会创建 ColumnManager)
         this.mount() // 这里 ColumnManager 才初始化, 可能导致更新列有问题
-        // 6. 设置排序指示器
+        // 设置排序指示器
         this.shell.setSortIndicator(this.store.getState().data.sort)
         this.config.onModeChange?.(this.mode)
 
-        // 7. ready 可以在 mount 后就 resolve, 此时 dispatch 安全, 数据可能还还在加载
+        // ready 可以在 mount 后就 resolve, 此时 dispatch 安全, 数据可能还还在加载
         this.isReady = true 
         const pending = this.pendingActions
         this.pendingActions = []
@@ -164,69 +184,104 @@ export class VirtualTable {
         this.resolveReady?.()
         this.resolveReady = null 
 
-        // 8. 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
-        void this.dataStrategy.bootstrap().then(({ totalRows: realTotal }) => {
-          if (typeof realTotal === 'number' && realTotal >= 0) {
-            // 先判断是否需要重建 scroller, 在 修改 config 之前
-            const needRebuild = realTotal !== this.config.totalRows
-            // 更新 totalRows
-            this.config.totalRows = realTotal
-            this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: realTotal} })
-            
-            // 只有 totalRows 变化时才重建 scroller
-            if (needRebuild) {
-              this.scroller = new VirtualScroller(this.config)
-              this.viewport.setScroller(this.scroller)
-              this.shell.setScrollHeight(this.scroller)
-            }
-            // ===== 规则3: 初始化填充不能走 applyServerQuery =======
-            if (process.env.NODE_ENV === 'development') {
-              RenderProtocalValidator.validate(
-                RenderScenario.INITIAL_FILL,
-                RenderMethod.UPDATE_VISIBLE,
-                'VirtaulTable.initializeAsync (server mode)'
-              )
-            }
-            this.viewport.updateVisibleRows() // 不能是 refresh() 哦!
-            this.updateStatusBar() // 更新底部状态栏
+        // 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
+        void this.dataStrategy.bootstrap().then( async ({ totalRows: realTotal }) => {
+          // 只要 bootstrap 成功就执行, 不论 totalRows 是多少, 宽松管理
+          const newTotal = typeof realTotal === 'number' ? realTotal : 0
+          // 先判断是否需要重建 scroller, 在 修改 config 之前
+          const needRebuild = newTotal !== this.config.totalRows
+          // 更新 totalRows
+          this.config.totalRows = newTotal
+          this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: realTotal} })
+          
+          // 只有 totalRows 变化时才重建 scroller
+          if (needRebuild) {
+            this.scroller = new VirtualScroller(this.config)
+            this.viewport.setScroller(this.scroller)
+            this.shell.setScrollHeight(this.scroller)
           }
+          // ===== 规则3: 初始化填充不能走 applyServerQuery =======
+          if (process.env.NODE_ENV === 'development') {
+            RenderProtocalValidator.validate(
+              RenderScenario.INITIAL_FILL,
+              RenderMethod.UPDATE_VISIBLE,
+              'VirtaulTable.initializeAsync (server mode)'
+            )
+          }
+          this.viewport.updateVisibleRows() // 不能是 refresh() 哦!
+          this.updateStatusBar() // 更新底部状态栏
+          
+          if (this.config.showSummary) {
+            await this.refreshSummary().catch(console.warn)
+          }
+
+          // 关键!!: 订阅 store 要等 bootstrap 和 refreshSummary 完成之后
+          this.unsubscribleStore?.()
+          this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
+            this.handleStateChange(next, prev, action) 
+          })
+          
         }).catch(console.warn) 
+
+        
         return 
       }
 
     // ======= client 模式或者 用户传入了 initialData 的情况 ===========
 
-    // 0. client 模式下, 渲染前准备工作处理
+    // client 模式下, 渲染前准备工作处理
     const { strategy, mode, totalRows } = await bootstrapStrategy(this.config)
     this.dataStrategy = strategy
     this.mode = mode 
     this.config.totalRows = totalRows
 
-    // 1. 创建 全局 store 
+    // 创建 全局 store 
     this.store = createTableStore({
       columns: this.originalColumns,
       mode: this.mode,
       frozenCount: this.config.frozenColumns
     })
+
+    // 初始化 TableStateSync (client 模式)
+    this.stateSync = new TableStateSync({
+      config: this.config,
+      store: this.store,
+      originalColumns: this.originalColumns
+    })
+    // 同步列顺序到 state
+    this.stateSync.syncColumnOrderToState()
+
     // 更新 totalRows 到 store 中去 
     this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows } })
-
-    // 2. 订阅 state 变化 -> 驱动副作用 (排序/筛选/列变化重建等)
-    this.unsubscribleStore?.()
-    this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
-      this.handleStateChange(next, prev, action)
-    })
 
     assertUniqueColumnKeys(this.config.columns) // 列 key 唯一值校验, 避免排序拖拽等混乱
     this.originalColumns = [...this.config.columns] // 保留用户原始列配置
 
-    // 3. 挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
+    // ===== 初始化 TableLifecycle (client 模式) 
+    this.lifecycle = new TableLifecycle({
+      config: this.config,
+      dataStrategy: this.dataStrategy,
+      store:this.store,
+      originalColumns: this.originalColumns
+    })
+
+    // 将 lifecycle 中的组件引用同步到 VirtualTable
+    this.renderer = this.lifecycle.renderer
+    this.scroller = this.lifecycle.scroller
+    this.headerSortBinder = this.lifecycle.headerSortBinder
+
+    // 挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
     this.mount()
-    // 4. 应用列配置: 在 mount 前, 将 state 解析出来的列, 应用回 config
-    this.applyColumnsFromState()
-    // 5. 设置排序指示器
+
+    // 设置排序指示器
     this.shell.setSortIndicator(this.store.getState().data.sort)
     this.config.onModeChange?.(this.mode)
+
+    // 订阅 state 变化 -> 驱动副作用 (排序/筛选/列变化重建等), 在 mount 之后
+    this.unsubscribleStore?.()
+    this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
+      this.handleStateChange(next, prev, action)
+    })
 
     // 标记 ready, 并 flush 初始化前积攒的 action 
     this.isReady = true 
@@ -244,12 +299,12 @@ export class VirtualTable {
 
   // 挂载 shell + viewport (由 initializeAsync 内部调用)
   private mount(containerSelector?: string): void {
-    // 0. 防止重复挂载
+    // // 0. 防止重复挂载
     if (this.shell) {
       console.warn('[VirtualTable] 检测到重复挂载, 销毁旧实例')
       // 清理旧的实例, 允许重新挂载
       this.remount(containerSelector!)
-      // this.destroy()
+      this.destroy()
 
     }
     // 1. 检查 store 是否已初始化
@@ -258,7 +313,9 @@ export class VirtualTable {
       throw new Error('[VirtualTable] mount() 必须在 store 初始化后调用!')
     }
 
-    // 2. 确认容器存在
+    // 检查列的唯一性
+    assertUniqueColumnKeys(this.config.columns)
+    // 确认容器存在
     const selector = containerSelector || this.config.container
     const containerEl = typeof selector === 'string'
       ? document.querySelector<HTMLDivElement>(selector)
@@ -267,14 +324,14 @@ export class VirtualTable {
     if (!containerEl) {
       throw new Error(`[VirtualTable] 容器未找到: ${selector}`)
     }
-    // 3. 清空容器, 避免内容重复
+    // 清空容器, 避免内容重复
     containerEl.innerHTML = ''
-    // 4. 添加唯一标识, 表格实例样式隔离
+    // 添加唯一标识, 表格实例样式隔离
     containerEl.setAttribute('data-table-id', this.config.tableId)
     containerEl.classList.add('virtual-table-instance')
-    // 5. 判断是否启用右侧面板, !! 强制转为 boolean
+    // 判断是否启用右侧面板, !! 强制转为 boolean
     const hasSidePanel = !!(this.config.sidePanel?.enabled)
-    // 6. 创建回调函数集合, 并提取公共的 mountTableShell 参数
+    // 创建回调函数集合, 并提取公共的 mountTableShell 参数
     const shellCallbacks = new ShellCallbacks(
       this.config,
       this.store,
@@ -301,7 +358,7 @@ export class VirtualTable {
       ...shellCallbacks.getCallbacks() // 展开所有回调函数
     }
 
-    // 7. 根据是否有右侧面板, 选择不同的布局方式
+    // 根据是否有右侧面板, 选择不同的布局方式
     if (hasSidePanel) {
       // 类型守卫 和用 ?? 来提供默认值
       const sp = this.config.sidePanel!
@@ -368,53 +425,42 @@ export class VirtualTable {
 
       // 关键: 挂载 table 到 mainArea, 并传入所有回调, 注意右侧面板先不要调用哦!
       const mainArea = this.layoutManager.getMainArea()!
-      this.shell = mountTableShell({
-        ...commonShellParams, // 展开所有公共参数
-        container: mainArea, // 指定容器为主区域
+      this.lifecycle.mount({
+        commonShellParams, 
+        containerEl: mainArea,
+        mode: this.mode
       })
-      console.log('[VirtualTable] 已启用右侧面板布局')
+     
 
     } else {
       // ========= 无右侧面板: 标准布局 ===========
-      this.shell = mountTableShell({
-        ...commonShellParams, // 展开所有公共参数
-        container: containerEl
+      this.lifecycle.mount({
+        commonShellParams, 
+        containerEl: containerEl,
+        mode: this.mode
       })
     }
 
-    // 8. 通用初始化逻辑, 两种模式都需要
-    // 首次挂载后, 就立刻同步一次滚动高度
-    this.shell.setScrollHeight(this.scroller)
-    // 创建 viewport: 将 "可视区更新/骨架行/数据渲染" 的职责下放
-    this.viewport = new VirtualViewport({
+    // ==== 从 lifecycle 获取组件引用 ====
+    this.shell = this.lifecycle.shell
+    this.viewport = this.lifecycle.viewport
+    this.columnManager = this.lifecycle.columnManager
+
+    // ==== 初始化 TableQueryCoordinator ==== 
+    this.queryCoordinator = new TableQueryCoordinator({
       config: this.config,
       dataStrategy: this.dataStrategy,
+      store: this.store,
+      viewport: this.viewport,
+      shell: this.shell,
       renderer: this.renderer,
-      scroller: this.scroller,
-      scrollContainer: this.shell.scrollContainer,
-      virtualContent: this.shell.virtualContent,
-      // 只在滚动停止时触发更新, 不然表格行数据一直更新闪烁
-      onPageChange: (pageInfo) => {
-        if (this.mode === 'server' && this.store) {
-          // 只更新 store, 不更新 DOM 
-          const currentPage = this.store.getState().data.currentPage 
-          if (currentPage !== pageInfo.currentPage) {
-              this.store.dispatch({
-              type: 'SET_CURRENT_PAGE',
-              payload: { page: pageInfo.currentPage }
-            })
-          }
-        }
-      }
+      getScroller: () => this.scroller,
+      setScroller: (scroller: VirtualScroller) => { this.scroller = scroller }
     })
 
-    // 初始化 ColumnManager 统一列管理
-    this.columnManager = new ColumnManager(
-      this.config,
-      this.renderer,
-      this.dataStrategy
-    )
-
+    // 通用初始化逻辑, 两种模式都需要
+    // 首次挂载后, 就立刻同步一次滚动高度
+    this.shell.setScrollHeight(this.scroller)
     // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
     this.shell.bindScroll(() => {
       // ====== 规则2: 数据滚动只能调用 updateVisibleRows() ===== 
@@ -446,12 +492,12 @@ export class VirtualTable {
       this.viewport.updateVisibleRows()
     }
    
-    // 首次挂载后, 立即刷新一次总结行数据
-    if (this.config.showSummary) {
+    // 首次挂载后, 立即刷新一次总结行数据, server 模式下要等 bootstrap 搞完再刷
+    if (this.config.showSummary && this.mode === 'client') {
       this.refreshSummary().catch(console.warn)
     }
 
-    // 9. 最后显示默认面板 (使用微任务延迟,(可选)确保所有初始化完成)
+    // 最后显示默认面板 (使用微任务延迟,(可选)确保所有初始化完成)
     if (hasSidePanel && this.sidePanelManager) {
       const sp = this.config.sidePanel!
       // 直接调用, 不需要 setTimeout
@@ -465,32 +511,8 @@ export class VirtualTable {
 
   // 更新表格底部状态栏数据
   private updateStatusBar() {
-    if (!this.store) {
-      console.warn('[updateStatusBar] store 未初始化')
-      return 
-    }
-    const tableId = this.config.tableId || 'default'
-    const totalRowsEl = document.getElementById(`table-total-rows-${tableId}`)
-    const pageIndicator = document.getElementById(`table-page-indicator-${tableId}`)
-    const currentPageEl = document.getElementById(`table-current-page-${tableId}`)
-    const totalPagesEl = document.getElementById(`table-total-pages-${tableId}`)
-
-    if (totalRowsEl) {
-      const state = this.store.getState()
-      // 显示总行数
-      totalRowsEl.textContent = state.data.totalRows.toString()
-      // 只在 server 模式, 才显示页码指示器
-      if (this.mode === 'server' && pageIndicator && currentPageEl && totalPagesEl) {
-        pageIndicator.style.display = 'flex'
-        // 页码计算: 总页数, 当前页
-        const totalPages = Math.ceil(state.data.totalRows / this.config.pageSize)
-        currentPageEl.textContent = (state.data.currentPage + 1).toString()
-        totalPagesEl.textContent = totalPages.toString()
-
-      } else if (pageIndicator) {
-        pageIndicator.style.display = 'none'
-      }
-    }
+    // 委托给 queryCoordinator
+    this.queryCoordinator.updateStatusBar()
   }
 
   // server 模式下: 加载总结行数据 (传参)
@@ -506,15 +528,8 @@ export class VirtualTable {
 
   // client / server 刷新总结行数据, 统一走 dataStrategy
   public async refreshSummary() {
-    if (!this.config.showSummary) return 
-    const row = this.shell?.summaryRow
-    if (!row) return 
-    // 统一走 dataStrategy 
-    const summaryData = await this.dataStrategy.getSummary(this.serverQuery)
-    if (summaryData) {
-      this.renderer.updateSummaryRow(row, summaryData)
-    }
-    
+    // 委托给 queryCoordinator
+    await this.queryCoordinator.refreshSummary()
   }
 
   // 对外暴露: 是否为客户端模式
@@ -538,12 +553,8 @@ export class VirtualTable {
 
   // 将 state 应用到 config (列顺序, 列宽, 冻结列数等)
   private applyColumnsFromState() {
-    const state = this.store.getState()
-    const resolved = resolveColumns({ originalColumns: this.originalColumns, state})
-    // 让后续 DOMRenderer/Viewport 都使用新列定义
-    this.config.columns = resolved 
-    // 冻结列仍沿用我现有实现的: 前 N 列冻结
-    this.config.frozenColumns = state.columns.frozenCount
+    // 委托给 stateSync
+    this.stateSync.applyColumnsFromState()
   }
 
   // 列操作的统一更新逻辑
@@ -569,7 +580,7 @@ export class VirtualTable {
 
   // state 变化后的统一入口, 使用策略模式, 路由到 ActionHandler 映射, 并检测走白名单
   private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
-    // 1. 先查找是否有注册的处理器
+    // 先查找是否有注册的处理器
     const handler = actionHandlers.get(action.type)
 
     if (handler) {
@@ -578,7 +589,7 @@ export class VirtualTable {
       return  // 处理完就返回, 不再走后续逻辑
     } 
 
-    // 2. 若没有注册处理器, 检查是否再白名单中, 在 dev 模式下给出警告
+    // 若没有注册处理器, 检查是否再白名单中, 在 dev 模式下给出警告
     if (process.env.NODE_ENV === 'development') {
       const allKnowActions = new Set([
         ...DATA_EFFECT_ACTIONS,
@@ -594,7 +605,7 @@ export class VirtualTable {
       }
     }
 
-    // 3. 不再有默认的 handleDataChange 兜底
+    // 不再有默认的 handleDataChange 兜底
     // 这样可以避免 "未知 action 误触发数据刷新" 的重大问题
 
   }
@@ -605,26 +616,56 @@ export class VirtualTable {
     return this.dataStrategy.getFilterOptions(key)
   }
 
-  // 暴力重建 (列变化时用), 最稳但性能不行, 后续里程碑在优化为局部更新
+
   private rebuild() {
-    // 先销毁旧 DOM 和 旧 viewport
-    this.shell?.destroy()
-    this.viewport?.destroy()
-    // 重写挂载前, 现将最新列状态, 写回 config (顺序/宽度/冻结列等)
-    this.applyColumnsFromState()
-    // 重新挂载
-    this.mount()
-    // 重建后, 将 UI 与数据状态重新对齐
-    const state = this.store.getState()
-    this.shell.setSortIndicator(state.data.sort)
-    // 统一走 applyQuery
-    const query: ITableQuery = {
-      sortKey: state.data.sort?.key,
-      sortDirection: state.data.sort?.direction,
-      filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
-      columnFilters: state.data.columnFilters
-    }
-    void this.applyQuery(query)
+    // 委托给 lifecycle.rebuild
+    this.lifecycle.rebuild({
+      applyColumnsFromState: () => this.applyColumnsFromState(),
+      applyQuery: (query: ITableQuery) => this.applyQuery(query),
+      getMountParams: () => {
+        // 准备 mount 所需参数
+        const selector = this.config.container
+        const containerEl = typeof selector === 'string' 
+          ? document.querySelector<HTMLDivElement>(selector)!
+          : selector!
+        
+        const shellCallbacks = new ShellCallbacks(
+          this.config,
+          this.store,
+          this.mode,
+          this.originalColumns,
+          this.widthStorage,
+          (key: string) => this.getClientFilterOptions(key),
+          (summaryRow: HTMLDivElement) => this.loadSummaryData(summaryRow),
+          (panelId: string) => {
+            if (panelId === 'columns') {
+              this.sidePanelManager?.togglePanel(panelId, this.originalColumns)
+            } else {
+              this.sidePanelManager?.togglePanel(panelId)
+            }
+          }
+        )
+
+        const commonShellParams = {
+          config: this.config,
+          renderer: this.renderer,
+          headerSortBinder: this.headerSortBinder,
+          ...shellCallbacks.getCallbacks()
+        }
+
+        return {
+          commonShellParams,
+          containerEl,
+          mode: this.mode
+        }
+      }
+    })
+
+    // 重新同步组件引用
+    this.shell = this.lifecycle.shell
+    this.viewport = this.lifecycle.viewport
+    this.columnManager = this.lifecycle.columnManager
+   
   }
 
 
@@ -636,32 +677,8 @@ export class VirtualTable {
    * @param query 查询条件
    */
   private async applyQuery(query: ITableQuery) {
-    // 1. 调用 strategy 应用策略
-    const result = await this.dataStrategy.applyQuery(query)
-    // 2. 更新 totals 和 scroller
-    this.config.totalRows = result.totalRows
-    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: result.totalRows } })
-    this.scroller = new VirtualScroller(this.config)
-    this.viewport.setScroller(this.scroller)
-    this.shell.setScrollHeight(this.scroller)
-    // 3. 若需要回到顶部
-    if (result.shouldResetScroll) {
-      this.shell.scrollContainer.scrollTop = 0
-    }
-    // 4. 协议校验
-    if (process.env.NODE_ENV === 'development') {
-      RenderProtocalValidator.validate(
-        RenderScenario.QUERY_CHANGE,
-        RenderMethod.REFRESH,
-        'VirtualTable.applyQuery'
-      )
-    }
-    // 5. 刷新可视区
-    this.viewport.refresh()
-    this.updateStatusBar()
-    // 6. 刷新总结行
-    await this.refreshSummary()
-
+    //委托给 queryCoordinator
+    await this.queryCoordinator.applyQuery(query)
   }
 
   // 从 localStorage 恢复列宽, 表格宽, 列顺序
@@ -719,18 +736,6 @@ export class VirtualTable {
 
     } catch (err) {
       console.warn('恢复列顺序失败: ', err)
-    }
-  }
-
-  private syncColumnOrderToState() {
-    if (!this.store) return 
-    
-    if (this.config.columns.length > 0) {
-      const columnKeys = this.config.columns.map(col => col.key)
-      this.store.dispatch({
-        type: 'COLUMN_ORDER_SET',
-        payload: { order: columnKeys }
-      })
     }
   }
 

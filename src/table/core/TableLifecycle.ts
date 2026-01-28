@@ -13,7 +13,7 @@ import { SidePanelManager } from "@/table/panel/SidePanelManager";
 
 
 /**
- * 表格声明周期管理器
+ * 表格生命周期管理器
  * 
  * 职责:
  * - 管理表格的初始化, 挂载, 销毁流程

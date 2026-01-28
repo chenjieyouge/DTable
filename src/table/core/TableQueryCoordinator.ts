@@ -43,7 +43,7 @@ export class TableQueryCoordinator {
     this.shell = params.shell
     this.renderer = params.renderer
     this.getScroller = params.getScroller
-    this.setScroller = params.getScroller
+    this.setScroller = params.setScroller
   }
 
   /**
