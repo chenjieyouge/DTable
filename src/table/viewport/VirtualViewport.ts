@@ -158,7 +158,7 @@ export class VirtualViewport {
       if (!rowData) {
         // 缓存页中没有该行数据, 则触发异步数据加载 (分页模式)
         const pageIndex = Math.floor(rowIndex / this.config.pageSize)
-        await this.dataStrategy.ensurePageForRow(pageIndex)
+        await this.dataStrategy.ensurePageForRow(rowIndex)
         rowData = this.dataStrategy.getRow(rowIndex)
       }
       if (rowData !== undefined) {
