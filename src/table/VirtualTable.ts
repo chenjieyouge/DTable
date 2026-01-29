@@ -1,41 +1,34 @@
 import { TableConfig } from '@/config/TableConfig'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import type { ColumnFilterValue, IConfig, ITableQuery, IUserConfig } from '@/types'
+import type { IConfig, ITableQuery, IUserConfig } from '@/types'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
-import { bootstrapStrategy } from '@/table/data/bootstrapStrategy'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 import type { ITableShell } from '@/table/TableShell'
-import { mountTableShell } from '@/table/TableShell'
 import type { TableStore } from '@/table/state/createTableStore'
 import type { TableAction, TableState } from '@/table/state/types'
 import type { IColumn } from '@/types'
-import { createTableStore } from '@/table/state/createTableStore'
-import { assertUniqueColumnKeys, resolveColumns } from '@/table/model/ColumnModel'
+import { assertUniqueColumnKeys } from '@/table/model/ColumnModel'
 import { ColumnWidthStorage } from '@/utils/ColumnWidthStorage'
 import { ColumnManager } from '@/table/core/ColumnManager'
 import { PerformanceMonitor } from '@/utils/PerformanceMonitor'
-// 重构布局 + 右侧菜单栏
 import { LayoutManager } from '@/table/layout/LayoutManager'
 import { SidePanelManager } from '@/table/panel/SidePanelManager'
 import type { IPanelConfig } from '@/table/panel/IPanel'
 import { ShellCallbacks } from '@/table/handlers/ShellCallbacks' // 回调
 import { createColumnPanel } from '@/table/panel/panels/ColumnPanel'
 import { 
-  actionHandlers, COLUMN_EFFTECT_ACTIONS, DATA_EFFECT_ACTIONS, handleDataChange, 
+  actionHandlers, COLUMN_EFFTECT_ACTIONS, DATA_EFFECT_ACTIONS, 
   STATE_ONLY_ACTIONS, 
   STRUCTURAL_EFFECT_ACTIONS } from '@/table/handlers/ActionHandlers'
 import type { ActionContext } from '@/table/handlers/ActionHandlers'
-import { SortState } from '@/table/core/SortState'
 import { RenderMethod, RenderProtocalValidator, RenderScenario } from '@/table/viewport/RenderProtocol'
-// 数据策略
 import type { DataStrategy } from '@/table/data/DataStrategy'
-import { ClientDataStrategy } from '@/table/data/ClientDataStrategy'
-import { ServerDataStrategy } from '@/table/data/ServerDataStrategy'
-//  3个核心类
 import { TableLifecycle } from '@/table/core/TableLifecycle'
 import { TableQueryCoordinator } from '@/table/core/TableQueryCoordinator'
 import { TableStateSync } from '@/table/core/TableStateSync'
+import type { InitResult } from '@/table/factory/TableInitializer'
+import { initServerMode, initClientMode } from '@/table/factory/TableInitializer'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -77,7 +70,6 @@ export class VirtualTable {
     // 初始化配置 (此时的 totalRows 是默认值, 后续会被覆盖)
     const tableConfig = new TableConfig(userConfig)
     this.config = tableConfig.getAll()
-
     // 初始化列宽存储, 使用最终的 tableId, 自动生成
     const finalTableId = this.config.tableId
     if (finalTableId) {
@@ -102,199 +94,107 @@ export class VirtualTable {
     }
   }
 
-  // 对外暴露当前表格 state 状态, 后续做 vue 封装会很需要
-  public getState() {
-    return this.store.getState()
-  }
-
-  // 方便 demo 使用 (减少导出 await)
-  public onReady(cb: () => void) {
-    this.ready.then(cb).catch(console.warn)
-  }
-
-  // 对外暴露 dispatch, 后续拽列, 原生 UI 都走它
-  public dispatch(action: TableAction) {
-    // 未初始完成时, 不直接 dispatch, 先排队, 避免 store 为 undefined
-    if (!this.isReady || !this.store) {
-      this.pendingActions.push(action)
-      return 
-    }
-    return this.store.dispatch(action)
-  }
-
   // 异步初始化
   private async initializeAsync() {
-    // ======= server 模式 渲染流程 ===========
-    // server 模式渲染准备前期工作
-
-    // server 模式下, 不要 await 首次请求, 否则 mount 被阻塞, 会白屏无数据
     const isServerBootstrap = !this.config.initialData && typeof this.config.fetchPageData === 'function'
+
     try {
+      assertUniqueColumnKeys(this.config.columns)
+      this.originalColumns = [...this.config.columns]
+
       if (isServerBootstrap) {
-        // 先按 server 模式将 "骨架表格" 挂出来
-        this.mode = 'server'
-        // totalRows 先用默认值, 等有数真实数据再替换回来
-        assertUniqueColumnKeys(this.config.columns) // 列 key 唯一校验
-        this.originalColumns = [...this.config.columns]
-        // 创建 ServerDataStrategy, 在 mount 之前搞定
-        this.dataStrategy = new ServerDataStrategy(
-          this.config.fetchPageData!,
-          this.config.pageSize,
-        )
-        // 创建 store
-        this.store = createTableStore({
-          columns: this.originalColumns,
-          mode: this.mode,
-          frozenCount: this.config.frozenColumns
-        })
-
-        this.stateSync = new TableStateSync({
-          config: this.config,
-          store: this.store,
-          originalColumns: this.originalColumns
-        })
-
-        // 同步列到 state
-        this.stateSync.syncColumnOrderToState()
-        // 初始化 TableLifecycle (server 模式)
-        this.lifecycle = new TableLifecycle({
-          config: this.config,
-          dataStrategy: this.dataStrategy,
-          store: this.store,
-          originalColumns: this.originalColumns
-        })
-
-        // 将 lifecycle 中的组件引用 同步到 VirtalTable
-        this.renderer = this.lifecycle.renderer
-        this.scroller = this.lifecycle.scroller
-        this.headerSortBinder = this.lifecycle.headerSortBinder
-
-        // 挂载 DOM (会创建 ColumnManager)
-        this.mount() // 这里 ColumnManager 才初始化, 可能导致更新列有问题
-        // 设置排序指示器
+        // ==== Server 模式初始化 ====
+        const result = initServerMode(this.config, this.originalColumns)
+        this.initComponents(result)
+        this.mount()
         this.shell.setSortIndicator(this.store.getState().data.sort)
         this.config.onModeChange?.(this.mode)
+        this.markAsReady()
+        this.bootstrapServerData()  // 从后台加载数据
 
-        // ready 可以在 mount 后就 resolve, 此时 dispatch 安全, 数据可能还还在加载
-        this.isReady = true 
-        const pending = this.pendingActions
-        this.pendingActions = []
-        pending.forEach(action => this.store.dispatch(action))
-        this.resolveReady?.()
-        this.resolveReady = null 
-
-        // 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
-        void this.dataStrategy.bootstrap().then(({ totalRows: realTotal }) => {
-          // 只要 bootstrap 成功就执行, 不论 totalRows 是多少, 宽松管理
-          const newTotal = typeof realTotal === 'number' ? realTotal : 0
-          // 先判断是否需要重建 scroller, 在 修改 config 之前
-          const needRebuild = newTotal !== this.config.totalRows
-          // 更新 totalRows
-          this.config.totalRows = newTotal
-          this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: realTotal} })
-          
-          // 只有 totalRows 变化时才重建 scroller
-          if (needRebuild) {
-            this.scroller = new VirtualScroller(this.config)
-            this.viewport.setScroller(this.scroller)
-            this.shell.setScrollHeight(this.scroller)
-          }
-          // ===== 规则3: 初始化填充不能走 applyServerQuery =======
-          if (process.env.NODE_ENV === 'development') {
-            RenderProtocalValidator.validate(
-              RenderScenario.INITIAL_FILL,
-              RenderMethod.UPDATE_VISIBLE,
-              'VirtaulTable.initializeAsync (server mode)'
-            )
-          }
-          this.viewport.updateVisibleRows() // 不能是 refresh() 哦!
-          this.updateStatusBar() // 更新底部状态栏
-    
-          // 立即订阅 store
-          this.unsubscribleStore?.()
-          this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
-            this.handleStateChange(next, prev, action) 
-          })
-
-           // 同步刷新总结行
-          if (this.config.showSummary) {
-            this.refreshSummary()
-          }
-          
-        }).catch(console.warn) 
-
-        return 
+      } else {
+        // ==== Client 模式初始化 ====
+        const result = await initClientMode(this.config, this.originalColumns)
+        this.initComponents(result)
+        this.config.totalRows = this.dataStrategy.getTotalRows()
+        this.mount()
+        this.shell.setSortIndicator(this.store.getState().data.sort)
+        this.config.onModeChange?.(this.mode)
+        this.subscribeStore()
+        this.markAsReady()
       }
+      
+    } catch (err) {
+      console.warn('[VirtualTable.initializeAsync] faild: ', err)
+      throw err 
+    }
+  }
 
-    // ======= client 模式或者 用户传入了 initialData 的情况 ===========
-
-    // client 模式下, 渲染前准备工作处理
-    const { strategy, mode, totalRows } = await bootstrapStrategy(this.config)
-    this.dataStrategy = strategy
-    this.mode = mode 
-    this.config.totalRows = totalRows
-
-    // 创建 全局 store 
-    this.store = createTableStore({
-      columns: this.originalColumns,
-      mode: this.mode,
-      frozenCount: this.config.frozenColumns
-    })
-
-    // 初始化 TableStateSync (client 模式)
-    this.stateSync = new TableStateSync({
-      config: this.config,
-      store: this.store,
-      originalColumns: this.originalColumns
-    })
-    // 同步列顺序到 state
-    this.stateSync.syncColumnOrderToState()
-
-    // 更新 totalRows 到 store 中去 
-    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows } })
-
-    assertUniqueColumnKeys(this.config.columns) // 列 key 唯一值校验, 避免排序拖拽等混乱
-    this.originalColumns = [...this.config.columns] // 保留用户原始列配置
-
-    // ===== 初始化 TableLifecycle (client 模式) 
-    this.lifecycle = new TableLifecycle({
-      config: this.config,
-      dataStrategy: this.dataStrategy,
-      store:this.store,
-      originalColumns: this.originalColumns
-    })
-
-    // 将 lifecycle 中的组件引用同步到 VirtualTable
+  /**
+   * 初始化组件引用
+   */
+  private initComponents(result: InitResult) {
+    this.dataStrategy = result.dataStrategy
+    this.mode = result.mode
+    this.store = result.store
+    this.stateSync = result.stateSync
+    this.lifecycle = result.lifecycle
+    // 同步组件引用
     this.renderer = this.lifecycle.renderer
     this.scroller = this.lifecycle.scroller
     this.headerSortBinder = this.lifecycle.headerSortBinder
+  }
 
-    // 挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
-    this.mount()
-
-    // 设置排序指示器
-    this.shell.setSortIndicator(this.store.getState().data.sort)
-    this.config.onModeChange?.(this.mode)
-
-    // 订阅 state 变化 -> 驱动副作用 (排序/筛选/列变化重建等), 在 mount 之后
+  /**
+   * 订阅 store
+   */
+  private subscribeStore() {
     this.unsubscribleStore?.()
     this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
       this.handleStateChange(next, prev, action)
     })
+  }
 
-    // 标记 ready, 并 flush 初始化前积攒的 action 
+  /**
+   * 标记为 ready
+   */
+  private markAsReady() {
     this.isReady = true 
     const pending = this.pendingActions
     this.pendingActions = []
     pending.forEach(action => this.store.dispatch(action))
     this.resolveReady?.()
     this.resolveReady = null 
-
-  } catch (err) {
-    console.warn('[VirtualTable.initializeAsync] faild: ', err)
-    throw err 
   }
-}
+
+  /** 
+   * Server 模式下从后台加载数据
+   */
+  private bootstrapServerData() {
+    void this.dataStrategy.bootstrap().then(({ totalRows: realTotal }) => {
+
+      const newTotal = typeof realTotal === 'number' ? realTotal : 0
+      const needRebuild = newTotal !== this.config.totalRows
+
+      this.config.totalRows = newTotal
+      this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: newTotal } })
+
+      if (needRebuild) {
+        this.scroller = new VirtualScroller(this.config)
+        this.viewport.setScroller(this.scroller)
+        this.shell.setScrollHeight(this.scroller)
+      }
+
+      this.viewport.updateVisibleRows() // 更新可视区, 而非 refresh 哦!
+      this.updateStatusBar()
+      
+      // 要表格数据加载完后, 才订阅 store 和 同步更新 summary 数据
+      this.subscribeStore() 
+      if (this.config.showSummary) {
+        this.refreshSummary()
+      }
+    })
+  }
 
   // 挂载 shell + viewport (由 initializeAsync 内部调用)
   private mount(containerSelector?: string): void {
@@ -605,7 +505,6 @@ export class VirtualTable {
 
     // 不再有默认的 handleDataChange 兜底
     // 这样可以避免 "未知 action 误触发数据刷新" 的重大问题
-
   }
 
   // client 模式下, 推导列可选值 (topN 或全量去重, 避免百万枚举卡死)
@@ -776,6 +675,27 @@ export class VirtualTable {
     this.mount(containerSelector)
   }
 
+
+  /** 对外暴露当前表格 state 状态, 后续做 vue 封装会很需要 */
+  public getState() {
+    return this.store.getState()
+  }
+
+  /** 方便 demo 使用 (减少导出 await) */
+  public onReady(cb: () => void) {
+    this.ready.then(cb).catch(console.warn)
+  }
+
+  /** 对外暴露 dispatch, 后续拽列, 原生 UI 都走它 */
+  public dispatch(action: TableAction) {
+    // 未初始完成时, 不直接 dispatch, 先排队, 避免 store 为 undefined
+    if (!this.isReady || !this.store) {
+      this.pendingActions.push(action)
+      return 
+    }
+    return this.store.dispatch(action)
+  }
+
   // 全部清空, dom + 状态 + 一切, 避免内存泄露
   public destroy() {
     this.unsubscribleStore?.()
@@ -793,6 +713,5 @@ export class VirtualTable {
       clearTimeout(this.scrollStopTimer)
     }
   }
-
 
 }
