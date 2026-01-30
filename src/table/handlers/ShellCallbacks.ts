@@ -20,7 +20,7 @@ export class ShellCallbacks {
     private originalColumns: IColumn[],
     private widthStorage: ColumnWidthStorage | null,
     private getClientFilterOptions: (key: string) => string[],
-    private loadSummaryData: (summaryRow: HTMLDivElement) => Promise<void>,
+    private loadSummaryData: (summaryRow: HTMLDivElement) => void | Promise<void>,
     private onToggleSidePanel?: (panelId: string) => void
   ) {}
 
@@ -32,7 +32,7 @@ export class ShellCallbacks {
         this.store.dispatch({type: 'SORT_TOGGLE', payload: {key}})
       },
       onNeedLoadSummary: (summaryRow: HTMLDivElement) => {
-          this.loadSummaryData(summaryRow).catch(console.warn)
+          this.loadSummaryData(summaryRow)
       }, 
       onColumnResizeEnd: (key: string, width: number) => {
         this.store.dispatch({ type: 'COLUMN_WIDTH_SET', payload: { key, width}})

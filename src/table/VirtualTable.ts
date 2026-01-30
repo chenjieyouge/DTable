@@ -1,13 +1,12 @@
 import { TableConfig } from '@/config/TableConfig'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import type { IConfig, ITableQuery, IUserConfig } from '@/types'
+import type { IConfig, ITableQuery, IUserConfig, IColumn } from '@/types'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 import type { ITableShell } from '@/table/TableShell'
 import type { TableStore } from '@/table/state/createTableStore'
 import type { TableAction, TableState } from '@/table/state/types'
-import type { IColumn } from '@/types'
 import { assertUniqueColumnKeys } from '@/table/model/ColumnModel'
 import { ColumnWidthStorage } from '@/utils/ColumnWidthStorage'
 import { ColumnManager } from '@/table/core/ColumnManager'
@@ -29,6 +28,7 @@ import { TableQueryCoordinator } from '@/table/core/TableQueryCoordinator'
 import { TableStateSync } from '@/table/core/TableStateSync'
 import type { InitResult } from '@/table/factory/TableInitializer'
 import { initServerMode, initClientMode } from '@/table/factory/TableInitializer'
+import { MountHelper } from '@/table/factory/TableMountHelper'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -37,7 +37,6 @@ export class VirtualTable {
   private shell!: ITableShell
   private mode: 'client' | 'server' = 'server' 
   private headerSortBinder = new HeaderSortBinder()
-  private serverQuery: ITableQuery = { filterText: '' } 
   private viewport!: VirtualViewport
 
   private dataStrategy!: DataStrategy
@@ -198,180 +197,62 @@ export class VirtualTable {
 
   // 挂载 shell + viewport (由 initializeAsync 内部调用)
   private mount(containerSelector?: string): void {
-    // // 0. 防止重复挂载
+    // 防止重复挂载
     if (this.shell) {
-      console.warn('[VirtualTable] 检测到重复挂载, 销毁旧实例')
-      // 清理旧的实例, 允许重新挂载
+      console.warn('[VirtaulTable] 检测到重复挂载,销毁旧实例')
       this.remount(containerSelector!)
       this.destroy()
-
-    }
-    // 1. 检查 store 是否已初始化
-    if (!this.store) {
-      throw new Error('[VirtualTable] mount() 必须在 store 初始化后调用!')
     }
 
-    // 检查列的唯一性
-    assertUniqueColumnKeys(this.config.columns)
-    // 确认容器存在
-    const selector = containerSelector || this.config.container
-    const containerEl = typeof selector === 'string'
-      ? document.querySelector<HTMLDivElement>(selector)
-      : selector 
-    
-    if (!containerEl) {
-      throw new Error(`[VirtualTable] 容器未找到: ${selector}`)
-    }
-    // 清空容器, 避免内容重复
-    containerEl.innerHTML = ''
-    // 添加唯一标识, 表格实例样式隔离
-    containerEl.setAttribute('data-table-id', this.config.tableId)
-    containerEl.classList.add('virtual-table-instance')
-    // 判断是否启用右侧面板, !! 强制转为 boolean
-    const hasSidePanel = !!(this.config.sidePanel?.enabled)
-    // 创建回调函数集合, 并提取公共的 mountTableShell 参数
-    const shellCallbacks = new ShellCallbacks(
-      this.config,
-      this.store,
-      this.mode,
-      this.originalColumns,
-      this.widthStorage,
-      (key: string) => this.getClientFilterOptions(key),
-      (summaryRow: HTMLDivElement) => this.loadSummaryData(summaryRow),
-      (panelId: string) => {
+    // 使用 MountHelper 挂载表格
+    const result = MountHelper.mount({
+      config: this.config,
+      store: this.store,
+      mode: this.mode,
+      originalColumns: this.originalColumns,
+      widthStorage: this.widthStorage,
+      renderer: this.renderer,
+      headerSortBinder: this.headerSortBinder,
+      lifecycle: this.lifecycle,
+      getClientFilterOptions: (key: string) => this.getClientFilterOptions(key),
+      loadSummaryData: (summaryRow: HTMLDivElement) => this.loadSummaryData(summaryRow),
+      togglePanel: (panelId: string) => {
         if (this.sidePanelManager) {
           if (panelId === 'columns') {
+            // 列管理面板, 需要将 原始列配置传过去
             this.sidePanelManager.togglePanel(panelId, this.originalColumns)
           } else {
             this.sidePanelManager.togglePanel(panelId)
           }
         }
       }
-    )
+    }, containerSelector)
 
-    const commonShellParams = {
-      config: this.config,
-      renderer: this.renderer,
-      headerSortBinder: this.headerSortBinder,
-      ...shellCallbacks.getCallbacks() // 展开所有回调函数
-    }
-
-    // 根据是否有右侧面板, 选择不同的布局方式
-    if (hasSidePanel) {
-      // 类型守卫 和用 ?? 来提供默认值
-      const sp = this.config.sidePanel!
-      // ======== 有右侧面板: 使用 LayoutManager 布局 =============
-      this.layoutManager = new LayoutManager(this.config, {
-        mode: 'desktop',
-        sidePanel: {
-          position: sp.position ?? 'right',
-          width: sp.width ?? 250,
-          collapsible: true,
-          defaultOpen: sp.defaultOpen ?? true
-        }
-      })
-      // 渲染布局容器
-      const layoutContainer = this.layoutManager.render()
-      layoutContainer.style.height = `${this.config.tableHeight}px`
-      // 使用 widthStorage 恢复表格宽度
-      if (this.widthStorage) {
-        const savedWidth = this.widthStorage.loadTableWidth()
-        if (savedWidth && savedWidth >= 300) {
-          layoutContainer.style.width = `${savedWidth}px`
-        }
-      }
-      containerEl.appendChild(layoutContainer)
-      // 动态添加列管理面板到配置中
-      const panelConfigs: IPanelConfig[] = [
-        ...this.config.sidePanel!.panels, // 用户配置的面板
-        // 兜底: 列管理面板
-        {
-          id: 'columns',
-          title: '列管理',
-          icon: '⚙️',
-          // 使用 createColumnPanel 工厂函数
-          component: createColumnPanel as any 
-        }
-      ]
-      // 获取 Tab 容器
-      const tabsArea = this.layoutManager.getTabsArea()
-      // 创建面板管理器, 传入 Tab 容器和回调
-      this.sidePanelManager = new SidePanelManager(
-        this.store, // 此时 store 可能还没有有值哦!
-        panelConfigs,
-        tabsArea,
-        (show: boolean) => {
-          // 面板展开/收起时, 通知 LayoutManager 
-          this.layoutManager?.togglePanel(show)
-        }
-      )
-      // 将面板管理器挂载到右侧区域
-      const sideArea = this.layoutManager.getSideArea()
-      if (sideArea) {
-        sideArea.appendChild(this.sidePanelManager.getContainer())
-      }
-
-      // 显示默认面板, 如果是 columns 面板, 则传入 originalColumns 
-      const defaultPaneId = this.config.sidePanel?.defaultPanel || panelConfigs[0]?.id
-      if (defaultPaneId === 'columns') {
-        // 列管理面板需要传入 originalColumns
-        this.sidePanelManager.togglePanel(defaultPaneId, this.originalColumns)
-
-      } else {
-        this.sidePanelManager.togglePanel(defaultPaneId)
-      }
-
-      // 关键: 挂载 table 到 mainArea, 并传入所有回调, 注意右侧面板先不要调用哦!
-      const mainArea = this.layoutManager.getMainArea()!
-      this.lifecycle.mount({
-        commonShellParams, 
-        containerEl: mainArea,
-        mode: this.mode
-      })
-     
-
-    } else {
-      // ========= 无右侧面板: 标准布局 ===========
-      this.lifecycle.mount({
-        commonShellParams, 
-        containerEl: containerEl,
-        mode: this.mode
-      })
-    }
-
-    // ==== 从 lifecycle 获取组件引用 ====
+    // 同步挂载结果
+    this.layoutManager = result.layoutManager
+    this.sidePanelManager = result.sidePanelManager
+    // 从 lifecycle 获取组件引用
     this.shell = this.lifecycle.shell
     this.viewport = this.lifecycle.viewport
     this.columnManager = this.lifecycle.columnManager
-
-    // ==== 初始化 TableQueryCoordinator ==== 
+    // 创建 TableQueryCoordinator
     this.queryCoordinator = new TableQueryCoordinator({
       config: this.config,
       dataStrategy: this.dataStrategy,
-      store: this.store,
       viewport: this.viewport,
       shell: this.shell,
       renderer: this.renderer,
+      store: this.store,
       getScroller: () => this.scroller,
       setScroller: (scroller: VirtualScroller) => { this.scroller = scroller }
     })
 
-    // 通用初始化逻辑, 两种模式都需要
     // 首次挂载后, 就立刻同步一次滚动高度
     this.shell.setScrollHeight(this.scroller)
-    // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
+
+    // 滚动监听由 shell 统一绑定
     this.shell.bindScroll(() => {
-      // ====== 规则2: 数据滚动只能调用 updateVisibleRows() ===== 
-      if (process.env.NODE_ENV === 'development') {
-        RenderProtocalValidator.validate(
-          RenderScenario.SCROLL_UPDATE,
-          RenderMethod.UPDATE_VISIBLE,
-          'VirtaulTable scroll callback'
-        )
-      }
-
       this.viewport.updateVisibleRows()
-
       // 只在 server 模式且由状态栏时, 检测滚动停止并更新
       if (this.mode === 'server' && this.config.showStatusBar !== false) {
         if (this.scrollStopTimer) {
@@ -383,27 +264,15 @@ export class VirtualTable {
         }, 150)
       }
     })
-    
-    // 只在 client 模式下首次渲染, 因为已缓存了;
-    // 而 server 会等 getPageData(0) 后在 initializeAsync 的 then 回调中
+
+    // 关键!: Client 模式下需要立即更新可视区, 否则无数据
     if (this.mode === 'client') {
       this.viewport.updateVisibleRows()
     }
-   
-    // 首次挂载后, clinet 数据在内存, 直接更新汇总; 但server 模式下要等 bootstrap 搞完再刷
+
+    // 首次挂载后, 立即更新一次总结行数据, 针对 client 模式
     if (this.config.showSummary && this.mode === 'client') {
       this.refreshSummary()
-    }
-
-    // 最后显示默认面板 (使用微任务延迟,(可选)确保所有初始化完成)
-    if (hasSidePanel && this.sidePanelManager) {
-      const sp = this.config.sidePanel!
-      // 直接调用, 不需要 setTimeout
-      if (sp.defaultPanel) {
-        this.sidePanelManager?.togglePanel(sp.defaultPanel)
-      } else if (sp.panels.length > 0) {
-        this.sidePanelManager?.togglePanel(sp.panels[0].id)
-      }
     }
   }
 
@@ -413,14 +282,14 @@ export class VirtualTable {
     this.queryCoordinator.updateStatusBar()
   }
 
-  // server 模式下: 加载总结行数据 (传参)
-  private async loadSummaryData(summaryRow: HTMLDivElement) {
+  /** 加载总结行数据 (同步) */
+  private loadSummaryData(summaryRow: HTMLDivElement): void {
+    // 没配置显示就不处理
     if (!this.config.fetchSummaryData) return 
-    try {
-      const summaryData = await this.config.fetchSummaryData(this.serverQuery)
+
+    const summaryData = this.dataStrategy.getSummary()
+    if (summaryData) {
       this.renderer.updateSummaryRow(summaryRow, summaryData)
-    } catch (err) {
-      console.error('加载总结行失败: ', err)
     }
   }
 
