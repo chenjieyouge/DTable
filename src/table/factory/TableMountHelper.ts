@@ -192,7 +192,7 @@ export class MountHelper {
 
       // 创建 Tab 容器, 在 SidePanelManager 外部创建
       const tabsContainer = document.createElement('div')
-      tabsContainer.className = 'side-panel-tab-vertical' 
+      tabsContainer.className = 'side-panel-tabs-container' 
       sideArea.appendChild(tabsContainer)
       // 创建面板管理器
       sidePanelManager = new SidePanelManager(

@@ -23,41 +23,34 @@
   flex-direction: column; /* 纵向布局, 给底部状态栏留空间 */
 }
 
-/* 右侧面板容器 */
+/* 右侧面板容器, 始终保持 40px 宽度用于显示 Tab */
 .table-layout-side {
   position: relative;
   flex-shrink: 0;
-  width: 250px;
+  width: 40px;
   height: 100%;
   background-color: #fff;
   border-left: 1px solid #e0e0e0;
   transition: width 0.3s, opacity 0.3s;
-  overflow: hidden;
-  z-index: 101;
+  overflow: visible;
+  z-index: 100;
 }
 
-/* 面板收起状态, 彻底隐藏 */
+/* 面板收起状态: 只保留 40px 的 Tab 区域 */
 .table-layout-side.collapsed {
-  width: 0;
-  border-left: none;
-  opacity: 0;
-  pointer-events: none;
+  width: 40px;
 }
 
-/* 垂直 Tab 栏, 固定在右侧边缘 */
-.table-layout-side-tabs {
+/* === 侧边栏 Tab 系统 */
+.side-panel-tabs-container {
   position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 40px;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background-color: #f5f5f5;
   border-left: 1px solid #e0e0e0;
-  z-index: 101;
 }
-
 
 /* Tab 按钮 */
 .side-panel-tab-vertical {
@@ -93,19 +86,36 @@
   letter-spacing: 1px;
 }
 
-/* 面板内容包装器 */
+/* 面板内容包装器（可以弹出/收起） */
 .side-panel-content-wrapper {
+  position: absolute;
+  right: 40px;  /* 为 Tab 容器留出 40px */
+  top: 0;
+  bottom: 0;
+  width: 250px;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  width: 100%;
-  box-sizing: border-box;
+  background-color: #fff;
+  border-left: 1px solid #e0e0e0;
+  overflow: hidden;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  transform: translateX(0);
+  opacity: 1;
+  z-index: 100;
+}
+ 
+/* 面板收起时，内容区向右隐藏 */
+.side-panel-content-wrapper.hidden {
+  transform: translateX(100%); 
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* 面板内容区*/
 .side-panel-content {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   padding: 16px;
   box-sizing: border-box;
 }

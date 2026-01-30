@@ -37,6 +37,9 @@ export class SidePanelManager {
     // 只渲染面板内容容器, 不包含 Tab
     const container = document.createElement('div')
     container.className = 'side-panel-content-wrapper'
+
+    // 默认隐藏面板内容
+    container.classList.add('hidden')
     // 渲染面板内容区
     this.contentContainer = document.createElement('div')
     this.contentContainer.className = 'side-panel-content'
@@ -101,6 +104,8 @@ export class SidePanelManager {
       return 
     }
 
+    this.container.classList.remove('hidden')
+
     // 1. 隐藏当前活跃面板
     if (this.activePanel) {
       const currentPanel = this.panels.get(this.activePanel)
@@ -142,6 +147,7 @@ export class SidePanelManager {
     if (this.activePanel) {
       const panel = this.panels.get(this.activePanel)
       panel?.onHide?.()
+      this.container.classList.add('hidden')
       this.contentContainer.innerHTML = ''
       this.activePanel = null 
       this.updateTabsActiveState('')

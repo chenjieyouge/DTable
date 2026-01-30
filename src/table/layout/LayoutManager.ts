@@ -50,7 +50,7 @@ export class LayoutManager {
       this.sideArea = document.createElement('div')
       this.sideArea.className = 'table-layout-side'
       // 只设置动态宽度, 其他样式都写在 css 文件中
-      this.sideArea.style.width = `${this.layoutConfig.sidePanel.width}px`
+      // this.sideArea.style.width = `${this.layoutConfig.sidePanel.width}px`
 
       // 默认隐藏 (向右平移到屏幕外)
       if (!this.layoutConfig.sidePanel.defaultOpen) {
@@ -73,22 +73,8 @@ export class LayoutManager {
 
   // 切换显示/隐藏, 右侧面板
   public toggleSidePanel(show?: boolean): void {
-    if (!this.sideArea) return
-
-    const shouldShow = show ?? (this.sideArea.style.display === 'none')
-    if (shouldShow) {
-      // 缓慢从右侧往左展开
-      this.sideArea.style.display = 'block'
-      this.sideArea.style.animation = 'slideInRight 0.3s ease-out' // 展开动画
-    } else {
-      // 缩回去藏起来
-      this.sideArea.style.animation = 'slideOutRight 0.3s ease-out'
-      setTimeout(() => {
-        if (this.sideArea) {
-          this.sideArea.style.display = 'none'
-        }
-      }, 300)
-    }
+    // 面板的显示, 隐藏都由 SidePanelManager 通过 css 类控制
+    // 这里不操作 dom, 保持接口兼容性
   }
 
   // 响应式调整
