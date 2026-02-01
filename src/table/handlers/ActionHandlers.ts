@@ -106,7 +106,9 @@ export function handleColumnWidthSet(action: TableAction, ctx: ActionContext): v
   if (storage) {
     const widths: Record<string, number> = {}
     ctx.table['config'].columns.forEach(col =>{
-      widths[col.key] = col.width
+      if (col.width) {
+        widths[col.key] = col.width
+      }
     })
     storage.saveColumnWidth(widths)
   }

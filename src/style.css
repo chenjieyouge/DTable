@@ -6,7 +6,8 @@
 .table-layout-container {
   position: relative;
   display: flex;
-  width: 800px; /* 初始固定宽度 */
+  /* width: 800px; 初始固定宽度 */
+  width: 100%;
   max-width: 100%;
   height: 100%;
   box-sizing: border-box;
@@ -872,6 +873,13 @@
   background-color: #f3f4f6;
 }
 
+/** 测试表格容器模式样式 */
+#table-small,
+#table-large {
+  width: 100%;
+}
 
 }
+
+
 

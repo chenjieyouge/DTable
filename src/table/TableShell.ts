@@ -125,9 +125,14 @@ export function mountTableShell(params: {
   const portalContainer = document.createElement('div')
   portalContainer.className = 'table-portal-container'
   portalContainer.style.position = 'relative'
-  portalContainer.style.width = `${config.tableWidth}px`
-  portalContainer.style.height = `${config.tableHeight}px`
 
+  portalContainer.style.height = `${config.tableHeight}px`
+  // 支持 100% 宽度或固定数值
+  if (typeof config.tableWidth === 'string') {
+    portalContainer.style.width = config.tableWidth // '100%'
+  } else {
+    portalContainer.style.width = `${config.tableWidth}px`
+  }
   // 3.创建滚动容器 (原来的 scrollContainer)
   const scrollContainer = document.createElement('div')
   scrollContainer.className = 'table-container'
@@ -332,17 +337,27 @@ export function mountTableShell(params: {
     updateColumnWidths(columns, dataRows) {
       let leftOffset = 0
       columns.forEach((col, index) => {
+        // 确保 width 存在, 其实在 TableConfig 中已经计算过了
+        const width = col.width || 100
         // 设置列宽 css 变量
-        tableWrapper.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)
+        tableWrapper.style.setProperty(`--col-${col.key}-width`, `${width}px`)
         // 设置冻结列偏移量 css 变量
         if (index < config.frozenColumns) {
           tableWrapper.style.setProperty(`--col-${col.key}-left`, `${leftOffset}px`)
-          leftOffset += col.width
+          leftOffset += width
         }
       }) 
       // 更新表格总宽度
-      const totalWidth = columns.reduce((sum, col) => sum + col.width, 0)
-      tableWrapper.style.width = `${totalWidth}px`
+      const totalWidth = columns.reduce((sum, col) => sum + (col.width || 100), 0)
+      // 若 tableWidth 是 '100%', 则保持 100%
+      if (typeof config.tableWidth === 'string') {
+        tableWrapper.style.width = '100%'
+        tableWrapper.style.minWidth = `${totalWidth}px`
+
+      } else {
+        tableWrapper.style.width = `${totalWidth}px`
+      }
+      
       // 使用 css 变量后, 只需更新一次样式类即可
       if (config.frozenColumns > 0) {
         // 直接同步执行更新, 不用异步 requestAnimationFrame, 避免页面闪烁
@@ -386,7 +401,8 @@ function applyContainerStyles(container: HTMLDivElement, config: IConfig) {
   container.style.setProperty('--row-height', `${config.rowHeight}px`)
   // 给每列都写入 css 变量, 为后续 cell 宽度响应式更新
   for (const col of config.columns) {
-    container.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)
+    const width = col.width || 100
+    container.style.setProperty(`--col-${col.key}-width`, `${width}px`)
   }
 }
 
@@ -394,7 +410,15 @@ function applyContainerStyles(container: HTMLDivElement, config: IConfig) {
 function createTableWrapper(config: IConfig): HTMLDivElement {
   const wrapper = document.createElement('div')
   wrapper.className = 'table-wrapper'
-  const totalWidth = config.columns.reduce((sum, col) => sum + col.width, 0)
-  wrapper.style.width = `${totalWidth}px`
+  const totalWidth = config.columns.reduce((sum, col) => sum + (col.width || 0), 0)
+
+  if (typeof config.tableWidth === 'string') {
+    wrapper.style.width = '100%'
+    wrapper.style.minWidth = `${totalWidth}px` // 最小宽度为列宽总和
+
+  } else {
+    wrapper.style.width = `${totalWidth}px`
+  }
+
   return wrapper
 }

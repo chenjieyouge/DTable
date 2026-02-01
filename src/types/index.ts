@@ -51,7 +51,9 @@ export interface IPageInfo {
 export interface IColumn {
   key: string
   title: string
-  width: number
+  width?: number  // 宽度不传则自动计算
+  minWidth?: number // 最小没款, 默认 100px
+  flex?: number // flex 布局权重
   sortable?: boolean
   filter?: IColumnFilterConfig  // 列筛选配置 (不配置则表示不可筛选)
   summaryType?: 'sum' | 'avg' | 'count' | 'none' // 总结行聚合类型
@@ -104,11 +106,12 @@ export interface IConfig extends ITableCallbacks {
   container: string | HTMLDivElement
   tableId: string // 表格的唯一标识, 用于 localstorage 存储等
   // 尺寸
-  tableWidth: number
+  tableWidth: number | string  // 支持数值 或者 '100%'
   tableHeight: number
   headerHeight: number
   summaryHeight: number
   rowHeight: number
+  minColumnWidth?: number // 默认最新列宽, 默认 100
   // 数据
   totalRows: number 
   columns: IColumn[] // 约定必填

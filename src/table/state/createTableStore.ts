@@ -193,7 +193,6 @@ export function createTableStore(params: {
       case 'COLUMN_SHOW': {
         const { key } = action.payload
         const hiddenKeys = prev.columns.hiddenKeys.filter(k => k !== key)
-
         // 若 order 中没有该列, 则按原始顺序位置, 给加进去
         let order = [...prev.columns.order]
         if (!order.includes(key)) {
@@ -211,7 +210,6 @@ export function createTableStore(params: {
           }
           order.splice(insertIndex, 0, key)
         }
-
         return { ...prev, columns: { ...prev.columns, hiddenKeys, order }}
       }
 
@@ -242,7 +240,7 @@ export function createTableStore(params: {
         // 移动列: 从 fromIndex 移到 toIndex
         const [moveItem] = order.splice(fromIndex, 1)
         order.splice(toIndex, 0, moveItem)
-        
+
         return { ...prev, columns: { ...prev.columns, order } }
       }
 

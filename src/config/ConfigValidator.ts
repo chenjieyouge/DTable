@@ -28,8 +28,14 @@ export class ConfigValidator {
       }
     }
     // 3. 尺寸验证
-    if (config.tableWidth !== undefined && config.tableWidth < 100) {
-      throw new Error('[ConfigValidator] tableWidth 不能小于 100px')
+    if (config.tableWidth !== undefined) {
+      // 支持数值 或者 '100%' 字符串
+      if (typeof config.tableWidth === 'number' && config.tableWidth < 100) {
+        throw new Error('[ConfigValidator] tableWidth 不能小于 100px')
+      }
+      if (typeof config.tableWidth === 'string' && config.tableWidth !== '100%') {
+        throw new Error('[ConfigValidator] tableWidth 字符串只支持 "100%"')
+      }
     }
     if (config.tableHeight !== undefined && config.tableHeight < 100) {
       throw new Error('[ConfigValidator] tableHeight 不能小于 100px')
@@ -62,6 +68,12 @@ export class ConfigValidator {
       columnKeys.add(col.key)
       if (col.width !== undefined && col.width < 20) {
         throw new Error(`[ConfigValidator] 列 "${col.key}" 的 width 不能小于 20px` )
+      }
+      if (col.minWidth !== undefined && col.minWidth < 20) {
+        throw new Error(`[ConfigValidator] 列 "${col.key}" 的 minWidth 不能小于 20px` )
+      }
+      if (col.flex !== undefined && col.flex <= 0) {
+        throw new Error(`[ConfigValidator] 列 "${col.key}" 的 flex 必须大于 0`)
       }
     })
 

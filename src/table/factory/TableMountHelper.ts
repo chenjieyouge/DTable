@@ -151,11 +151,23 @@ export class MountHelper {
     const layoutContainer = layoutManager.render()
     layoutContainer.style.height = `${config.tableHeight}px`
 
-    // 恢复表格宽度
-    if (widthStorage) {
-      const savedWidth = widthStorage.loadTableWidth()
-      if (savedWidth && savedWidth >= 300) {
-        layoutContainer.style.width = `${savedWidth}px`
+    // 设置布局容器宽度
+    if (typeof config.tableWidth === 'string') {
+      // 若配置为 '100%',则直接使用
+      layoutContainer.style.width = config.tableWidth
+    } else {
+      // 若是数值, 则优先恢复保存的宽度, 否则使用配置的宽度
+      if (widthStorage) {
+        const savedWidth = widthStorage.loadTableWidth()
+        if (savedWidth && savedWidth >= 300) {
+          layoutContainer.style.width = `${savedWidth}px`
+          // 使用配置的宽度
+        } else {
+          layoutContainer.style.width = `${config.tableWidth}px`
+        }
+      } else {
+        // 使用配置的宽度
+        layoutContainer.style.width = `${config.tableWidth}px`
       }
     }
 

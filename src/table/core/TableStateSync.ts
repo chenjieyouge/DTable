@@ -47,7 +47,8 @@ export class TableStateSync {
 
     // 3. 应用列宽覆盖
     for (const col of orderedColumns) {
-      if (widthOverrides[col.key]) {
+      const overrideWidth = widthOverrides[col.key]
+      if (overrideWidth && overrideWidth > 0) {
         col.width = widthOverrides[col.key]
       }
     }

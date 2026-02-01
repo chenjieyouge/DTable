@@ -52,7 +52,7 @@ export function resolveColumns(params: {
     const overrideWidth = widthOverrides[col.key]
     return {
       ...col,
-      width: typeof overrideWidth === 'number' ? overrideWidth: col.width,
+      width: typeof overrideWidth === 'number' ? overrideWidth: (col.width || 100),
       isFrozen: index < frozenCount
     }
   })

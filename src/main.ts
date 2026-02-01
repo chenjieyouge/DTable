@@ -2,7 +2,7 @@
 import { VirtualTable } from '@/table/VirtualTable'
 import './style.css'
 import { IPageInfo, ITableQuery } from '@/types'
-import { mockFechPageData, mockFechSummaryData } from '@/utils/mockData'
+import { mockFechPageData } from '@/utils/mockData'
 import type { IUserConfig } from '@/types'
 
 // ##### 场景01: 小数据 -> 内存模式 ##########
@@ -15,115 +15,146 @@ const smallData = Array.from({ length: 200000 }, (_, i) => ({
   sales: (Math.random() * 10000).toFixed(2),
   cost: Math.floor(Math.random() * 8000),
   profit: Math.floor(Math.random() * 2000),
+
+  profit1: Math.floor(Math.random() * 2000),
+  profit2: Math.floor(Math.random() * 2000),
+  profit3: Math.floor(Math.random() * 2000),
+  profit4: Math.floor(Math.random() * 2000),
+  profit5: Math.floor(Math.random() * 2000),
 }))
 
+// ==== 个性版 小数据模式配置 ========
+// const configSmall2: IUserConfig = {
+//   container: '#table-small',
+//   tableWidth: 600,
+//   tableHeight: 500,
+//   rowHeight: 36,
+//   headerHeight: 40,
+//   initialData: smallData, // 传全量数据
+//   columns: [
+//     { key: 'name', title: '姓名'},
+//     { key: 'id', title: 'ID', filter: { enabled: true, type: 'numberRange'}},
+//     { 
+//       key: 'dept', 
+//       title: '部门', 
+//       sortable: true, 
+//       filter: { enabled: true, type: 'text' },
+//       // 自定义渲染, 部门带颜色标签
+//       render: (value) => {
+//         const colors: Record<string, string> = {
+//           '产品部': '#1890ff',
+//           '研发部': '#52c41a',
+//           '运营部': '#faad14'
+//         }
+//         const color = colors[value] || '#999'
+//         return `<span style="color: ${color}; font-weight: bold;">${value}</span>`
+//       }
+//      },
+//     { 
+//       key: 'region', 
+//       title: '区域', 
+//       filter: { enabled: true, type: 'set' },
+//       // 自定义渲染, 区域 字段加粗显示
+//       render: (value) => {
+//         return `<strong>${value}</stron>`
+//       }
+//     },
+//     { key: 'product', title: '产品', sortable: true, summaryType: 'count'},
+//     { 
+//       key: 'sales', 
+//       title: '销售额',
+//        sortable: true, 
+//        summaryType: 'sum',
+//        // 自定义渲染：成本格式化为货币
+//       render: (value) => {
+//         const num = parseFloat(value)
+//         if (isNaN(num)) return value
+//         return `<span style="color: #ff4d4f;">¥${num.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span>`
+//       }
+//       },
+//     { key: 'cost', title: '成本', width: 120, sortable: true, summaryType: 'avg' },
+//     { 
+//       key: 'profit', 
+//       title: '利润', 
+//       sortable: true,
+//       // 条件格式化 (背景, 字体)
+//       cellStyle: (value, row) => {
+//         const num = Number(value)
+//         if (isNaN(num)) return null
+//         return {
+//           color: num >= 1000 ? '#ef4444' : '#16a34a',
+//           fontWeight: '700',
+//           // flexDirection: 'column',
+//           // alignSelf: 'flex-end'
+//           justifyContent: 'flex-end'
+//         }
+//       },
+//       // 内置组件雏形: 进图条 + 文本
+//       render: (value, row) => {
+//         const profit = parseFloat(value)
+//         const sales = parseInt(row.sales)
+//         const percentage = sales > 0 ? (profit / sales * 100).toFixed(1) : 0
+//         const color = profit > 0 ? 'red' : '#52c41a'
+
+//         return `
+//           <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+//             <div style="flex: 1; height: 6px; background: #f0f0f0; border-radius: 4px; overflow: hidden;">
+//               <div style="width: ${Math.min(Math.abs(Number(percentage)), 100)}%; height: 100%; background: ${color};"></div>
+//               <span style="color: ${color}; font-size: 12px; white-space: nowrap;">${percentage}%</span>
+//             </div>
+//           </div>
+//         `
+//       }
+//     },
+//   ],
+//   // 配置右侧面板
+//   sidePanel: {
+//     enabled: true,
+//     position: 'right',
+//     width: 250,
+//     defaultOpen: true,
+//     defaultPanel: 'columns',
+//     panels: []
+//   },
+//   onModeChange(mode: 'client' | 'server') {
+//     // console.log('[小数据表格-内存模式]: ', mode)
+//   },
+// } 
+
+// ==== 极简版 小数据模式配置 ========
 const configSmall: IUserConfig = {
   container: '#table-small',
-  tableWidth: 600,
-  tableHeight: 500,
-  rowHeight: 36,
-  headerHeight: 40,
-  initialData: smallData, // 传全量数据
+  initialData: smallData,
   columns: [
-    { key: 'name', title: '姓名', width: 120 },
-    { key: 'id', title: 'ID', width: 100, filter: { enabled: true, type: 'numberRange'}},
-    { 
-      key: 'dept', 
-      title: '部门', 
-      width: 80, 
-      sortable: true, 
-      filter: { enabled: true, type: 'text' },
-      // 自定义渲染, 部门带颜色标签
-      render: (value) => {
-        const colors: Record<string, string> = {
-          '产品部': '#1890ff',
-          '研发部': '#52c41a',
-          '运营部': '#faad14'
-        }
-        const color = colors[value] || '#999'
-        return `<span style="color: ${color}; font-weight: bold;">${value}</span>`
-      }
-     },
-    { 
-      key: 'region', 
-      title: '区域', 
-      width: 100, 
-      filter: { enabled: true, type: 'set' },
-      // 自定义渲染, 区域 字段加粗显示
-      render: (value) => {
-        return `<strong>${value}</stron>`
-      }
-    },
-    { key: 'product', title: '产品', width: 140, sortable: true, summaryType: 'count'},
-    { 
-      key: 'sales', 
-      title: '销售额',
-       width: 120, 
-       sortable: true, 
-       summaryType: 'sum',
-       // 自定义渲染：成本格式化为货币
-      render: (value) => {
-        const num = parseFloat(value)
-        if (isNaN(num)) return value
-        return `<span style="color: #ff4d4f;">¥${num.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span>`
-      }
-      },
-    { key: 'cost', title: '成本', width: 120, sortable: true, summaryType: 'avg' },
-    { 
-      key: 'profit', 
-      title: '利润', 
-      width: 120,
-      sortable: true,
-      // 条件格式化 (背景, 字体)
-      cellStyle: (value, row) => {
-        const num = Number(value)
-        if (isNaN(num)) return null
-        return {
-          color: num >= 1000 ? '#ef4444' : '#16a34a',
-          fontWeight: '700',
-          // flexDirection: 'column',
-          // alignSelf: 'flex-end'
-          justifyContent: 'flex-end'
-        }
-      },
-      // 内置组件雏形: 进图条 + 文本
-      render: (value, row) => {
-        const profit = parseFloat(value)
-        const sales = parseInt(row.sales)
-        const percentage = sales > 0 ? (profit / sales * 100).toFixed(1) : 0
-        const color = profit > 0 ? 'red' : '#52c41a'
-
-        return `
-          <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-            <div style="flex: 1; height: 6px; background: #f0f0f0; border-radius: 4px; overflow: hidden;">
-              <div style="width: ${Math.min(Math.abs(Number(percentage)), 100)}%; height: 100%; background: ${color};"></div>
-              <span style="color: ${color}; font-size: 12px; white-space: nowrap;">${percentage}%</span>
-            </div>
-          </div>
-        `
-      }
-    },
+    { key: 'name', title: '姓名', width: 180 },
+    { key: 'id', title: 'ID' },
+    { key: 'dept', title: '部门', filter: {enabled: true, type: 'set' }}, 
+    { key: 'region', title: '区域', },
+    { key: 'product', title: '产品' },
+    { key: 'sales', title: '销售额', summaryType: 'sum' },
+    { key: 'cost', title: '成本', summaryType: 'avg'},
+    { key: 'profit', title: '利润'},
+    // 增加多列
+    { key: 'profit1', title: '利润1', width: 150 },
+    { key: 'profit2', title: '利润2', width: 150 },
+    { key: 'profit3', title: '利润3', width: 150 },
+    { key: 'profit4', title: '利润4', width: 150 },
+    { key: 'profit5', title: '利润5', width: 150 },
   ],
-  // 配置右侧面板
   sidePanel: {
     enabled: true,
-    position: 'right',
-    width: 250,
-    defaultOpen: true,
+    defaultOpen: false,
     defaultPanel: 'columns',
     panels: []
-  },
-  onModeChange(mode: 'client' | 'server') {
-    // console.log('[小数据表格-内存模式]: ', mode)
-  },
-} 
+
+  }
+}
 
 
 // ##### 场景02: 大数据 -> 分页模式 ##########
 const PAGE_SIZE = 200 // 和 mock 表格配置共用
 const configLarge: IUserConfig = {
   container: '#table-large',
-  tableWidth: 600,
   tableHeight: 500,
   headerHeight: 40,
   summaryHeight: 20,
@@ -137,23 +168,21 @@ const configLarge: IUserConfig = {
 
   // 事先已经返回的数据格式,进行列配置
   columns: [
-    { key: 'seq', title: '序号(筛选后)', width: 120 },
-    { key: 'id', title: '原始ID', width: 100, filter: { enabled: true, type: 'numberRange'}},
-    { key: 'name', title: '姓名', width: 150, filter: { enabled: true, type: 'text'}},
-    { key: 'dept', title: '部门', width: 80, filter: { enabled: true, type: 'set'} },
-    { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'set'} },
+    { key: 'seq', title: '序号(筛选后)' },
+    { key: 'id', title: '原始ID', filter: { enabled: true, type: 'numberRange'}},
+    { key: 'name', title: '姓名', filter: { enabled: true, type: 'text'}},
+    { key: 'dept', title: '部门', filter: { enabled: true, type: 'set'} },
+    { key: 'region', title: '区域', filter: { enabled: true, type: 'set'} },
     { 
       key: 'product', 
       title: '产品', 
-      width: 140,
       render: (value) => `<strong>${value}</strong>`
     },
-    { key: 'sales', title: '销售额', width: 120, sortable: true },
-    { key: 'cost', title: '成本', width: 120 },
+    { key: 'sales', title: '销售额', sortable: true },
+    { key: 'cost', title: '成本' },
     { 
       key: 'profit', 
       title: '利润', 
-      width: 120,
       // 自定义渲染: 利润带进度条
     },
   ],
@@ -202,6 +231,7 @@ const configLarge: IUserConfig = {
 // main
 document.addEventListener('DOMContentLoaded', () => {
   const table = new VirtualTable(configSmall)
+  // const table = new VirtualTable(configSmall2)
   table.ready
   if (typeof window !== 'undefined') {
     (window as any).table = table 

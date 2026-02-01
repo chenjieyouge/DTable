@@ -455,7 +455,8 @@ export class VirtualTable {
     const savedColumnWidths = this.widthStorage.loadColumnWidth()
     if (savedColumnWidths) {
       this.config.columns.forEach(col => {
-        if (savedColumnWidths[col.key]) {
+        const savedWidth = savedColumnWidths[col.key]
+        if (savedWidth && savedWidth > 0) {
           col.width = savedColumnWidths[col.key]
         }
       })

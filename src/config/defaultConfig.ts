@@ -12,11 +12,12 @@ export function createDefaultConfig(): Omit<IConfig, 'columns'> {
     container: '#container',
     tableId: '',  // 运行时生成
     // 默认尺寸
-    tableWidth: 600,
+    tableWidth: '100%',  // 默认占满容器
     tableHeight: 500,
     headerHeight: 40,
     summaryHeight: 36,
     rowHeight: 36,
+    minColumnWidth: 100, // 默认最小列宽
     // 默认数据
     totalRows: 100000,
     // 默认功能
