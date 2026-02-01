@@ -733,7 +733,7 @@
   width: 220px;
 }
 
-/** ======== 列管理面板样式 */
+/** ======== 列管理面板样式 ==== */
 .column-panel {
   display: flex;
   flex-direction: column;
@@ -747,22 +747,23 @@
 }
 
 .column-panel-title {
+  margin: 0 0 8px 0;
   font-size: 16px;
   font-weight: 600;
   color: #1f2937;
-  margin: 0 0 4px 0;
 }
 
 .column-panel-desc {
+  margin: 0;
   font-size: 12px;
   color: #6b7280;
-  margin: 0;
 }
 
 /* 搜索框 */
 .column-panel-search {
   margin-bottom: 12px;
 }
+
 .column-panel-search-input {
   width: 100%;
   padding: 8px 12px;
@@ -772,6 +773,7 @@
   outline: none;
   transition: border-color 0.2s;
 }
+
 .column-panel-search-input:focus {
   border-color: #3b82f6;
 }
@@ -793,10 +795,39 @@
   border-radius: 4px;
   transition: background-color 0.2s;
   cursor: pointer;
+  user-select: none;
 }
 
 .column-panel-item:hover {
   background-color: #f3f4f6;
+}
+
+.column-panel-item.dragging {
+  opacity: 0.5;
+  background-color: #e3f2fd;
+}
+
+.column-panel-item--hidden {
+  opacity: 0.5;
+}
+
+/* 拖拽插入位置提示线 */
+.drop-indicator {
+  margin: 2px;
+  height: 2px;
+  background-color: #1890ff;
+  pointer-events: none;
+}
+
+.column-panel-drag-handle {
+  margin-right: 8px;
+  color: #999;
+  cursor: grab;
+  font-size: 16px;
+}
+
+.column-panel-drag-handle:active {
+  cursor: grabbing;
 }
 
 .column-panel-item input[type='checkbox'] {

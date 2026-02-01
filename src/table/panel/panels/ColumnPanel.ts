@@ -127,35 +127,46 @@ export class ColumnPanel implements IPanel {
 
   // 渲染列列表
   public renderList(): void {
-
     if (!this.listContainer || !this.store) return 
 
     const state = this.store.getState()
     const currentOrder = state.columns.order // 当前列顺序, 拖拽后会变化
     const hiddenKeys = state.columns.hiddenKeys // 隐藏的列 key
 
-    // 合并可见列和隐藏列, 保持完整列表
-    // 先按 currentOrder 排列; 再最佳隐藏列 (按原始顺序)
-    const allKeys = [
-      ...currentOrder,
-      ...this.allColumnKeys.filter(key => !currentOrder.includes(key))
-    ]
+    // 构建完整列表, 按 currentOrder 显示, 然后补充缺失的列
+    const allKeys = [...currentOrder]
+    this.allColumnKeys.forEach(key => {
+      if (!allKeys.includes(key)) {
+        allKeys.push(key)
+      }
+    })
+
     // 清空列表
     this.listContainer.innerHTML = ''
-    // 按拖拽操作后的最新顺序展示, 并将隐藏列也显示出来
-    allKeys.forEach(key => {
+    // 渲染每一列
+    allKeys.forEach((key, index) => {
       const col = this.originalColumns.find(c => c.key === key)
       if (!col) return 
-
       const isVisible = !hiddenKeys.includes(key)
       // 每个列表项
       const item = document.createElement('div')
       item.className = 'column-panel-item'
+      item.draggable = true // 开启可拖拽
+      item.dataset.columnKey = key 
+      item.dataset.index = String(index)
+
       // 给隐藏列添加样式提示
       if (!isVisible) {
         item.classList.add('column-panel-item--hidden')
       }
-      // 单选框
+
+      // 拖拽图标, 出现在每列元素左侧
+      const dragHandle = document.createElement('span')
+      dragHandle.className = 'column-panel-drag-handle'
+      dragHandle.textContent = '⋮⋮'
+      item.appendChild(dragHandle)
+
+      // 复选框
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox'
       checkbox.checked = isVisible
@@ -168,12 +179,71 @@ export class ColumnPanel implements IPanel {
           this.store.dispatch({ type: 'COLUMN_HIDE', payload: { key }})
         }
       }
+
       const label = document.createElement('label')
       label.htmlFor = `col-panel-${key}`
       label.textContent = col.title
+      // 挂载
       item.appendChild(checkbox)
       item.appendChild(label)
+      // 绑定拖拽事件
+      this.bindDragEvents(item)
       this.listContainer?.appendChild(item)
+    })
+  }
+
+  /** 绑定拖拽事件 */
+  private bindDragEvents(item: HTMLDivElement): void {
+    // 拖拽开始
+    item.addEventListener('dragstart', (e) => {
+      item.classList.add('dragging')
+      e.dataTransfer!.effectAllowed = 'move'  // 拖拽只允许 'move' 效果
+    })
+
+    // 拖拽结束
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging')
+      // 移除所有插入提示
+      this.listContainer?.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+    })
+
+    // 拖拽经过时的视觉反馈
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault()
+
+      const draggingItem = this.listContainer?.querySelector('.dragging')
+      if (!draggingItem || draggingItem === item) return 
+
+      const rect = item.getBoundingClientRect()
+      const midY = rect.top + rect.height / 2 
+
+      // 先移除之前的提示线
+      this.listContainer?.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      // 再添加蓝色提示线
+      const indicator = document.createElement('div')
+      indicator.className = 'drop-indicator'
+
+      if (e.clientY < midY) {
+        item.parentNode?.insertBefore(indicator, item)
+        item.parentNode?.insertBefore(draggingItem, item)
+      } else {
+        item.parentNode?.insertBefore(indicator, item.nextSibling)
+        item.parentNode?.insertBefore(draggingItem, item.nextSibling)
+      }
+    })
+
+    // 拖拽放置
+    item.addEventListener('drop', (e) => {
+      e.preventDefault()
+      
+      // 移除提示线
+      this.listContainer?.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      // 获取新的顺序
+      const items = Array.from(this.listContainer?.children || []) as HTMLDivElement[]
+      const newOrder = items.map(el => el.dataset.columnKey).filter(key => key) as string[]
+      
+      // 更新列顺序, 包括隐藏列
+      this.store.dispatch({ type: 'COLUMN_ORDER_SET', payload: { order: newOrder }})
     })
   }
 

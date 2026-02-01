@@ -171,6 +171,8 @@ export function createTableStore(params: {
       case 'COLUMN_HIDE': {
         const { key } = action.payload
         const hiddenKeys = [...prev.columns.hiddenKeys]
+
+        // 隐藏列时, 只添加到 hiddenKeys, 不从 order 中移除, 保留列顺序
         if (!hiddenKeys.includes(key)) {
           hiddenKeys.push(key)
         }
@@ -191,7 +193,26 @@ export function createTableStore(params: {
       case 'COLUMN_SHOW': {
         const { key } = action.payload
         const hiddenKeys = prev.columns.hiddenKeys.filter(k => k !== key)
-        return { ...prev, columns: { ...prev.columns, hiddenKeys }}
+
+        // 若 order 中没有该列, 则按原始顺序位置, 给加进去
+        let order = [...prev.columns.order]
+        if (!order.includes(key)) {
+          // 找到该列在原始列表的位置
+          const allKeys = prev.columns.order.concat(hiddenKeys)
+          const originalIndex = allKeys.indexOf(key)
+
+          let insertIndex = order.length
+          for (let i = 0; i < order.length; i++) {
+            const currentIndex = allKeys.indexOf(order[i])
+            if (currentIndex > originalIndex) {
+              insertIndex = i 
+              break
+            }
+          }
+          order.splice(insertIndex, 0, key)
+        }
+
+        return { ...prev, columns: { ...prev.columns, hiddenKeys, order }}
       }
 
       case 'COLUMN_BATCH_SHOW': {
@@ -213,6 +234,16 @@ export function createTableStore(params: {
             hiddenKeys: []
           }
         }
+      }
+
+      case 'COLUMN_REORDER': {
+        const { fromIndex, toIndex } = action.payload
+        const order = [...prev.columns.order]
+        // 移动列: 从 fromIndex 移到 toIndex
+        const [moveItem] = order.splice(fromIndex, 1)
+        order.splice(toIndex, 0, moveItem)
+        
+        return { ...prev, columns: { ...prev.columns, order } }
       }
 
       case 'SET_TOTAL_ROWS': {

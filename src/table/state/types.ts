@@ -32,6 +32,7 @@ export type TableAction =
   | { type: 'SORT_TOGGLE'; payload: { key: string }}
   | { type: 'SORT_SET'; payload: { sort: SortValue }} // 列值排序
   | { type: 'COLUMN_ORDER_SET'; payload: { order: string[]} }  // 设置列顺序
+  | { type: 'COLUMN_REORDER'; payload: { fromIndex: number; toIndex: number } } // 拖拽面板列字段调顺序
   | { type: 'COLUMN_WIDTH_SET'; payload: { key: string; width: number }}  // 设置列宽
   | { type: 'FROZEN_COUNT_SET'; payload: { count: number }}  // 冻结前 N 列设置
   | { type: 'COLUMN_FILTER_SET'; payload: { key: string; filter: ColumnFilterValue } } // 列值筛选
