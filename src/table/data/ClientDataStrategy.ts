@@ -88,7 +88,7 @@ export class ClientDataStrategy implements DataStrategy {
 
     switch(col.summaryType) {
       case 'sum': {
-        const numValues = values.map(v => Number(v)).filter(v => isNaN(v))
+        const numValues = values.map(v => Number(v)).filter(v => !isNaN(v))
         return numValues.reduce((acc, val) => acc + val, 0)
       }
 

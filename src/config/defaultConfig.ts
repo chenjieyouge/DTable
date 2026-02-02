@@ -37,11 +37,11 @@ export function createDefaultConfig(): Omit<IConfig, 'columns'> {
   }
 }
 
-// 获取默认的右侧面板配置, 不用需要启用右侧面板, 而用户未提供完整配置时
+// 获取默认的右侧面板配置, 默认不开启
 export function getDefaultSidePanelConfig() {
   return {
     position: 'right' as const,
     width: 250,
-    defaultOpen: true
+    defaultOpen: false
   }
 }

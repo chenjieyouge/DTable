@@ -211,14 +211,15 @@ export class MountHelper {
         store,
         panelConfigs,
         tabsContainer,
+        originalColumns,
         (show: boolean) => {
           layoutManager.toggleSidePanel(show)
         }
       )
       // 挂载面板内容日期
       sideArea.appendChild(sidePanelManager.getContainer())
-      // 显示默认面板
-      if (sp.defaultPanel) {
+      // 只有在 defaultOpen 为 true 的释藏, 才显示默认面板
+      if (sp.defaultOpen && sp.defaultPanel) {
         if (sp.defaultPanel === 'columns') {
           // 列管理 tab 则需要将 原始列信息传入进去
           sidePanelManager.togglePanel(sp.defaultPanel, originalColumns)

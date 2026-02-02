@@ -91,6 +91,66 @@ export class ColumnResizeBinder {
     }
     // 鼠标弹起时触发
     headerRow.addEventListener('mousedown', this.onMouseDown)
+
+    // 双击自动调整列宽
+    headerRow.addEventListener('dblclick', (e: MouseEvent) => {
+      const target = e.target as HTMLDivElement | null 
+      const handle = target?.closest<HTMLDivElement>('.col-resize-handle')
+      if (!handle) return 
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      const key = handle.dataset.columnKey
+      if (!key) return 
+      
+      if (this.isFrozenColumn(handle)) {
+        return 
+      }
+
+      // 计算列内容最佳宽度, 即采样 100条测量最大宽度
+      const optimalWidth = this.calculateOptimalWidth(scrollContainer, key, minWidth)
+      if (optimalWidth) {
+        onResizeEnd(key, optimalWidth)
+      }
+    })
+  }
+
+  /** 计算列的最佳宽度, 基于前 100 行数据测量 */
+  public calculateOptimalWidth(
+    container: HTMLDivElement,
+    columnKey: string,
+    minWidth: number
+
+  ): number | null  {
+    // 获取该列的所有单元格 
+    const cells = container.querySelectorAll<HTMLDivElement>(`.table-cell[data-column-key="${columnKey}"]`)
+
+    if (cells.length === 0) return null 
+    let fitWidth = minWidth 
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    if (!ctx) return null 
+    // 采样前 100 个单元格, 避免性能问题
+    const sampleSize = Math.min(100, cells.length)
+    for (let i = 0; i < sampleSize; i++) {
+      const cell = cells[i]
+      const text = cell.textContent || ''
+
+      // 获取单元格的字体样式
+      const style = window.getComputedStyle(cell)
+      ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+
+      // 测量文本宽度 + 左右各 4px padding
+      const metrics = ctx.measureText(text)
+      const textWidth = Math.ceil(metrics.width) 
+
+      // 宽度建议在 max(textWidth, minWidth) 的基础上, 加上边距, 按钮, 筛选等图标
+      fitWidth = Math.max(textWidth + 80, minWidth)
+    }
+    // 限制最大宽度为 500px
+    return Math.min(fitWidth, 500)
   }
 
   public unbind(headerRow: HTMLDivElement) {

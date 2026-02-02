@@ -6,7 +6,7 @@ import type { IPanelConfig } from "@/table/panel/IPanel"
 export type ColumnFilterType = 'set' | 'text' | 'dateRange' | 'numberRange'
 
 export interface IColumnFilterConfig {
-  enabled: boolean // 是否允许出现 "筛选" 按钮
+  // enabled: boolean // 是否允许出现 "筛选" 按钮
   type: ColumnFilterType // 筛选的列值类型, 决定弹窗层渲染形态和 query 结构
 }
 

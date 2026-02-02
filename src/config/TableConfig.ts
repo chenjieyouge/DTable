@@ -1,5 +1,5 @@
 import { IUserConfig, IConfig } from '@/types'
-import { createDefaultConfig } from './defaultConfig'
+import { createDefaultConfig, getDefaultSidePanelConfig } from './defaultConfig'
 import { ConfigValidator } from './ConfigValidator'
 import { calculateColumnWidth, getContainerWidth } from '@/utils/calculateColumnWidth'
 
@@ -15,6 +15,11 @@ export class TableConfig {
       ...createDefaultConfig(),
       ...userConfig,
       tableId: userConfig.tableId || this.generateTableId(userConfig),
+      // 深度合并 sidePanel 配置
+      sidePanel: userConfig.sidePanel ? {
+        ...getDefaultSidePanelConfig(),
+        ...userConfig.sidePanel
+      } : undefined
      } as IConfig
 
     // 3. 计算列宽, 若有列没有指定 width

@@ -1,6 +1,7 @@
 import type { IPanel, IPanelConfig } from "@/table/panel/IPanel";
 import type { TableStore } from "@/table/state/createTableStore";
 import { PanelRegistry } from "@/table/panel/PanelRegistry";
+import { IColumn } from "@/types";
 
 /**
  * 右侧面板管理器: 管理右侧面板的显示, 切换和销毁
@@ -23,6 +24,7 @@ export class SidePanelManager {
     private store: TableStore, 
     private configs: IPanelConfig[], // 要启用的面板配置
     private tabsContainer: HTMLDivElement,
+    private originalColumns: IColumn[],
     private onPanelToggle?: (show: boolean) => void
   ) {
     this.registry = new PanelRegistry()
@@ -72,7 +74,13 @@ export class SidePanelManager {
       title.textContent = config.title
       tab.appendChild(title)
       // 点击 Tab 切换面板
-      tab.onclick = () => this.togglePanel(config.id)
+      tab.onclick = () => {
+        if (config.id === 'columns') {
+          this.togglePanel(config.id, this.originalColumns)
+        } else {
+          this.togglePanel(config.id)
+        }
+      }
       // hover 效果
       tab.onmouseenter = () => {
         tab.style.background = '#e8e8e8'

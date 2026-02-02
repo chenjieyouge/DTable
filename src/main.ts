@@ -128,7 +128,7 @@ const configSmall: IUserConfig = {
   columns: [
     { key: 'name', title: '姓名', width: 180 },
     { key: 'id', title: 'ID' },
-    { key: 'dept', title: '部门', filter: {enabled: true, type: 'set' }}, 
+    { key: 'dept', title: '部门', filter: {type: 'set' }}, 
     { key: 'region', title: '区域', },
     { key: 'product', title: '产品' },
     { key: 'sales', title: '销售额', summaryType: 'sum' },
@@ -169,10 +169,10 @@ const configLarge: IUserConfig = {
   // 事先已经返回的数据格式,进行列配置
   columns: [
     { key: 'seq', title: '序号(筛选后)' },
-    { key: 'id', title: '原始ID', filter: { enabled: true, type: 'numberRange'}},
-    { key: 'name', title: '姓名', filter: { enabled: true, type: 'text'}},
-    { key: 'dept', title: '部门', filter: { enabled: true, type: 'set'} },
-    { key: 'region', title: '区域', filter: { enabled: true, type: 'set'} },
+    { key: 'id', title: '原始ID', filter: { type: 'numberRange'}},
+    { key: 'name', title: '姓名', filter: { type: 'text'}},
+    { key: 'dept', title: '部门', filter: { type: 'set'} },
+    { key: 'region', title: '区域', filter: { type: 'set'} },
     { 
       key: 'product', 
       title: '产品', 
@@ -213,7 +213,7 @@ const configLarge: IUserConfig = {
     enabled: true,
     position: 'right',
     width: 320,
-    defaultOpen: true,
+    defaultOpen: false,
     defaultPanel: 'columns',
     panels: []
   },
