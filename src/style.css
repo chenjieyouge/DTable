@@ -882,4 +882,237 @@
 }
 
 
+/* ======== 透视表样式 ========== */
+
+/* 透视表整体布局: 左表格 + 右配置面板 */
+.pivot-layout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+/* 左侧表格区域 */
+.pivot-table-area {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* 右侧配置面板区域 */
+.pivot-config-area {
+  width: 250px;
+  flex-shrink: 0;
+  border-left: 1px solid #e5e7eb;
+  background-color: #fafbfc;
+  overflow-y: auto;
+}
+
+/* 透视表格 */
+.pivot-table {
+  min-width: 100%;
+}
+
+/* 透视表表头 */
+.pivot-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #f3f4f6;
+  border-bottom: 2px solid #d1d5db;
+}
+
+.pivot-header-cell {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.pivot-table .table-row {
+  display: flex;
+  height: auto;
+}
+
+.pivot-table .table-cell {
+  box-sizing: border-box;
+  overflow: hidden;
+  border-right: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 透视表行 */
+.pivot-row {
+  transition: background-color 0.15s ease;
+}
+
+/* 分组行 */
+.pivot-group-row {
+  background-color: #f9fafb;
+  font-weight: 500;
+}
+
+.pivot-group-row:hover {
+  background-color: #eff6ff;
+}
+
+/* 分组单元格 */
+.pivot-group-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 展开/折叠 图标 */
+.pivot-expand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  cursor: pointer;
+  user-select: none;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.pivot-expand-icon:hover {
+  color: #1890ff;
+  background-color: rgba(24, 144, 255, 0.1);
+}
+
+/* 分组标签 */
+.pivot-group-label {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* 行数标记 */
+.pivot-count-badge {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-left: 4px;
+}
+
+/* 聚合值单元格 */
+.pivot-agg-cell {
+  color: #1890ff;
+  font-weight: 500;
+}
+
+/* 数据行 */
+.pivot-data-row {
+  background-color: #fff;
+}
+
+.pivot-data-row:hover {
+  background-color: #f0f7ff;
+}
+
+/* 透视表体 */
+.pivot-table-body {
+  /* 预留, 后续虚拟滚动用 */
+  font-size: 12px;
+}
+
+/* ========= 透视表配置面板样式 ========== */
+.pivot-config-panel {
+  padding: 16px;
+}
+
+.pivot-config-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16px;
+}
+
+.pivot-config-section {
+  margin-bottom: 12px;
+}
+
+.pivot-config-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+/* 分组字段下拉框 */
+.pivot-select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: #fff;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.pivot-select:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+/* 数值字段列表 */
+.pivot-value-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 数值字段选项行 */
+.pivot-value-field-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.pivot-value-field-item:hover {
+  background-color: #f3f4f6;
+}
+
+.pivot-value-field-item input[type="checkbox"] {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pivot-value-field-item label {
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+}
+
+/* 聚合方式下拉框 */
+.pivot-agg-select {
+  padding: 3px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #fff;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.pivot-agg-select:focus {
+  border-color: #1890ff;
+}
+
+.pivot-agg-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+
 
