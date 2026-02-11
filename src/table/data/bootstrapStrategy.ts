@@ -33,7 +33,6 @@ export async function bootstrapStrategy(config: IConfig): Promise<{
       const strategy = new ServerDataStrategy(
         config.fetchPageData!,
         config.pageSize,
-        config.fetchSummaryData
       )
       await strategy.bootstrap()
       return { strategy, mode, totalRows: strategy.getTotalRows() }
@@ -67,8 +66,7 @@ export async function bootstrapStrategy(config: IConfig): Promise<{
     // 大数据量了已经, 则用 server 分页模式
     const strategy = new ServerDataStrategy(
       config.fetchPageData,
-      config.pageSize,
-      config.fetchSummaryData
+      config.pageSize
     )
     await strategy.bootstrap()
     return { strategy, mode, totalRows: strategy.getTotalRows() }

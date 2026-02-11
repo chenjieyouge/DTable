@@ -5,12 +5,8 @@ import { IPageInfo, ITableQuery } from '@/types'
 import { mockFechPageData } from '@/utils/mockData'
 import type { IUserConfig } from '@/types'
 
-import type { IPivotConfig } from '@/types/pivot'
-import { PivotTable } from '@/table/pivot/PivotTable'
-
-
 // ##### 场景01: 小数据 -> 内存模式 ##########
-const smallData = Array.from({ length: 200000 }, (_, i) => ({
+const smallData = Array.from({ length: 1000 }, (_, i) => ({
   name: `User ${i}`,
   id: i,
   dept: ['研发部', '产品部', '运营部'][i % 3],
@@ -234,43 +230,6 @@ const configLarge: IUserConfig = {
 
 // main
 document.addEventListener('DOMContentLoaded', () => {
-  // ======== 透视表 MVP 测试 ==========
-  const pivotData = Array.from({ length: 10000 }, (_, i) => ({
-    dept: ['研发部', '产品部', '运营部', '市场部'] [i % 4],
-    name: `员工${i+1}`,
-    sales: Math.floor(Math.random() * 10000),
-    cost: Math.floor(Math.random() * 5000),
-    profit: Math.floor(Math.random() * 3000),
-  }))
-
-  const pivotConfig: IPivotConfig = {
-    enabled: true,
-    rowGroup: 'dept',
-    valueFields: [
-      { key: 'sales', aggregation: 'sum', label: '销售额' },
-      { key: 'cost', aggregation: 'avg', label: '成本' },
-      { key: 'profit', aggregation: 'count', label: '利润' }
-    ]
-  }
-
-  const pivotColumns = [
-    { key: 'dept', title: '部门' },
-    { key: 'name', title: '姓名' },
-    { key: 'sales', title: '销售额', summaryType: 'sum' as const },
-    { key: 'cost', title: '成本', summaryType: 'avg' as const },
-    { key: 'profit', title: '利润', summaryType: 'sum' as const },
-  ]
-
-  const pivotContainer = document.getElementById('pivot-demo') as HTMLDivElement
-  if (pivotContainer) {
-    const pivotTable = new PivotTable(pivotConfig, pivotColumns, pivotData)
-    pivotTable.mount(pivotContainer)
-    // 暴露到全局方便调试
-    ;(window as any).pivotTable = pivotTable
-  }
-
-  // ======== 透视表 MVP 测试结束 ==========
-
 
   const table = new VirtualTable(configSmall)
   // const table = new VirtualTable(configSmall2)

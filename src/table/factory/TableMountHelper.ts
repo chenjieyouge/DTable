@@ -10,6 +10,7 @@ import { assertUniqueColumnKeys } from "@/table/model/ColumnModel";
 import { ShellCallbacks } from "@/table/handlers/ShellCallbacks";
 import { createColumnPanel } from "@/table/panel/panels/ColumnPanel";
 import { TableLifecycle } from "@/table/core/TableLifecycle";
+import { createPivotPanel } from "@/table/panel/panels/PivotPanel";
 
 
 /** 表格挂载参数: 容器准备, 布局创建, 面板初始化等 */
@@ -25,6 +26,8 @@ export interface MountParams {
   getClientFilterOptions: (key: string) => string[]
   loadSummaryData: (summaryRow: HTMLDivElement) => void 
   togglePanel: (panelId: string) => void 
+  onPivotModeToggle?: (enabled: boolean) => void 
+  onPivotConfigChange?: (config: any) => void
 }
 
 /** 挂载后的布局: 主布局 + 侧边布局 */
@@ -53,7 +56,7 @@ export class MountHelper {
 
     // 检查 store 是否已初始化
     if (!store) {
-      throw new Error('[VirtaulTable] mount() 必须在 store 初始化后调用! ')
+      throw new Error('[VirtualTable] mount() 必须在 store 初始化后调用! ')
     }
     // 检查列的唯一性
     assertUniqueColumnKeys(config.columns)
@@ -65,7 +68,7 @@ export class MountHelper {
       : selector
 
     if (!containerEl) {
-      throw new Error(`[VirtaulTable] 容器未找到: ${selector}`)
+      throw new Error(`[VirtualTable] 容器未找到: ${selector}`)
     }
 
     // 清空容器并添加唯一标识
@@ -106,6 +109,9 @@ export class MountHelper {
         widthStorage,
         store,
         lifecycle,
+        params.onPivotModeToggle,
+        params.onPivotConfigChange
+
       )
 
     } else {
@@ -131,7 +137,9 @@ export class MountHelper {
     originalColumns: IColumn[],
     widthStorage: ColumnWidthStorage | null,
     store: TableStore,
-    lifecycle: TableLifecycle
+    lifecycle: TableLifecycle,
+    onPivotModeToggle?: (enabled: boolean) => void,
+    onPivotConfigChange?: (config: any) => void,
 
   ): MountResult {
 
@@ -213,6 +221,13 @@ export class MountHelper {
       const panelConfigs: IPanelConfig[] = [
         ...sp.panels,
         {
+          id: 'pivot',
+          title: '透视表',
+          icon: '📊',
+          component: createPivotPanel as any 
+
+        },
+        {
           id: 'columns',
           title: '列管理',
           icon: '⚙️',
@@ -230,9 +245,9 @@ export class MountHelper {
         panelConfigs,
         tabsContainer,
         originalColumns,
-        (show: boolean) => {
-          layoutManager.toggleSidePanel(show)
-        }
+        (show: boolean) => { layoutManager.toggleSidePanel(show) },
+        onPivotModeToggle,
+        onPivotConfigChange
       )
       // 挂载面板内容日期
       sideArea.appendChild(sidePanelManager.getContainer())

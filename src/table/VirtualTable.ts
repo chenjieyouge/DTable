@@ -29,6 +29,8 @@ import { TableStateSync } from '@/table/core/TableStateSync'
 import type { InitResult } from '@/table/factory/TableInitializer'
 import { initServerMode, initClientMode } from '@/table/factory/TableInitializer'
 import { MountHelper } from '@/table/factory/TableMountHelper'
+import type { IPivotConfig } from '@/types/pivot'
+import { PivotTable } from '@/table/pivot/PivotTable'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -54,6 +56,10 @@ export class VirtualTable {
   private layoutManager: LayoutManager | null = null 
   private sidePanelManager: SidePanelManager | null = null 
   private scrollStopTimer?: number // 滚动停止检测定时器
+
+  private pivotTable: PivotTable | null = null 
+  private isPivotMode = false 
+  private savedMainContent: HTMLDivElement | null = null 
 
   private lifecycle!: TableLifecycle
   private queryCoordinator!: TableQueryCoordinator
@@ -124,7 +130,7 @@ export class VirtualTable {
       }
       
     } catch (err) {
-      console.warn('[VirtualTable.initializeAsync] faild: ', err)
+      console.warn('[VirtualTable.initializeAsync] failed: ', err)
       throw err 
     }
   }
@@ -201,7 +207,7 @@ export class VirtualTable {
     if (this.shell) {
       console.warn('[VirtaulTable] 检测到重复挂载,销毁旧实例')
       this.remount(containerSelector!)
-      this.destroy()
+      // this.destroy()
     }
 
     // 使用 MountHelper 挂载表格
@@ -225,6 +231,12 @@ export class VirtualTable {
             this.sidePanelManager.togglePanel(panelId)
           }
         }
+      },
+      onPivotModeToggle: (enabled: boolean) => {
+        this.togglePivotMode(enabled)
+      },
+      onPivotConfigChange: (config: IPivotConfig) => {
+        this.onPivotConfigChange(config)
       }
     }, containerSelector)
 
@@ -566,6 +578,77 @@ export class VirtualTable {
     return this.store.dispatch(action)
   }
 
+  /**
+   * 切换 Pivot 模式
+   * 
+   * 开启: 保存 mainArea 内容 -> 替换为 PivotTable
+   * 关闭: 销毁 PivotTable -> 恢复 mainArea 内容
+   */
+  public togglePivotMode(enabled: boolean): void {
+    if (this.isPivotMode === enabled) return 
+    this.isPivotMode = enabled 
+
+    const mainArea = this.layoutManager?.getMainArea()
+    if (!mainArea) return 
+
+    if (enabled) {
+      // 开启透视模式, 并保存当前普通表格 dom 
+      this.savedMainContent = document.createElement('div')
+      while (mainArea.firstChild) {
+        this.savedMainContent.appendChild(mainArea.firstChild)
+      }
+
+      // 创建透视表容器
+      const pivotContainer = document.createElement('div')
+      pivotContainer.style.height = '100%'
+      pivotContainer.style.overflow = 'auto'
+      mainArea.appendChild(pivotContainer)
+
+      // 获取全量数据 (仅 client 模式支持)
+      const allData = this.dataStrategy.getAllData?.() || []
+      if (allData.length === 0) {
+        console.warn('[VirtaulTable] Pivot 模式需要全量数据, 当前无数据或为 server 模式')
+      }
+
+      // 创建默认透视配置
+      const defautConfig: IPivotConfig = {
+        enabled: true,
+        rowGroup: this.config.columns[1]?.key || '', // 约定第二个字段作为默认分组字段
+        valueFields: this.config.columns
+          .filter(col => col.summaryType && col.summaryType !== 'none')
+          .map(col => ({
+            key: col.key,
+            aggregation: (col.summaryType as any) || 'sum',
+            label: col.title
+          }))
+      }
+
+      this.pivotTable = new PivotTable(defautConfig, this.config.columns, allData)
+      this.pivotTable.mount(pivotContainer)
+
+    } else {
+      // 关闭透视模式
+      this.pivotTable?.destroy()
+      this.pivotTable = null 
+
+      mainArea.innerHTML = ''
+      if (this.savedMainContent) {
+        while (this.savedMainContent.firstChild) {
+          mainArea.appendChild(this.savedMainContent.firstChild)
+        }
+        this.savedMainContent = null 
+      }
+      // 恢复后刷新可视区
+      this.viewport?.updateVisibleRows()
+    }
+  }
+
+  /** 透视表配置变更 (由 PivotPanel 触发) */
+  public onPivotConfigChange(config: IPivotConfig): void {
+    if (!this.isPivotMode || !this.pivotTable) return 
+    this.pivotTable.updateConfig(config, this.config.columns)
+  }
+
   // 全部清空, dom + 状态 + 一切, 避免内存泄露
   public destroy() {
     this.unsubscribleStore?.()
@@ -578,6 +661,11 @@ export class VirtualTable {
     // 清理面板管理器
     this.sidePanelManager?.destroy()
     this.sidePanelManager = null 
+    // 清理透视表相关
+    this.pivotTable?.destroy()
+    this.pivotTable = null 
+    this.isPivotMode = false 
+    this.savedMainContent = null 
     // 清空定时器
     if (this.scrollStopTimer) {
       clearTimeout(this.scrollStopTimer)

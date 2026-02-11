@@ -54,7 +54,7 @@ export const STRUCTURAL_EFFECT_ACTIONS = new Set<string>([
  */
 export const STATE_ONLY_ACTIONS = new Set<string>([
   'SET_TOTAL_ROWS',
-  'SET_CURRENT_PAGES',
+  'SET_CURRENT_PAGE',
   'INIT_FROM_CONFIG',
   'SET_MODE'
 ])

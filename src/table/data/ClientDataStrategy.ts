@@ -181,7 +181,7 @@ export class ClientDataStrategy implements DataStrategy {
         if (isNaN(num)) return false 
         // 值小于筛选区间的 最小值, 或者 大于 筛选区间的 最大值, 都不行
         if (filter.min !== undefined && num < filter.min) return false 
-        if (filter.max !== undefined && num < filter.max) return false 
+        if (filter.max !== undefined && num > filter.max) return false 
 
       } // else if ...其他
     }
@@ -215,6 +215,11 @@ export class ClientDataStrategy implements DataStrategy {
       }
     })
     return sorted 
+  }
+
+  /** 获取全量数据, 透视表等场景需要 */
+  public getAllData(): Record<string, any>[] {
+    return this.filteredData
   }
 
 }

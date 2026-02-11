@@ -61,24 +61,8 @@ export class PivotTable {
   public mount(container: HTMLDivElement): void {
     this.container = container
     container.innerHTML = ''
-
-    // 最外层布局
-    const layout = document.createElement('div')
-    layout.className = 'pivot-layout'
-
-    // 左侧: 表格区域
-    this.tableArea = document.createElement('div')
-    this.tableArea.className = 'pivot-table-area'
-
-    // 右侧: 配置面板
-    const configArea = document.createElement('div')
-    configArea.className = 'pivot-config-area'
-    configArea.appendChild(this.configPanel.render())
-
-    layout.appendChild(this.tableArea)
-    layout.appendChild(configArea)
-    container.appendChild(layout)
-
+    // 直接作为表格区域, 配置面板已又侧边栏 PivotPanel 管理
+    this.tableArea = container
     // 初始化渲染
     this.refresh()
   }
@@ -93,7 +77,6 @@ export class PivotTable {
    */
   private refresh(): void {
     if (!this.tableArea) return 
-
     // 构建透视树
     this.treeRoot = this.processor.buildPivotTree(this.data)
     // 展平
@@ -186,6 +169,15 @@ export class PivotTable {
   public updateColumns(columns: IColumn[]): void {
     this.columns = columns
     this.renderer.updateConfig(this.pivotConfig, columns)
+    this.refresh()
+  }
+
+  /** 更新透视配置 (由外部 PivotPanel 调用) */
+  public updateConfig(config: IPivotConfig, columns: IColumn[]): void {
+    this.pivotConfig = config
+    this.columns = columns
+    this.processor = new PivotDataProcessor(config)
+    this.renderer = new PivotRenderer(config, columns)
     this.refresh()
   }
 

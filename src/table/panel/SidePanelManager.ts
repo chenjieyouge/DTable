@@ -19,13 +19,16 @@ export class SidePanelManager {
   private activePanel: string | null = null // 当前集合的面板 id
   private container: HTMLDivElement // 面板容器
   private contentContainer!: HTMLDivElement // 面板内容容器
+  private pivotModeEnabled = false
 
   constructor(
     private store: TableStore, 
     private configs: IPanelConfig[], // 要启用的面板配置
     private tabsContainer: HTMLDivElement,
     private originalColumns: IColumn[],
-    private onPanelToggle?: (show: boolean) => void
+    private onPanelToggle?: (show: boolean) => void,
+    private onPivotModeToggle?: (enabled: boolean) => void ,
+    private onPivotConfigChange?: (config: any) => void // 此回调在 pivot 创建时传入
   ) {
     this.registry = new PanelRegistry()
     // 注册所有面板
@@ -34,7 +37,7 @@ export class SidePanelManager {
     this.container = this.render()
   }
 
-  // 渲染面板管理器的 dom 结构
+  /** 渲染面板管理器的 dom 结构 */ 
   private render(): HTMLDivElement {
     // 只渲染面板内容容器, 不包含 Tab
     const container = document.createElement('div')
@@ -52,11 +55,62 @@ export class SidePanelManager {
     return container
   }
 
-  // 渲染 tab 到容器中
+  /** 渲染 tab 到容器中 */
   public renderTabsToContainer(): void {
-    // 先清空 Tab 容器
     this.tabsContainer.innerHTML = ''
-    // 为每个面板创建一个 tab
+
+    // === 顶部: Pivot Mode 开关 =====
+    const pivotToggle = document.createElement('div')
+    pivotToggle.className = 'pivot-mode-toggle'
+
+    const toggleIcon = document.createElement('div')
+    toggleIcon.className = 'pivot-mode-toggle'
+    toggleIcon.textContent = '📊'
+    pivotToggle.appendChild(toggleIcon)
+
+    const toggleTitle = document.createElement('div')
+    toggleTitle.className = 'pivot-mode-title'
+    toggleTitle.textContent = 'Pivot'
+    pivotToggle.appendChild(toggleTitle)
+
+    // Toggle Switch
+    const switchWrapper = document.createElement('label')
+    switchWrapper.className = 'pivot-switch'
+
+    const switchInput = document.createElement('input')
+    switchInput.className = 'pivot-switch-input'
+    switchInput.type = 'checkbox'
+    switchInput.checked = this.pivotModeEnabled
+
+    const switchSlider = document.createElement('span')
+    switchSlider.className = 'pivot-switch-slider'
+    // 挂载
+    switchWrapper.appendChild(switchInput)
+    switchWrapper.appendChild(switchSlider)
+    pivotToggle.appendChild(switchWrapper)
+
+    switchInput.addEventListener('change', () => {
+      this.pivotModeEnabled = switchInput.checked 
+      // 通知 VirtualTable 切换透视模式
+      this.onPivotModeToggle?.(this.pivotModeEnabled)
+      // 开启时自动打开 pivot 配置面板
+      if (this.pivotModeEnabled && this.registry.has('pivot')) {
+        // 传入 columns + onConfigChange 回调
+        this.togglePanel('pivot', this.originalColumns, this.onPivotConfigChange)
+
+      } else if (!this.pivotModeEnabled) {
+        this.hideCurrentPanel()
+      }
+    })
+
+    this.tabsContainer.appendChild(pivotToggle)
+    // 分割线
+    const divider = document.createElement('div')
+    divider.style.borderBottom = '1px solid #e0e0e0'
+    divider.style.margin = '4px 0'
+    this.tabsContainer.appendChild(divider)
+
+    // ========  下方: 为每个面板创建一个 tab
     this.configs.forEach(config => {
       const tab = document.createElement('div')
       tab.className = 'side-panel-tab-vertical'
@@ -73,10 +127,14 @@ export class SidePanelManager {
       title.className = 'tab-title-vertical'
       title.textContent = config.title
       tab.appendChild(title)
-      // 点击 Tab 切换面板
+      // 点击 Tab 切换面板, 注意有的面板, 如 pivot 是需要传回调的哦
       tab.onclick = () => {
         if (config.id === 'columns') {
           this.togglePanel(config.id, this.originalColumns)
+
+        } else if (config.id === 'pivot') {
+          this.togglePanel(config.id, this.originalColumns, this.onPivotConfigChange)
+          
         } else {
           this.togglePanel(config.id)
         }
@@ -94,7 +152,7 @@ export class SidePanelManager {
     })
   }
 
-  // 切换指定面板, 支持传参
+  /** 切换指定面板, 支持传参 */
   public togglePanel(panelId: string, ...args: any[]): void {
     // 验证 store 是否存在
     if (!this.store) {
@@ -137,7 +195,7 @@ export class SidePanelManager {
     this.onPanelToggle?.(true)
   }
 
-  // 更新 Tab 激活状态
+  /** 更新 Tab 激活状态 */
   public updateTabsActiveState(activeId: string): void {
     const tabs = this.tabsContainer.querySelectorAll<HTMLDivElement>('.side-panel-tab-vertical')
     tabs.forEach(tab => {
@@ -150,7 +208,7 @@ export class SidePanelManager {
     })
   }
 
-  // 隐藏当前面板
+  /** 隐藏当前面板 */
   public hideCurrentPanel(): void {
     if (this.activePanel) {
       const panel = this.panels.get(this.activePanel)
@@ -164,17 +222,22 @@ export class SidePanelManager {
     }
   }
 
-  // 获取面板管理的 dom 容器
+  /** 获取面板管理的 dom 容器 */
   public getContainer(): HTMLDivElement {
     return this.container
   }
 
-  // 获取当前激活面板 id 
+  /** 获取当前激活面板 id */
   public getActivePanel(): string | null {
     return this.activePanel
   }
 
-  // 销毁面板管理器, 释放所有资源
+  /** 获取当前表格形态是否为 透视 模式 */
+  public isPivotMode(): boolean {
+    return this.pivotModeEnabled
+  }
+
+  /** 销毁面板管理器, 释放所有资源 */
   public destroy(): void {
     // 销毁所有面板实例
     this.panels.forEach((panel, id) => {

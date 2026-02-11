@@ -1114,5 +1114,78 @@
   cursor: not-allowed;
 }
 
+/* ======== Pivot Mode 开关样式 ======= */
+.pivot-mode-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  gap: 4px;
+}
+
+.pivot-mode-icon {
+  font-size: 18px;
+}
+
+.pivot-mode-title {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.pivot-switch {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.pivot-switch-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.pivot-switch-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  border-radius: 18px;
+  transition: 0.3s;
+}
+
+.pivot-switch-slider::before {
+  content: '';
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.pivot-switch:checked + .pivot-switch-slider {
+  background-color: #1890ff;
+}
+
+.pivot-switch-input:checked + .pivot-switch-slider::before {
+  transform: translateX(14px);
+}
+
+/* 透视表面板样式 */
+.pivot-panel {
+  padding: 0;
+}
+
+.pivot-panel-header {
+  margin-bottom: 12px;
+}
+
 
 

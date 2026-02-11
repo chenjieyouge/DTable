@@ -62,7 +62,7 @@ export class DOMRenderer {
       if (idx < this.config.frozenColumns) {
         cell.classList.add('cell-frozen')
       } else {
-        cell.classList.remove('cell.frozen')
+        cell.classList.remove('cell-frozen')
       }
 
       // 优先自定义渲染器
@@ -121,8 +121,6 @@ export class DOMRenderer {
       // 处理冻结列
       if (index < this.config.frozenColumns) {
         cell.classList.add('cell-frozen')
-        // cell.style.borderBottom = '1px solid #d3d3d5'
-        // cell.style.boxShadow = '0 1px 0 0 #d3d3d5 inset'
         cell.style.left = `${leftOffset}px`
       }
       // TODO: 拓展更多字段配置
@@ -168,7 +166,7 @@ export class DOMRenderer {
         menuBtn.className = 'col-menu-btn'
         menuBtn.dataset.columnKey = col.key
         menuBtn.innerHTML = `
-          <svg width="16"; height="16"; viewBox="0 0 16 16" fill="currentColor">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <circle cx="8" cy="3" r="1.5"/>
             <circle cx="8" cy="8" r="1.5"/>
             <circle cx="8" cy="13" r="1.5"/>

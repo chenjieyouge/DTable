@@ -59,6 +59,15 @@ export interface DataStrategy {
    * @returns 该列所有的可选值 (去重后)
    */
   getFilterOptions(columnKey: string): string[]
+
+  /**
+   * 获取全量数据 (可选, 仅 client 模式支持)
+   * 用于透视表等需要全量数据的场景
+   * 
+   * 说明: 
+   * 透视表需要用全量数据进行分组聚合, 返回用 filteredData 能响应全局筛选, 因而接口定义为可选
+   */
+  getAllData?(): Record<string, any>[]
   
 }
 

@@ -29,6 +29,7 @@ export class VirtualScroller {
     // 必须传入滚动的距离, 可视区高度
     // 从配置里获取: 行高, 总行数, 缓存行数
     const { rowHeight, totalRows, bufferRows } = this.config
+
     // 将滚动高度 "还原" 为真实的数据高度
     const logicalScrollTop = scrollTop * this.scrollScale
 
