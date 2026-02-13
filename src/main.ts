@@ -6,7 +6,7 @@ import { mockFechPageData } from '@/utils/mockData'
 import type { IUserConfig } from '@/types'
 
 // ##### 场景01: 小数据 -> 内存模式 ##########
-const smallData = Array.from({ length: 1000 }, (_, i) => ({
+const smallData = Array.from({ length: 500000 }, (_, i) => ({
   name: `User ${i}`,
   id: i,
   dept: ['研发部', '产品部', '运营部'][i % 3],

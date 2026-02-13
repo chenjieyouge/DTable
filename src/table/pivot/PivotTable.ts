@@ -6,16 +6,19 @@ import { PivotConfigPanel } from "@/table/pivot/PivotConfigPanel";
 import { PivotTreeNode } from "@/table/pivot/PivotTreeNode";
 
 /**
- * 透视表主类
+ * 透视表主类 (虚拟滚动)
  * 
  * 职责: 
- * 1. 整合数据处理器, 渲染器, 配置面板
+ * 1. 整合数据处理器, 渲染器
  * 2. 管理透视表生命周期 (挂载, 刷新, 销毁)
- * 3. 处理用户交互 (展开/折叠, 配置变更)
+ * 3. 虚拟滚动, 只渲染可视区行, 支持大数据量
+ * 4. 处理用户交互 (展开/折叠, 配置变更)
  * 
- * 使用方式: 
- * const pivot = new PivotTable(pivotConfig, columns, data)
- * pivot.mount(document.getElementById('container'))
+ * 虚拟滚动原理 (与项目中 VirtualViewport 一致)
+ * - scrollSpacer 撑出总高度 = flatRows.lenght * ROW_HEIGHT
+ * - virtualContent 用 translateY 定位到可视区起始位置
+ * - 只创建 [startRow, endRow] 范围内的行 DOM 
+ * - 滚动时增量更新: 新进入的行创建, 离开的行销毁
  */
 export class PivotTable {
   private pivotConfig: IPivotConfig
@@ -31,6 +34,21 @@ export class PivotTable {
 
   private container: HTMLDivElement | null = null 
   private tableArea: HTMLDivElement | null = null 
+
+  // 虚拟滚动相关
+  private scrollContainer: HTMLDivElement | null = null 
+  private scrollSpacer: HTMLDivElement | null = null 
+  private virtualContent: HTMLDivElement | null = null 
+  private headerEl: HTMLDivElement | null = null 
+
+  private visibleRowMap = new Map<number, HTMLDivElement>()
+  private visibleSet = new Set<number>()
+
+  private readonly ROW_HEIGHT = 32 //  暂时写死行高就 32px
+  private readonly BUFFER_ROWS =10 //  暂时写死缓存行 10行
+
+  // 绑定 scroll handler 引用, 方便 destroy 时移除
+  private scrollHandler = () => this.updateVisibleRows()
 
   constructor(pivotConfig: IPivotConfig, columns: IColumn[], data: Record<string, any>[]) {
     this.pivotConfig = pivotConfig
@@ -49,22 +67,59 @@ export class PivotTable {
   /**
    * 挂载到容器
    * 
-   * 布局结构: 
-   * ┌──────────────────────────────────┐
-   * │ pivot-layout                     │
-   * │ ┌──────────────┐ ┌────────────┐ │
-   * │ │ table-area   │ │ config-area│ │
-   * │ │ (表格)       │ │ (配置面板) │ │
-   * │ └──────────────┘ └────────────┘ │
-   * └──────────────────────────────────┘
+   * DOM 结构: 
+   * container
+   *  └─ pivot-table (flex column, 100% height)
+   *      ├─ pivot-header-wrapper (固定表头)
+   *      └─ pivot-scroll-container (flex:1, overflow:auto)
+   *          └─ pivot-scroll-spacer (height = totalRows * ROW_HEIGHT)
+   *              └─ pivot-virtual-content (translateY 定位, 只渲染可视行)
    */
   public mount(container: HTMLDivElement): void {
     this.container = container
     container.innerHTML = ''
     // 直接作为表格区域, 配置面板已又侧边栏 PivotPanel 管理
     this.tableArea = container
-    // 初始化渲染
-    this.refresh()
+
+    this.buildScrollStructure() // 构建虚拟滚动骨架
+    this.refresh() // 初始化渲染
+  }
+
+  /** 构建虚拟滚动 DOM 骨架 */
+  private buildScrollStructure(): void {
+    if (!this.tableArea) return 
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'pivot-table'
+    wrapper.style.height = '100%'
+    wrapper.style.display = 'flex'
+    wrapper.style.flexDirection = 'column'
+
+    // 表头 (固定, 不随滚动)
+    this.headerEl = document.createElement('div')
+    this.headerEl.className = 'pivot-header-wrapper'
+    wrapper.appendChild(this.headerEl)
+
+    // 滚动容器
+    this.scrollContainer = document.createElement('div')
+    this.scrollContainer.className = 'pivot-scroll-container'
+
+    // 撑高度的而 spacer
+    this.scrollSpacer = document.createElement('div')
+    this.scrollSpacer.className = 'pivot-scroll-spacer'
+
+    // 虚拟内容区
+    this.virtualContent = document.createElement('div')
+    this.virtualContent.className = 'pivot-virtual-content'
+
+    // 挂载
+    this.scrollContainer.appendChild(this.scrollSpacer)
+    this.scrollContainer.appendChild(this.virtualContent)
+    wrapper.appendChild(this.scrollContainer)
+    this.tableArea.appendChild(wrapper)
+    
+    // 绑定滚动事件
+    this.scrollContainer.addEventListener('scroll', this.scrollHandler)
   }
 
   /**
@@ -73,7 +128,9 @@ export class PivotTable {
    * 流程: 
    * 1. 构建透视树 (PivotDataProcessor)
    * 2. 展平树结构 (PivotTreeNode.flattenTree)
-   * 3. 渲染表格 (PivotRender)
+   * 3. 渲染表头
+   * 4. 更新滚动高度
+   * 5. 清空可视区缓存 并 重新渲染可视区
    */
   private refresh(): void {
     if (!this.tableArea) return 
@@ -81,57 +138,120 @@ export class PivotTable {
     this.treeRoot = this.processor.buildPivotTree(this.data)
     // 展平
     this.flatRows = PivotTreeNode.flattenTree(this.treeRoot)
-    // 渲染
-    this.renderTable()
+    // 渲染表头, 更新滚动高度, 清空并重新渲染可视区
+    this.renderHeader()
+    this.updateScrollHeight()
+    this.clearVisibleRows()
+    this.updateVisibleRows()
   }
 
-  /** 渲染表格 */
-  private renderTable(): void {
-    if (!this.tableArea) return 
-    this.tableArea.innerHTML = ''
+  /** 渲染表头 */
+  private renderHeader(): void {
+    if (!this.headerEl) return 
 
-    // 表格容器
-    const table = document.createElement('div')
-    table.className = 'pivot-table'
-    // 表头
+    this.headerEl.innerHTML = ''
     const header = this.renderer.renderHeader()
-    table.appendChild(header)
-    // 数据区域
-    const body = document.createElement('div')
-    body.className = 'pivot-table-body'
+    this.headerEl.appendChild(header)
+  }
 
-    for (const flatRow of this.flatRows) {
-      const row = this.renderer.renderRow(flatRow)
-      // 分组行绑定 展开/折叠 事件
-      if (flatRow.type === 'group') {
-        const expandIcon = row.querySelector('.pivot-expand-icon')
-        if (expandIcon) {
-          expandIcon.addEventListener('click', (e) => {
-            e.stopPropagation()
-            this.toggleNode(flatRow.nodeId)
+  /** 更新 spacer 高度 */
+  private updateScrollHeight(): void {
+    if (!this.scrollSpacer) return 
+
+    const totalHeight = this.flatRows.length * this.ROW_HEIGHT // 行数 * 每行高度
+    this.scrollSpacer.style.height = `${totalHeight}px`
+  }
+
+  /** 清空可视区缓存 */
+  private clearVisibleRows(): void {
+    if (this.virtualContent) {
+      this.virtualContent.innerHTML = ''
+    }
+    this.visibleRowMap.clear()
+    this.visibleSet.clear()
+  }
+
+  /** 
+   * 增量更新可视区行 (虚拟滚动)
+   * 
+   * 原理与项目中 VirtualViewport.updateVisibleRowInternal 一致:
+   * 1. 根据 scrollTop 计算 [startRow, endRow]
+   * 2. 新进 可视区的行 -> 创建 DOM 并加入 fragment
+   * 3. 离开 可视区的行 -> 移除 DOM
+   * 4. translateY 定位 virturalContent
+  */
+  private updateVisibleRows(): void {
+    if (!this.scrollContainer || !this.virtualContent) return 
+
+    const scrollTop = this.scrollContainer.scrollTop 
+    const viewportHeight = this.scrollContainer.clientHeight
+    const totalRows = this.flatRows.length
+
+    if (totalRows === 0) return 
+
+    // 计算可视行范围 (带缓冲区)
+    const startRow = Math.max(0, Math.floor(scrollTop / this.ROW_HEIGHT) - this.BUFFER_ROWS)
+    const endRow = Math.min(
+      totalRows - 1,
+      Math.ceil((scrollTop + viewportHeight) / this.ROW_HEIGHT + this.BUFFER_ROWS)
+    )
+    
+    // 定位虚拟内容区
+    this.virtualContent.style.transform = `translateY(${startRow * this.ROW_HEIGHT}px)`
+
+    const newVisibleSet = new Set<number>()
+    const fragement = document.createDocumentFragment()
+
+    for (let i = startRow; i <= endRow; i++) {
+      newVisibleSet.add(i)
+
+      if (!this.visibleSet.has(i)) {
+        const flatRow = this.flatRows[i]
+        if (!flatRow) continue 
+
+        const rowEl = this.renderer.renderRow(flatRow)
+        rowEl.style.height = `${this.ROW_HEIGHT}px`
+        rowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
+
+        // 分组行绑定 展开 / 折叠
+        if (flatRow.type === 'group') {
+          rowEl.style.cursor = 'pointer'
+          const nodeId = flatRow.nodeId
+          rowEl.addEventListener('click', () => {
+            this.toggleNode(nodeId)
           })
         }
-        // 点击整行也可以 展开/折叠
-        row.style.cursor = 'pointer'
-        row.addEventListener('click', () => {
-          this.toggleNode(flatRow.nodeId)
-        })
-      }
 
-      body.appendChild(row)
+        fragement.appendChild(rowEl)
+        this.visibleRowMap.set(i, rowEl)
+      }
     }
 
-    table.appendChild(body)
-    this.tableArea.appendChild(table)
+    // 批量插入
+    if (fragement.children.length > 0) {
+      this.virtualContent.appendChild(fragement)
+    }
+
+    // 清理离开可视区的行
+    for (const idx of this.visibleSet) {
+      if (!newVisibleSet.has(idx)) {
+        const el = this.visibleRowMap.get(idx)
+        el?.remove()
+        this.visibleRowMap.delete(idx)
+      }
+    }
+
+    this.visibleSet = newVisibleSet
   }
+ 
 
   /**
    * 切换节点 展开/折叠
    * 
    * 流程: 
    * 1. 在树中找到目标节点, 切换 isExpanded
-   * 2. 重新展平树结构
-   * 3. 重新渲染表格
+   * 2. 重新展平树结构 (不需要重建树)
+   * 3. 更新滚动高度 + 重新渲染可视区
    */
   private toggleNode(nodeId: string): void {
     if (!this.treeRoot) return 
@@ -140,8 +260,10 @@ export class PivotTable {
     PivotTreeNode.toggleNode(this.treeRoot, nodeId)
     // 重新展平 (无需重新构建树, 只需重新展平即可)
     this.flatRows = PivotTreeNode.flattenTree(this.treeRoot)
-    // 重新渲染
-    this.renderTable()
+    // 更新滚动高度 + 清理可视区缓存 + 重渲染可视区行
+    this.updateScrollHeight()
+    this.clearVisibleRows()
+    this.updateVisibleRows()
   }
 
   /**
@@ -154,7 +276,6 @@ export class PivotTable {
     this.pivotConfig = newConfig
     this.processor = new PivotDataProcessor(newConfig)
     this.renderer = new PivotRenderer(newConfig, this.columns)
-
     // 重新构建透树, 并渲染
     this.refresh()
   }
@@ -183,12 +304,21 @@ export class PivotTable {
 
   /** 销毁 */
   public destroy(): void {
+    this.scrollContainer?.removeEventListener('scroll', this.scrollHandler)
+    this.clearVisibleRows()
+
     if (this.container) {
       this.container.innerHTML = ''
     }
+
     this.treeRoot = null 
     this.flatRows = []
     this.container = null 
     this.tableArea = null 
+
+    this.scrollContainer = null 
+    this.scrollSpacer = null 
+    this.virtualContent = null 
+    this.headerEl = null 
   }
 }

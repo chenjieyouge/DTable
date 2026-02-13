@@ -1187,5 +1187,33 @@
   margin-bottom: 12px;
 }
 
+/* 透视表-虚拟滚动结构 */
+.pivot-scroll-container {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.pivot-scroll-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.pivot-virtual-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  will-change: transform;
+}
+
+.pivot-header-wrapper {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  background-color: #fff;
+  z-index: 1;
+}
+
 
 
