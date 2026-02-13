@@ -4,7 +4,11 @@ import type { IColumn } from "@/types";
 import type { IPivotConfig, AggregationType } from "@/types/pivot";
 
 /**
- * 透视表配置面板: 集成到有侧边栏的面板
+ * 这个面板已继集成到 列管理 中了, 目前已弃用, 但先留着吧, 万一后面想要该方案呢 !!!
+ */
+
+/**
+ * 透视表配置面板: 集成到有侧边栏的面板 
  * 
  * 职责: 
  * 1. 提供分组字段选择 (下拉框, 后续改拖拽)

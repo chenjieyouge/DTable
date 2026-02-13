@@ -13,15 +13,12 @@ import { ColumnManager } from '@/table/core/ColumnManager'
 import { PerformanceMonitor } from '@/utils/PerformanceMonitor'
 import { LayoutManager } from '@/table/layout/LayoutManager'
 import { SidePanelManager } from '@/table/panel/SidePanelManager'
-import type { IPanelConfig } from '@/table/panel/IPanel'
-import { ShellCallbacks } from '@/table/handlers/ShellCallbacks' // 回调
-import { createColumnPanel } from '@/table/panel/panels/ColumnPanel'
+import { ShellCallbacks } from '@/table/handlers/ShellCallbacks' 
 import { 
   actionHandlers, COLUMN_EFFTECT_ACTIONS, DATA_EFFECT_ACTIONS, 
   STATE_ONLY_ACTIONS, 
   STRUCTURAL_EFFECT_ACTIONS } from '@/table/handlers/ActionHandlers'
 import type { ActionContext } from '@/table/handlers/ActionHandlers'
-import { RenderMethod, RenderProtocalValidator, RenderScenario } from '@/table/viewport/RenderProtocol'
 import type { DataStrategy } from '@/table/data/DataStrategy'
 import { TableLifecycle } from '@/table/core/TableLifecycle'
 import { TableQueryCoordinator } from '@/table/core/TableQueryCoordinator'

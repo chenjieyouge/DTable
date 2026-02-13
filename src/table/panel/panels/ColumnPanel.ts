@@ -1,6 +1,7 @@
 import type { IPanel } from "@/table/panel/IPanel";
 import type { TableStore } from "@/table/state/createTableStore";
 import type { IColumn } from "@/types";
+import type { IPivotConfig, AggregationType } from "@/types/pivot";
 
 /**
  * 列管理面板: 管理列的显示, 隐藏, 搜索, 全选, 重置
@@ -16,10 +17,15 @@ export class ColumnPanel implements IPanel {
   private searchInput: HTMLInputElement | null = null 
   private listContainer: HTMLDivElement | null = null 
   private allColumnKeys: string[] = [] // 保存所有列的 key, 包括隐藏的
+  private pivotConfgSection: HTMLDivElement | null = null 
+  private currentGroupKey: string = ''
 
   constructor(
     private store: TableStore,
-    private originalColumns: IColumn[]
+    private originalColumns: IColumn[],
+    private onPivotModeToggle?: (enabled: boolean) => void,
+    private onPivotConfigChange?: (config: any) => void,
+
   ) {
     this.allColumnKeys = originalColumns.map(col => col.key)
     this.container = this.render()
@@ -29,14 +35,46 @@ export class ColumnPanel implements IPanel {
     const container = document.createElement('div')
     container.className = 'column-panel'
 
-    // 面板标题
-    const header = document.createElement('div')
-    header.className = 'column-pannel'
-    header.innerHTML = `
-      <h3 class="column-panel-title">列管理</h3>
-      <p class="column-panel-desc">管理表格列的显示和隐藏</p>
-    `
-    container.appendChild(header)
+    // Pivot Mode 开关
+    const pivotToggleRow = document.createElement('div')
+    pivotToggleRow.className = 'column-panel-pivot-toggle'
+
+    const pivotLable = document.createElement('span')
+    pivotLable.className = 'pivot-mode-title'
+    pivotLable.textContent = 'Pivot'
+    
+    const pivotSwitch = document.createElement('label')
+    pivotSwitch.className = 'pivot-switch'
+
+    const pivotInput = document.createElement('input')
+    pivotInput.className = 'pivot-switch-input'
+    pivotInput.type = 'checkbox'
+
+    const pivotSlider = document.createElement('span')
+    pivotSlider.className = 'pivot-switch-slider'
+
+    pivotSwitch.appendChild(pivotInput)
+    pivotSwitch.appendChild(pivotSlider)
+    pivotToggleRow.appendChild(pivotLable)
+    pivotToggleRow.appendChild(pivotSwitch)
+    container.appendChild(pivotToggleRow)
+
+    // Pivot 配置区, 默认隐藏
+    this.pivotConfgSection = document.createElement('div')
+    this.pivotConfgSection.className = 'column-panel-pivot-config'
+    this.pivotConfgSection.style.display = 'none'
+    container.appendChild(this.pivotConfgSection)
+
+    // 开关事件
+    pivotInput.addEventListener('change', () => {
+      const enabled = pivotInput.checked
+      this.onPivotModeToggle?.(enabled)
+      this.pivotConfgSection!.style.display = enabled ? 'block': 'none'
+      if (enabled) {
+        this.renderPivotConfig()
+      }
+    })
+
 
     // 搜索框 (暂时保留, 后续实现)
     const searchBox = document.createElement('div')
@@ -247,6 +285,143 @@ export class ColumnPanel implements IPanel {
     })
   }
 
+  /** 渲染透视表配置区 (分组字段 + 数值字段) */
+  private renderPivotConfig(): void {
+    if (!this.pivotConfgSection) return 
+    this.pivotConfgSection.innerHTML = ''
+
+    // ======= 行分组字段选择区 ========
+    const groupLabel = document.createElement('div')
+    groupLabel.className = 'pivot-config-label'
+    groupLabel.textContent = '行分组字段'
+    this.pivotConfgSection.appendChild(groupLabel)
+
+    const groupSelect = document.createElement('select')
+    groupSelect.className = 'pivot-select'
+
+    // 分组字段下拉框 (后续更为拖拽的)
+    for (const col of this.originalColumns) {
+      const option = document.createElement('option')
+      option.value = col.key
+      option.textContent = col.title
+      groupSelect.appendChild(option)
+    }
+
+    // 默认选中: 优先用上次选中的, 否则就约定用第二个字段 (俺通常喜欢第一个字段传 id 啦)
+    if (this.currentGroupKey) {
+      groupSelect.value = this.currentGroupKey
+
+    } else if (this.originalColumns.length > 1) {
+      groupSelect.value = this.originalColumns[1].key
+    }
+    this.currentGroupKey = groupSelect.value // 同步
+
+    this.pivotConfgSection.appendChild(groupSelect)
+
+    // 分割线
+    const divider = document.createElement('hr')
+    divider.style.border = 'none'
+    divider.style.borderTop = '1px solid #e5e7eb'
+    divider.style.margin = '12px 0'
+    this.pivotConfgSection.appendChild(divider)
+
+    // ======= 数值字段 选择区 (后续也改为拖拽)
+    const valueLabel = document.createElement('div')
+    valueLabel.className = 'pivot-config-label'
+    valueLabel.textContent = '数值字段'
+    this.pivotConfgSection.appendChild(valueLabel)
+
+    const valueList = document.createElement('div')
+    valueList.className = 'pivot-value-fields-list'
+
+    // 列表展示区域, 一个字段一行; (checkbox, lable, title, aggType); 
+    for (const col of this.originalColumns) {
+      // 若分组字段选了, 数值字段就不能选, 后续拓展为自动类型推断过滤掉
+      if (col.key === groupSelect.value) continue
+
+      const item = document.createElement('div')
+      item.className = 'pivot-value-field-item'
+      item.dataset.colKey = col.key 
+
+      const checkbox = document.createElement('input')
+      checkbox.type = 'checkbox'
+      checkbox.dataset.colKey = col.key
+      // 有 summaryType 的默认勾选
+      checkbox.checked = !!(col.summaryType && col.summaryType !== 'none')
+
+      const label = document.createElement('label')
+      label.style.flex = '1'
+      label.textContent = col.title
+
+      const aggSelect = document.createElement('select')
+      aggSelect.className = 'pivot-agg-select'
+      aggSelect.dataset.colKey = col.key
+
+      const aggTypes = ['sum', 'count', 'avg', 'max', 'min']
+      for (const agg of aggTypes) {
+        const opt = document.createElement('option')
+        opt.value = agg 
+        opt.textContent = agg 
+        aggSelect.appendChild(opt)
+      }
+
+      // 若无配置聚合方式, 则默认为 'sum'
+      aggSelect.value = (col.summaryType && col.summaryType !== 'none')  ? col.summaryType : 'sum'
+      aggSelect.disabled = !checkbox.checked 
+
+      // 监听字段勾选 和 聚合方法 的变化, 并从 DOM 收集 透视配置, 并触发回调
+      checkbox.addEventListener('change', () => {
+        aggSelect.disabled = !checkbox.checked 
+        this.emitPivotConfig(groupSelect, valueList)
+      })
+
+      aggSelect.addEventListener('change', () => {
+        this.emitPivotConfig(groupSelect, valueList)
+      })
+
+      item.appendChild(checkbox)
+      item.appendChild(label)
+      item.appendChild(aggSelect)
+      valueList.appendChild(item)
+    }
+
+    this.pivotConfgSection.appendChild(valueList)
+    // 分组字段变化时, 重新渲染数值列表 + 触发回调
+    groupSelect.addEventListener('change', () => {
+      this.currentGroupKey = groupSelect.value  // 先记住选中值
+      this.renderPivotConfig()
+    })
+    
+    // 首次触发一次回调, 让透视表用默认配置渲染
+    this.emitPivotConfig(groupSelect, valueList)
+  }
+
+  /** 从 DOM 收集透视表配置, 并触发回调 */
+  private emitPivotConfig(groupSelect: HTMLSelectElement, valueList: HTMLDivElement): void {
+    const valueFields: IPivotConfig['valueFields'] = []
+
+    valueList.querySelectorAll('.pivot-value-field-item').forEach(item => {
+      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
+      const aggSelect = item.querySelector('.pivot-agg-select') as HTMLSelectElement
+
+      if (checkbox?.checked) {
+        const key = checkbox.dataset.colKey!
+        const col = this.originalColumns.find(c => c.key === key)
+        valueFields.push({
+          key, 
+          aggregation: aggSelect.value as AggregationType,
+          label: col?.title
+        })
+      }
+    })
+
+    this.onPivotConfigChange?.({
+      enabled: true,
+      rowGroup: groupSelect.value,
+      valueFields
+    } as IPivotConfig)
+  }
+
   public onHide(): void {
     this.unsubscribe?.()
     this.unsubscribe = null 
@@ -260,6 +435,12 @@ export class ColumnPanel implements IPanel {
 }
 
 // 导出工厂函数, 提供给 PanelRegistry 使用
-export const createColumnPanel = (store: TableStore, originalColumns: IColumn[]): IPanel => {
-  return new ColumnPanel(store, originalColumns)
+export const createColumnPanel = (
+  store: TableStore, 
+  originalColumns: IColumn[],
+  onPivotModeToggle?: (enbled: boolean) => void ,
+  onPivotConfigChange?: (config: any) => void
+
+): IPanel => {
+  return new ColumnPanel(store, originalColumns, onPivotModeToggle, onPivotConfigChange)
 }

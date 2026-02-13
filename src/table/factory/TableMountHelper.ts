@@ -10,7 +10,6 @@ import { assertUniqueColumnKeys } from "@/table/model/ColumnModel";
 import { ShellCallbacks } from "@/table/handlers/ShellCallbacks";
 import { createColumnPanel } from "@/table/panel/panels/ColumnPanel";
 import { TableLifecycle } from "@/table/core/TableLifecycle";
-import { createPivotPanel } from "@/table/panel/panels/PivotPanel";
 
 
 /** 表格挂载参数: 容器准备, 布局创建, 面板初始化等 */
@@ -27,7 +26,7 @@ export interface MountParams {
   loadSummaryData: (summaryRow: HTMLDivElement) => void 
   togglePanel: (panelId: string) => void 
   onPivotModeToggle?: (enabled: boolean) => void 
-  onPivotConfigChange?: (config: any) => void
+  onPivotConfigChange?: (config: any) => void 
 }
 
 /** 挂载后的布局: 主布局 + 侧边布局 */
@@ -51,7 +50,9 @@ export class MountHelper {
       widthStorage,
       renderer,
       headerSortBinder,
-      lifecycle
+      lifecycle,
+      onPivotModeToggle,
+      onPivotConfigChange
     } = params
 
     // 检查 store 是否已初始化
@@ -221,17 +222,12 @@ export class MountHelper {
       const panelConfigs: IPanelConfig[] = [
         ...sp.panels,
         {
-          id: 'pivot',
-          title: '透视表',
-          icon: '📊',
-          component: createPivotPanel as any 
-
-        },
-        {
           id: 'columns',
           title: '列管理',
           icon: '⚙️',
-          component: createColumnPanel as any 
+          component: ((store: TableStore, columns: IColumn[]) => {
+            return createColumnPanel(store, columns, onPivotModeToggle, onPivotConfigChange)
+          }) as any 
         }
       ]
 
@@ -246,8 +242,6 @@ export class MountHelper {
         tabsContainer,
         originalColumns,
         (show: boolean) => { layoutManager.toggleSidePanel(show) },
-        onPivotModeToggle,
-        onPivotConfigChange
       )
       // 挂载面板内容日期
       sideArea.appendChild(sidePanelManager.getContainer())

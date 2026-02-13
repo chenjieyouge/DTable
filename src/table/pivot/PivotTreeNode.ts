@@ -60,10 +60,11 @@ export class PivotTreeNode {
   }
 
   /**
-   * 展平属性结构为一维数组
+   * 展平树形结构为一维数组
    * 
-   * 原理: 
-   * 1. 递归遍历树节点
+   * 要用迭代模式, 用栈模拟递归, 避免大数据量时 result.push(...array) 调用栈爆炸
+   * 
+   * 1. 用栈模拟递归, 用数组模拟栈, array.pop() 右侧为栈顶, 子节点逆序压栈
    * 2. 只展平已展开的节点
    * 3. 返回一维数组, 便于虚拟滚动渲染
    * 
@@ -81,23 +82,32 @@ export class PivotTreeNode {
   static flattenTree(node: IPivotTreeNode): IPivotFlatRow[] {
     const result: IPivotFlatRow[] = []
 
-    // 跳过根节点 (level = -1)
-    if (node.level >= 0) {
-      result.push({
-        nodeId: node.id,
-        type: node.type,
-        level: node.level,
-        data: node.aggregatedData,
-        isExpanded: node.isExpanded
-      })
-    }
-    // 若节点展开, 则递归展平子节点
-    if (node.isExpanded && node.children.length > 0) {
-      for (const child of node.children) {
-        result.push(...this.flattenTree(child)) // 递归调用
+    // 用栈模拟递归, 避免大数据量时 push(...) 栈溢出
+    const stack: IPivotTreeNode[] = [node]
+
+    while (stack.length > 0) {
+      const current = stack.pop()!  // 数组模拟栈, 左侧栈底, 右侧栈顶
+
+      // 跳过根节点 (level = -1)
+      if (current.level >= 0) {
+        result.push({
+          nodeId: current.id,
+          type: current.type,
+          level: current.level,
+          data: current.aggregatedData,
+          isExpanded: current.isExpanded
+        })
+      }
+
+      // 若节点展开, 将子节点逆序压栈 (保证弹出顺序正确)
+      if (current.isExpanded && current.children.length > 0) {
+        // result: [a, b, c, d]; 期望 从左到右 a, b, c, d ; 因为 array.pop() 方法是处理最右
+        // 因此可以逆序压栈, 即 [d, c, b, a] => pop => a, b, c, d 就是为了迁就数组而已啦
+        for (let i = current.children.length - 1; i >= 0; i--) {
+          stack.push(current.children[i]) // 逆序压栈
+        }
       }
     }
-    
     return result
   }
 
