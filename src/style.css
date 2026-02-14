@@ -1028,6 +1028,15 @@
   margin-bottom: 8px;
 }
 
+/* 透视表吸顶分组行 */
+.pivot-sticky-group {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: #fef3c7;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
 /* 分组字段下拉框 */
 .pivot-select {
   width: 100%;

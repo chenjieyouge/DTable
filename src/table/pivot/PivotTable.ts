@@ -40,6 +40,7 @@ export class PivotTable {
   private scrollSpacer: HTMLDivElement | null = null 
   private virtualContent: HTMLDivElement | null = null 
   private headerEl: HTMLDivElement | null = null 
+  private stickyGroupEl: HTMLDivElement | null = null 
 
   private visibleRowMap = new Map<number, HTMLDivElement>()
   private visibleSet = new Set<number>()
@@ -104,6 +105,11 @@ export class PivotTable {
     this.scrollContainer = document.createElement('div')
     this.scrollContainer.className = 'pivot-scroll-container'
 
+    // 吸顶分组行, 介于 scrollContiner 和 scrollSpacer 之间, 不有 transform 影响
+    this.stickyGroupEl = document.createElement('div')
+    this.stickyGroupEl.className = 'pivot-sticky-group'
+    this.stickyGroupEl.style.display = 'none'
+
     // 撑高度的而 spacer
     this.scrollSpacer = document.createElement('div')
     this.scrollSpacer.className = 'pivot-scroll-spacer'
@@ -113,6 +119,7 @@ export class PivotTable {
     this.virtualContent.className = 'pivot-virtual-content'
 
     // 挂载
+    this.scrollContainer.appendChild(this.stickyGroupEl)
     this.scrollContainer.appendChild(this.scrollSpacer)
     this.scrollContainer.appendChild(this.virtualContent)
     wrapper.appendChild(this.scrollContainer)
@@ -167,8 +174,13 @@ export class PivotTable {
     if (this.virtualContent) {
       this.virtualContent.innerHTML = ''
     }
+
     this.visibleRowMap.clear()
     this.visibleSet.clear()
+
+    if (this.stickyGroupEl) {
+      this.stickyGroupEl.style.display = 'none'
+    }
   }
 
   /** 
@@ -242,6 +254,54 @@ export class PivotTable {
     }
 
     this.visibleSet = newVisibleSet
+    // 更新吸顶分组行
+    this.updateStickyGroup(startRow)
+  }
+
+  /**
+   * 更新吸顶分组行
+   * 
+   * 原理: 
+   * 从当前可视区, 第一行往前找最近的 group 行
+   * - 若该 group 行已经滚出视口, 则在顶部显示一个固定的副本
+   * - 若该 group 行本身还在视口, 则隐藏吸顶行, 避免重复
+   */
+  private updateStickyGroup(startRow: number): void {
+    if (!this.stickyGroupEl) return 
+
+    // 从 startRow 往前找最近的 group 行 
+    let groupRow: IPivotFlatRow | null = null 
+    let groupRowIndex = -1
+
+    for (let i = startRow; i >= 0; i--) {
+      if (this.flatRows[i]?.type === 'group') {
+        groupRow = this.flatRows[i]
+        groupRowIndex = i
+        break
+      }
+    }
+
+    // 若没有找到分组行 或者 分组行就是当前第一行 (视口内, 则隐藏)
+    if (!groupRow || groupRowIndex >= startRow) {
+      this.stickyGroupEl.style.display = 'none'
+      return 
+    }
+
+    // 分组行已滚出视口, 显示吸顶副本
+    this.stickyGroupEl.innerHTML = ''
+    const rowEl = this.renderer.renderRow(groupRow)
+    rowEl.style.height = `${this.ROW_HEIGHT}px`
+    rowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
+
+    // 吸顶行也支持点击 展开 / 折叠, 复用 toggleNode 逻辑
+    rowEl.style.cursor = 'pointer'
+    const nodeId = groupRow.nodeId
+    rowEl.addEventListener('click', () => {
+      this.toggleNode(nodeId)
+    })
+
+    this.stickyGroupEl.appendChild(rowEl)
+    this.stickyGroupEl.style.display = 'block'
   }
  
 
@@ -319,6 +379,7 @@ export class PivotTable {
     this.scrollContainer = null 
     this.scrollSpacer = null 
     this.virtualContent = null 
-    this.headerEl = null 
+    this.headerEl = null
+    this.stickyGroupEl = null  
   }
 }
