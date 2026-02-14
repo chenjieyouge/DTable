@@ -290,7 +290,7 @@ export class ColumnPanel implements IPanel {
     if (!this.pivotConfgSection) return 
     this.pivotConfgSection.innerHTML = ''
 
-    // ======= 行分组字段选择区 ========
+    // ======= 行分组字段: 只显示离散型 (string / date) ========
     const groupLabel = document.createElement('div')
     groupLabel.className = 'pivot-config-label'
     groupLabel.textContent = '行分组字段'
@@ -299,23 +299,27 @@ export class ColumnPanel implements IPanel {
     const groupSelect = document.createElement('select')
     groupSelect.className = 'pivot-select'
 
-    // 分组字段下拉框 (后续更为拖拽的)
-    for (const col of this.originalColumns) {
+    // 分组字段下拉框: 只显示离散型
+    const groupColumns = this.originalColumns.filter(
+      col => !col.dataType || col.dataType === 'string' || col.dataType === 'date'
+    )
+
+    for (const col of groupColumns) {
       const option = document.createElement('option')
       option.value = col.key
       option.textContent = col.title
       groupSelect.appendChild(option)
     }
 
-    // 默认选中: 优先用上次选中的, 否则就约定用第二个字段 (俺通常喜欢第一个字段传 id 啦)
-    if (this.currentGroupKey) {
+    // 默认选中: 优先用上次选中的, 否则用第一个离散型字段
+    if (this.currentGroupKey && groupColumns.some(c => c.key === this.currentGroupKey)) {
       groupSelect.value = this.currentGroupKey
 
     } else if (this.originalColumns.length > 1) {
-      groupSelect.value = this.originalColumns[1].key
+      groupSelect.value = groupColumns[0].key
     }
     this.currentGroupKey = groupSelect.value // 同步
-
+    // 挂载
     this.pivotConfgSection.appendChild(groupSelect)
 
     // 分割线
@@ -334,11 +338,13 @@ export class ColumnPanel implements IPanel {
     const valueList = document.createElement('div')
     valueList.className = 'pivot-value-fields-list'
 
-    // 列表展示区域, 一个字段一行; (checkbox, lable, title, aggType); 
-    for (const col of this.originalColumns) {
-      // 若分组字段选了, 数值字段就不能选, 后续拓展为自动类型推断过滤掉
-      if (col.key === groupSelect.value) continue
+    // 列表展示区域, 只显示数值型字段, 且 排除已宣威分组的字段
+    // 一个字段一行; (checkbox, lable, title, aggType); 
+    const valueColumns = this.originalColumns.filter(
+      col => col.dataType === 'number' && col.key !== groupSelect.value
+    )
 
+    for (const col of valueColumns) {
       const item = document.createElement('div')
       item.className = 'pivot-value-field-item'
       item.dataset.colKey = col.key 
@@ -346,8 +352,8 @@ export class ColumnPanel implements IPanel {
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox'
       checkbox.dataset.colKey = col.key
-      // 有 summaryType 的默认勾选
-      checkbox.checked = !!(col.summaryType && col.summaryType !== 'none')
+      // 数值字段默认全部勾选, 因为已过滤为 number 类型了
+      checkbox.checked = true
 
       const label = document.createElement('label')
       label.style.flex = '1'
@@ -434,7 +440,12 @@ export class ColumnPanel implements IPanel {
 
 }
 
-// 导出工厂函数, 提供给 PanelRegistry 使用
+/** 导出工厂函数, 提供给 PanelRegistry 使用 
+ * 
+ * - 工厂函数就是一个 "造东西的函数", 它不用 `new` 关键字暴露给外部, 
+ * - 而选择用 newColumnPanel(...) 返回一个 IPanel 接口
+ * - 好处: 外部不需要知道具体类名, 只需要知道 "给我一个面板"
+*/
 export const createColumnPanel = (
   store: TableStore, 
   originalColumns: IColumn[],

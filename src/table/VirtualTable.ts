@@ -28,6 +28,7 @@ import { initServerMode, initClientMode } from '@/table/factory/TableInitializer
 import { MountHelper } from '@/table/factory/TableMountHelper'
 import type { IPivotConfig } from '@/types/pivot'
 import { PivotTable } from '@/table/pivot/PivotTable'
+import { inferColumnTypes } from '@/utils/inferColumnType'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -118,8 +119,15 @@ export class VirtualTable {
         // ==== Client 模式初始化 ====
         const result = await initClientMode(this.config, this.originalColumns)
         this.initComponents(result)
+
+        // 自动推断列类型 (用实际数据采样, 凡未指定 dataType 的列均会被推断)
+        const allData = this.dataStrategy.getAllData?.() || []
+        this.originalColumns = inferColumnTypes(this.originalColumns, allData)
+        this.config.columns = this.originalColumns
         this.config.totalRows = this.dataStrategy.getTotalRows()
+
         this.mount()
+        
         this.shell.setSortIndicator(this.store.getState().data.sort)
         this.config.onModeChange?.(this.mode)
         this.subscribeStore()
@@ -229,6 +237,7 @@ export class VirtualTable {
           }
         }
       },
+      // 定义回调 -> 传给 MountHelper.mount(params) 的 params 对象中
       onPivotModeToggle: (enabled: boolean) => {
         this.togglePivotMode(enabled)
       },

@@ -10,7 +10,7 @@ export interface IColumnManagerConfig {
 }
 
 export class ColumnManagerView {
-  private panelEl: HTMLDivElement | null = null 
+  private panelEl: HTMLDivElement | null = null  
 
   // 渲染表格右侧列管理面板
   public render(config: IColumnManagerConfig, container: HTMLDivElement): HTMLDivElement {
@@ -34,14 +34,6 @@ export class ColumnManagerView {
     // 创建面板容器
     this.panelEl = document.createElement('div')
     this.panelEl.className = 'column-manager-panel'
-    
-    // 固定列管理面板在表格右侧位置, 用 fixed 定位, js 精准计算
-    // const rect = container.getBoundingClientRect()
-    // const panelWidth = 280
-    
-    // this.panelEl.style.top = `${rect.top}px`
-    // this.panelEl.style.left = `${rect.right - panelWidth}px`
-    // this.panelEl.style.height = `${rect.height}px`
 
     // 面板标题
     const header = document.createElement('div')

@@ -51,7 +51,7 @@ export class MountHelper {
       renderer,
       headerSortBinder,
       lifecycle,
-      onPivotModeToggle,
+      onPivotModeToggle, // 接收从 VirtualTable.ts 中传过来的回调函数
       onPivotConfigChange
     } = params
 
@@ -139,7 +139,7 @@ export class MountHelper {
     widthStorage: ColumnWidthStorage | null,
     store: TableStore,
     lifecycle: TableLifecycle,
-    onPivotModeToggle?: (enabled: boolean) => void,
+    onPivotModeToggle?: (enabled: boolean) => void, // 闭包: 外函数的变量 (局部)
     onPivotConfigChange?: (config: any) => void,
 
   ): MountResult {
@@ -226,6 +226,8 @@ export class MountHelper {
           title: '列管理',
           icon: '⚙️',
           component: ((store: TableStore, columns: IColumn[]) => {
+            // 这里 onPivotModeToggle 是外层 mountWithSidePanel 函数变量, 但已执行完
+            // 但这里点击 "列管理", 需要去引用外层 onPivotModeToggle 变量 这样就形成了闭包捕获
             return createColumnPanel(store, columns, onPivotModeToggle, onPivotConfigChange)
           }) as any 
         }

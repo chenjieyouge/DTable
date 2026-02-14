@@ -47,10 +47,15 @@ export interface IPageInfo {
   currentPage: number
 }
 
+// 列数据类型 (用于透视表智能判断: 离散型用于分组, 数值型用于聚合)
+export type ColumnDataType = 'string' | 'number' | 'date' | 'boolean'
+
+
 // 列字段配置, 文档约定必传哦!
 export interface IColumn {
   key: string
   title: string
+  dataType?: ColumnDataType // 不传则自动采样数据进行推断
   width?: number  // 宽度不传则自动计算
   minWidth?: number // 最小没款, 默认 100px
   flex?: number // flex 布局权重

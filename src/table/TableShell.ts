@@ -10,7 +10,6 @@ import { ColumnDragBinder } from "@/table/interaction/ColumnDragBinder";
 import { ColumnFilterBinder } from "@/table/interaction/ColumnFilterBinder";
 import { TableResizeBinder } from "@/table/interaction/TableResizeBinder";
 import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
-import { ColumnManagerBinder } from "@/table/interaction/ColumnManagerBinder";
 
 
 // 全局弹窗管理器, 弹窗之间互斥出现
@@ -32,7 +31,6 @@ class PopupManager {
     }
   }
 }
-
 
 export interface ITableShell {
   scrollContainer: HTMLDivElement
@@ -95,14 +93,6 @@ export function mountTableShell(params: {
     onTableResizeEnd,
     getCurrentSort,
     onMenuSort,
-    // 列管理相关
-    getAllColumns,
-    getHiddenKeys,
-    onColumnToggle,
-    onShowAllColumns,
-    onHideAllColumns,
-    onResetColumns,
-    onToggleSidePanel,
 
    } = params
 
@@ -168,30 +158,6 @@ export function mountTableShell(params: {
     containerEl.appendChild(statusBar) // 注意是挂载到 containerEl 哦!
   }
 
-  // 创建表格列管理按钮, 横向3个点, toto: 小齿轮(右上角)
-  const columnManagerBtn = document.createElement('button')
-  columnManagerBtn.className = 'column-manager-trigger'
-  columnManagerBtn.innerHTML = `
-   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M8 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM8 15a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" transform="rotate(90 8 8)"/>
-  </svg>
-  `
-  columnManagerBtn.title = '列管理'
-
-  // 创建表格宽度调整按钮
-//   const resizeBtn = document.createElement('button')
-//   resizeBtn.className = 'table-resize-btn'
-//   resizeBtn.innerHTML = `
-//   <svg width="16" height="16" viewBox="0 0 16 16">
-//     <path d="M10 2v12M6 2v12" stroke="currentColor" stroke-width="2"/>
-//   </svg>
-// `
-// resizeBtn.title = '拖拽调整表格宽度'
-// portalContainer.appendChild(resizeBtn)
-
-
-  // 挂载到 portalContainer 就不会跟随滚动了, 就固定住啦!
-  portalContainer.appendChild(columnManagerBtn)
   // 2. 表格包裹层 wrapper -> header
   const tableWrapper = createTableWrapper(config)
   const headerRow = renderer.createHeaderRow()
@@ -263,33 +229,6 @@ export function mountTableShell(params: {
       layoutContainer,
       onResizeEnd: onTableResizeEnd,
     })
-  }
-
-  // 绑定列管理面板, 判断是否启用了右侧面板
-  const columnManagerBinder = new ColumnManagerBinder()
-  if (getAllColumns && getHiddenKeys && onColumnToggle) {
-    // 检查是否启用了右侧面板
-    const hasSidePanel = config.sidePanel?.enabled
-    if (hasSidePanel) {
-      // 若启用了右侧面板, 则点击按钮打开列管理面板
-      columnManagerBtn.addEventListener('click', (e: MouseEvent) => {
-        e.stopPropagation()
-        // 通过回调函数来打开右侧面板
-        onToggleSidePanel?.('columns')
-      })
-    } else {
-      // 未开启右侧面板, 则兼容原来的弹窗样式
-      columnManagerBinder.bind({
-        container: portalContainer,  // 传个相对定位不动的容器去参考位置
-        triggerBtn: columnManagerBtn,
-        getAllColumns,
-        getHiddenKeys,
-        onToggle: onColumnToggle,
-        onShowAll: onShowAllColumns || (() => {}),
-        onHideAll: onHideAllColumns || (() => {}),
-        onReset: onResetColumns || (() => {})
-      })
-    }
   }
 
   // toto: 更多列功能添加
@@ -382,7 +321,6 @@ export function mountTableShell(params: {
       filterBinder.unbind()  // 释放列值筛选
       tableResizeBinder.unbind() // 释放整表宽度拖拽事件
       menuBinder.unbind() // 解绑列菜单
-      columnManagerBinder.unbind() // 解绑整表列管理面板
     }
   }
 }
