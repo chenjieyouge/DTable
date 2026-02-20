@@ -10,10 +10,13 @@
 // 聚合类型
 export type AggregationType = 'sum' | 'count' | 'avg' | 'max' | 'min'
 
+// 最大分组层级限制 (业务经验: 最多5层, 3层最佳)
+export const MAX_GROUP_LEVELS = 5
+
 // 透视表配置
 export interface IPivotConfig {
   enabled: boolean // 是否启用透视模式
-  rowGroup: string // 行分组字段 key (MVP 先只支持单层)
+  rowGroups: string[] // 行分组字段数字, 顺序决定层级 (最多 5 层)
   valueFields: {  // 数值字段配置
     key: string
     aggregation: AggregationType
@@ -44,6 +47,25 @@ export interface IPivotFlatRow {
   level: number                     // 层级, 用于计算缩进
   data: Record<string, any>           // 显示数据, 分组节点的聚合 or 数据节点的原始值
   isExpanded?: boolean                  // 是否展开 (仅分组行有效)
+}
+
+
+/**
+ * 向后兼容: 将旧的字段配置转为数组格式
+ * 
+ * 用法: 
+ * const config = normalizeRowGroups({ rowGroup: 'region', ...})
+ * 返回: { rowGroup: ['regin'], ....}
+ */
+export function normalizeRowGroups(config: any): IPivotConfig {
+  // 若是旧格式, 单个字段, 则转为新格式的数组字段
+  if ('rowGroup' in config && typeof config.rowGroup === 'string') {
+    return {
+      ...config,
+      rowGroups: [config.rowGroup]
+    }
+  }
+  return config
 }
 
 

@@ -31,11 +31,16 @@ export class PivotRenderer {
     const header = document.createElement('div')
     header.className = 'table-row pivot-header'
 
-    // 第一列: 分组字段
-    const groupCol = this.columns.find(c => c.key === this.config.rowGroup)
+    // 第一列: 分组字段 (多个时用 "/" 连接)
+    const rowGroups = this.config.rowGroups
+    const groupLabels = rowGroups.map(key => {
+      const col = this.columns.find(c => c.key === key)
+      return col?.title || key 
+    })
+
     const firstCell = document.createElement('div')
     firstCell.className = 'table-cell pivot-header-cell'
-    firstCell.textContent = groupCol?.title || this.config.rowGroup
+    firstCell.textContent = groupLabels.join('/') // 如: "大区/城市"
     firstCell.style.fontWeight = 'bold'
     header.appendChild(firstCell)
 
@@ -44,7 +49,7 @@ export class PivotRenderer {
       const col = this.columns.find(c => c.key === valueField.key)
       const cell = document.createElement('div')
       cell.className = 'table-cell pivot-header-cell'
-      // 显示: 字段名(聚合方式), 如 "销售额(sum"
+      // 显示: 字段名(聚合方式), 如 "销售额(sum)"
       const label = valueField.label || col?.title || valueField.key
       cell.textContent = `${label}(${valueField.aggregation})`
       cell.style.fontWeight = 'bold'
@@ -99,7 +104,8 @@ export class PivotRenderer {
     // 分组值 + 行数
     const groupLabel = document.createElement('span')
     groupLabel.className = 'pivot-group-label'
-    const groupValue = flatRow.data[this.config.rowGroup] ?? '(空)'
+    const currentGroupKey = this.config.rowGroups[flatRow.level] || this.config.rowGroups[0]
+    const groupValue = flatRow.data[currentGroupKey] ?? '(空)'
     groupLabel.textContent = `${groupValue}`
     firstCell.appendChild(groupLabel)
 
@@ -140,7 +146,9 @@ export class PivotRenderer {
     const firstCell = document.createElement('div')
     firstCell.className = 'table-cell'
     firstCell.style.paddingLeft = `${indent + 28}px` // 20px 图标 + 8px padding
-    firstCell.textContent = String(flatRow.data[this.config.rowGroup] ?? '')
+    const firstKey = Object.keys(flatRow.data)[0]
+    firstCell.textContent = String(flatRow.data[firstKey] ?? '')
+
     row.appendChild(firstCell)
 
     // 后续列: 数值字段值

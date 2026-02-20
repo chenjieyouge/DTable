@@ -2,18 +2,17 @@ import type { IPivotConfig, IPivotTreeNode, AggregationType } from "@/types/pivo
 import { PivotTreeNode } from "@/table/pivot/PivotTreeNode";
 
 /**
- * 透视表数据处理器
+ * 透视表数据处理器 (支持多层递归分组)
  * 
  * 职责: 
  * 1. 将平铺数据 转为 树形结构
- * 2. 按分组字段 进行 分组 group 
- * 3. 计算聚合值 (sum, avg, count, max 等)
+ * 2. 按 rowGrops 数组递归分组 (支持 1~5 层)
+ * 3. 计算聚合值 (sum, avg, count, max min)
  * 
  * 核心算法: 
- * 1. 遍历原始数据, 按分组字段提取唯一值
- * 2. 对每个唯一值, 过滤出对应的子数据
- * 3. 计算聚合值
- * 4. 构建树节点
+ * - 递归深度 = rowGroups.length, 业务限定最多 5层, 不会栈溢出
+ * - 时间复杂度: O(nxm),  n 为数据行数, m 为分组层数
+ * - 50w 行 x 3 层 = 150w 次 Map 操作, 约占用 200-500ms
  * 
  * 时间复杂度: O(n), n 为数据行数
  */
@@ -25,22 +24,15 @@ export class PivotDataProcessor {
   }
 
   /**
-   * 构建透视树 (核心方法)
-   * 
-   * 原理: 
-   * 1. 按分组字段分组数据
-   * 2. 为每个分组 创建 分组节点
-   * 3. 为每个分组的数据行, 创建数据节点
+   * 构建透视树 (入口方法)
    * 
    * @param data 原始数据数组
    * @returns 树形结构的根节点
    */
   public buildPivotTree(data: Record<string, any>[]): IPivotTreeNode {
-    // 分组 key 
-    const groupKey = this.config.rowGroup
-    // 按照分组字段分组, grops: Map<any, Record<string, any>[]
-    const groups = this.groupByField(data, groupKey)
-    // 创建根节点 (虚拟节点, 不展示)
+    const rowGroups = this.config.rowGroups
+
+    // 创建根节点 (虚拟节点, level = -1, 不展示)
     const root: IPivotTreeNode = {
       id: 'root',
       type: 'group',
@@ -51,18 +43,77 @@ export class PivotDataProcessor {
       isExpanded: true,  // 根节点始终展开
       rowCount: data.length
     }
-    // 为每个分组, 创建子节点
-    let index = 0
-    for (const [groupValue, rows] of groups.entries()) {
-      const groupNode = this.createGroupNode(groupValue, rows, index++)
-      root.children.push(groupNode)
-    }
-    
+
+    // 从第 0 层开始递归构建子树
+    root.children = this.buildSubTree(data, rowGroups, 0, 'root')
+
     return root 
+  }
+
+  /**
+   * 递归构建子树 (核心递归方法)
+   * 
+   * 原理: 
+   * 1. 若 level >= rowGroups.length, 达到叶子层, 创建数据节点
+   * 2. 否则按 rowGroups[level] 分组
+   * 3. 为每个分组值创建分组节点, 递归构建下一层
+   * 
+   * @param data 当前层数据
+   * @param rowGroups 分组字段数组
+   * @param level 当前层级 (0 为第一层)
+   * @param parentId 父节点 id, 用于生成唯一 id 
+   * @returns 当前层的所有节点
+   */
+  private buildSubTree(
+    data: Record<string, any>[],
+    rowGroups: string[],
+    level: number,
+    parentId: string,
+
+  ): IPivotTreeNode[] {
+    // 递归终止条件: 达到叶子层, 创建数据节点
+    if (level >= rowGroups.length) {
+      return data.map((row, i) => 
+        PivotTreeNode.createDataNode(`${parentId}-data-${i}`, level, row)
+      )
+    }
+
+    // 当前层的分组字段
+    const groupKey = rowGroups[level]
+    // 按当前字段分组
+    const groups = this.groupByField(data, groupKey)
+
+    // 为每个分组值创建分组节点
+    const nodes: IPivotTreeNode[] = []
+    let index = 0
+
+    for (const [groupValue, rows] of groups.entries()) {
+      // 计算当前分组的聚合数据
+      const aggregatedData = this.computeAggregatedData(rows, groupKey, groupValue)
+      // 创建分组节点
+      const nodeId = `${parentId}-g${level}-${index}`
+      const groupNode = PivotTreeNode.createGroupNode(
+        nodeId,
+        level,
+        groupValue,
+        aggregatedData,
+        rows.length
+      )
+      // 递归下一层子树
+      groupNode.children = this.buildSubTree(rows, rowGroups, level + 1, nodeId)
+
+      nodes.push(groupNode)
+      index++
+    }
+    return nodes
   }
  
   /**
    * 按字段分组
+   * 
+   * @param data 数据数组
+   * @param fieldKey 分组字段 key
+   * @returns Map<分组值, 该分组的所有行>
    * 
    * 原理: 使用 Map 结构, key 作为分组值, value 为该分组的所有行
    * 
@@ -70,7 +121,11 @@ export class PivotDataProcessor {
    * 输入: [{ country: 'ABC', sales: 100 }, { country: 'ABC', sales: 200 }]
    * 输出: Map { 'ABC' => [ { country: 'ABC', sales: 100 }, { country: 'ABC', sales: 200 }] }
    */
-  private groupByField(data: Record<string, any>[], fieldKey: string): Map<any, Record<string, any>[]> {
+  private groupByField(
+    data: Record<string, any>[], 
+    fieldKey: string
+
+  ): Map<any, Record<string, any>[]> {
     // 按 分组 key 重组织行数据
     const groups = new Map<any, Record<string, any>[]>()
 
@@ -85,21 +140,23 @@ export class PivotDataProcessor {
     return groups 
   }
 
-  /** 创建分组节点
+  /**
+   * 计算聚合数据
    * 
-   * 原理: 
-   * 1. 计算聚合数据 (sum, count, avg 等)
-   * 2. 创建分组节点
-   * 3. 为每个原始行创建数据节点, 作为子节点
+   * @param rows 当前分组的所有行
+   * @param groupKey 当澳门分组字段
+   * @param groupValue 当前分组值
+   * @returns 聚合后的数据对象
    */
-  private createGroupNode(
-    groupValue: any,
+  private computeAggregatedData(
     rows: Record<string, any>[],
-    index: number
-  ): IPivotTreeNode {
-    // 计算聚合数据
+    groupKey: string,
+    groupValue: any,
+
+  ): Record<string, any> {
+    // 分组字段值
     const aggregatedData: Record<string, any> = {
-      [this.config.rowGroup]: groupValue // 分组字段值
+      [groupKey]: groupValue  
     }
 
     // 计算每个数值字段的聚合值
@@ -108,26 +165,24 @@ export class PivotDataProcessor {
       aggregatedData[valueField.key] = aggValue
     }
 
-    // 创建分组节点
-    const groupNode = PivotTreeNode.createGroupNode(
-      `group-${index}`,
-      0, // MVP 先实现一层, level 固定为 0
-      groupValue,
-      aggregatedData,
-      rows.length
-    )
-
-    // 创建子数据节点
-    // 注意: 这里直接创建所有子节点, 展开时才渲染 (懒渲染)
-    groupNode.children = rows.map((row, i) => 
-      PivotTreeNode.createDataNode(`data-${index}-${i}`, 1, row)
-    )
-
-    return groupNode
+    return aggregatedData
   }
 
-  /** 聚合计算, 目前支持 sum, count, avg, max, min */
-  private aggregate(rows: Record<string, any>[], fieldKey: string, aggregation: AggregationType): any {
+
+  /** 聚合计算,
+   * 
+   * @param rows 数据行数据
+   * @param fieldKey 字段 key 
+   * @param aggregation 目前支持 sum, count, avg, max, min 
+   * @returns 聚合结果
+   * */
+  private aggregate(
+    rows: Record<string, any>[], 
+    fieldKey: string, 
+    aggregation: AggregationType
+
+  ): any {
+
     // count 直接返回行数
     if (aggregation === 'count') {
       return rows.length

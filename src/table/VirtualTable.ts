@@ -619,7 +619,7 @@ export class VirtualTable {
       // 创建默认透视配置
       const defautConfig: IPivotConfig = {
         enabled: true,
-        rowGroup: this.config.columns[1]?.key || '', // 约定第二个字段作为默认分组字段
+        rowGroups: [this.config.columns[1]?.key || this.config.columns[0]?.key || ''],
         valueFields: this.config.columns
           .filter(col => col.summaryType && col.summaryType !== 'none')
           .map(col => ({
