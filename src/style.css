@@ -1037,22 +1037,69 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-/* 分组字段下拉框 */
-.pivot-select {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 14px;
-  background-color: #fff;
-  outline: none;
-  transition: border-color 0.2s;
+/* 透视表分子字段容器 */
+.pivot-group-fields-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
 }
 
-.pivot-select:focus {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+/* 分组字段项 */
+.pivot-group-field-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  cursor: default;
+  transition: all 0.2s;
 }
+
+.pivot-group-field-item:hover {
+  background-color: #f9fafb;
+}
+
+/* 拖拽中的样式 */
+.pivot-group-field-item.dragging {
+  opacity: 0.5;
+  background-color: #e0f2fe;
+  border-color: #3b82f6;
+}
+
+/* 拖拽手柄 */
+.pivot-drag-handle {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 插入提示线 (蓝色) */
+.drop-indicator {
+  height: 2px;
+  background-color: #38b2f6;
+  margin: 2px 0;
+  border-radius: 1px;
+}
+
+/* 勾选框样式 */
+.pivot-group-field-item input[type="checkbox"] {
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.pivot-group-field-item input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 标签样式 */
+.pivot-group-field-item label {
+  margin: 0;
+  user-select: none;
+}
+
+
 
 /* 数值字段列表 */
 .pivot-value-fields-list {

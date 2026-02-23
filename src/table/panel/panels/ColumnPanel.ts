@@ -289,13 +289,13 @@ export class ColumnPanel implements IPanel {
   private renderPivotConfig(): void {
     if (!this.pivotConfgSection) return 
     // 渲染前先保存当前选中的分组字段 (避免新渲染后丢失)
-    const existingSelects = Array.from(
-      this.pivotConfgSection.querySelectorAll('select.pivot-select[data-level]') || []
-    ) as HTMLSelectElement[]
+    // const existingSelects = Array.from(
+    //   this.pivotConfgSection.querySelectorAll('select.pivot-select[data-level]') || []
+    // ) as HTMLSelectElement[]
 
-    if (existingSelects.length > 0) {
-      this.currentGroupKeys = existingSelects.map(s => s.value)
-    }
+    // if (existingSelects.length > 0) {
+    //   this.currentGroupKeys = existingSelects.map(s => s.value)
+    // }
 
     this.pivotConfgSection.innerHTML = ''
 
@@ -305,94 +305,97 @@ export class ColumnPanel implements IPanel {
     groupLabel.textContent = '行分组字段(最多3层)'
     this.pivotConfgSection.appendChild(groupLabel)
 
-    // const groupSelect = document.createElement('select')
-    // groupSelect.className = 'pivot-select'
-
-    // 离散型字段列表
+    // 离散型字段列表 (可分组的字段)
     const groupColumns = this.originalColumns.filter(
       col => !col.dataType || col.dataType === 'string' || col.dataType === 'date'
     )
 
-    // 创建 3 个下拉框 (简化版, 后续改为拖拽)
-    const MAX_LEVELS = 3
+    // 分组字段容器
+    const groupFieldsContainer = document.createElement('div')
+    groupFieldsContainer.className = 'pivot-group-fields-container'
+    this.pivotConfgSection.appendChild(groupFieldsContainer)
+
+     // 业务约定当前, 最大层级为 3层, 后续加钱可改
+    const MAX_GROUP_LEVELS = 3
     const groupSelects: HTMLSelectElement[] = []
 
-    for (let i = 0; i < MAX_LEVELS; i++) {
-      const selectWrapper = document.createElement('div')
-      selectWrapper.style.marginBottom = '8px'
+    // 渲染每个可分组字段
+    for (const col of groupColumns) {
+      const item = document.createElement('div')
+      item.className = 'pivot-group-field-item'
+      item.dataset.fieldKey = col.key
 
-      const levelLabel = document.createElement('span')
-      levelLabel.textContent = `第 ${i + 1} 层: `
-      levelLabel.style.marginRight = '8px'
-      levelLabel.style.fontSize = '12px'
-      levelLabel.style.color = '#666'
+      // 勾选框
+      const checkbox = document.createElement('input')
+      checkbox.id = `pivot-group-${col.key}`
+      checkbox.type = 'checkbox'
+      checkbox.dataset.fieldKey = col.key 
 
-      const select = document.createElement('select')
-      select.className = 'pivot-select'
-      select.dataset.level = String(i)
+      // 恢复之前的选中状态
+      const isSelected = this.currentGroupKeys.includes(col.key)
+      checkbox.checked = isSelected
 
-      // 第一个选项: "不分组"
-      const emptyOption = document.createElement('option')
-      emptyOption.value = ''
-      emptyOption.textContent = i === 0 ? '-- 必须 --': '-- 不分组 --'
-      select.appendChild(emptyOption)
-
-      // 添加离散型字段选项
-      for (const col of groupColumns) {
-        const option = document.createElement('option')
-        option.value = col.key
-        option.textContent = col.title
-        select.appendChild(option)
+      // 若已选 3个 且当前未选中, 则禁用
+      const selectedCount = this.currentGroupKeys.length
+      if (selectedCount >= MAX_GROUP_LEVELS && !isSelected) {
+        checkbox.disabled = true
       }
 
-      // 恢复之前的选中状态, 若没有则第一层默认选择第一个字段
-      if (this.currentGroupKeys[i]) {
-        select.value = this.currentGroupKeys[i]
-      } else if (i === 0 && groupColumns.length > 0) {
-        select.value = groupColumns[0].key
-      }
-      
-      // 挂载
-      selectWrapper.appendChild(levelLabel)
-      selectWrapper.appendChild(select)
-      this.pivotConfgSection.append(selectWrapper)
-      // 收集到数组值
-      groupSelects.push(select)
-    }
-
-    // 工具函数: 收集所有非空分组字段 (这个会有性能问题吧?)
-    const collectGroupKeys = (): string[] => {
-      return groupSelects
-        .map(s => s.value)
-        .filter(v => v !== '')
-    }
-
-    // 监听分组字段变化 (加防抖)
-    let debounceTimer: number | null = null 
-    for (const select of groupSelects) {
-      select.addEventListener('change', () => {
-        // 保存选中状态
-        this.currentGroupKeys = groupSelects.map(s => s.value)
-
-        // 防抖触发重建 (500ms)
-        if (debounceTimer) {
-          clearTimeout(debounceTimer)
+      // 勾选事件
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          // 勾选: 添加到 currentGroupKeys 中
+          if (this.currentGroupKeys.length < MAX_GROUP_LEVELS) {
+            this.currentGroupKeys.push(col.key)
+            this.renderPivotConfig() // 触发重新渲染
+          }
+        } else {
+          // 取消勾选: 从 currentGroupKeys 中移除
+          const index = this.currentGroupKeys.indexOf(col.key)
+          if (index > -1) {
+            this.currentGroupKeys.splice(index, 1)
+            this.renderPivotConfig() // 重新渲染
+          }
         }
-
-        debounceTimer = window.setTimeout(() => {
-          this.renderPivotConfig() // 重新渲染 + 自动收集配置
-        }, 500)
       })
+
+      // 标签
+      const label = document.createElement('label')
+      label.htmlFor = `pivot-group-${col.key}`
+      label.textContent = col.title 
+      label.style.flex = '1'
+      label.style.cursor = 'pointer'
+
+      // 拖拽手柄 (只有选中的字段才会显示)
+      const dragHandle = document.createElement('span')
+      dragHandle.className = 'pivot-drag-handle'
+      dragHandle.textContent = '⋮⋮'
+      dragHandle.style.cursor = 'grab'
+      dragHandle.style.marginLeft = 'auto'
+      dragHandle.style.fontSize = '16px'
+      dragHandle.style.color = '#999'
+      dragHandle.style.visibility = isSelected ? 'visible': 'hidden'
+
+      // 只有选中的字段才可拖拽
+      if (isSelected) {
+        item.draggable = true 
+        this.bindGroupFieldDragEvents(item, groupFieldsContainer)
+      }
+      // 挂载
+      item.appendChild(checkbox)
+      item.appendChild(label)
+      item.appendChild(dragHandle)
+      groupFieldsContainer.appendChild(item)
     }
 
-    // 分割线
+    // 分割线, 下面是数值勾选区域, 就直接展示得了
     const divider = document.createElement('hr')
     divider.style.border = 'none'
     divider.style.borderTop = '1px solid #e5e7eb'
     divider.style.margin = '12px 0'
     this.pivotConfgSection.appendChild(divider)
 
-    // ======= 数值字段 选择区 (后续也改为拖拽)
+    // ======= 数值字段 选择区
     const valueLabel = document.createElement('div')
     valueLabel.className = 'pivot-config-label'
     valueLabel.textContent = '数值字段'
@@ -401,12 +404,9 @@ export class ColumnPanel implements IPanel {
     const valueList = document.createElement('div')
     valueList.className = 'pivot-value-fields-list'
 
-    // 当前已选的分组字段 (排除这些, 以免重复)
-    const selectedGroupKeys = collectGroupKeys()
-
     // 只显示数值字段, 且排除已选为分组的字段
     const valueColumns = this.originalColumns.filter(
-      col => col.dataType === 'number' && !selectedGroupKeys.includes(col.key)
+      col => col.dataType === 'number' && !this.currentGroupKeys.includes(col.key)
     )
 
     // 一个字段一行; (checkbox, lable, title, aggType); 
@@ -418,9 +418,9 @@ export class ColumnPanel implements IPanel {
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox'
       checkbox.dataset.colKey = col.key
-      // 数值字段默认值显示前 2 个, 都显示就看不到重点了
+      // 数值字段默认值显示前 3个, 都显示就看不到重点了
       const index = valueColumns.indexOf(col)
-      checkbox.checked = (index < 2)
+      checkbox.checked = (index < 3)
 
       const label = document.createElement('label')
       label.style.flex = '1'
@@ -459,20 +459,106 @@ export class ColumnPanel implements IPanel {
     }
 
     this.pivotConfgSection.appendChild(valueList)
-    
     // 首次触发一次回调, 让透视表用默认配置渲染
     this.emitPivotConfig(valueList)
   }
 
+  /** 绑定分组字段拖拽事件 */
+  private bindGroupFieldDragEvents(item: HTMLDivElement, container: HTMLDivElement) {
+    // 拖拽开始
+    item.addEventListener('dragstart', (e) => {
+      item.classList.add('dragging')
+      e.dataTransfer!.effectAllowed = 'move'
+      // 改变拖拽手柄样式
+      const handle = item.querySelector('.pivot-drag-handle') as HTMLDivElement
+      if (handle) {
+        handle.style.cursor = 'grabbing'
+      }
+    })
+
+    // 拖拽结束
+    item.addEventListener('dragend', () => {
+      // 移除拖拽样式
+      item.classList.remove('dragging')
+      // 恢复拖拽手柄样式
+      const handle = item.querySelector('.pivot-drag-handle') as HTMLDivElement
+      if (handle) {
+        handle.style.cursor = 'grab'
+      }
+      // 移除所有插入提示线
+      container.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      // 更新 currentGroupKeys 顺序
+      this.updateGroupKeysOrder(container)
+    })
+
+    // 拖拽经过时的视觉反馈
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault()
+
+      const draggingItem = container.querySelector('.dragging')
+      if (!draggingItem || draggingItem === item) return 
+
+      // 只允许在选中的字段之间拖拽
+      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
+      if (!checkbox.checked) return 
+
+      const rect = item.getBoundingClientRect()
+      const minY = rect.top + rect.height / 2 
+
+      // 先移除之前的提示线
+      container.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      // 添加蓝色提示线
+      const indicator = document.createElement('div')
+      indicator.className = 'drop-indicator'
+
+      if (e.clientY < minY) {
+        item.parentNode?.insertBefore(indicator, item)
+        item.parentNode?.insertBefore(draggingItem, item)
+      } else {
+        item.parentNode?.insertBefore(indicator, item.nextSibling)
+        item.parentNode?.insertBefore(draggingItem, item.nextSibling)
+      }
+    })
+
+    // 拖拽放置
+    item.addEventListener('drop', (e) => {
+      e.preventDefault()
+      // 移除提示线
+      container.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      // 更新 currentGroupKeys 顺序
+      this.updateGroupKeysOrder(container)
+    })
+  }
+
+  /** 根据 DOM 顺序, 更新 currentGroupKeys, 并触发透视表重建 */
+  private updateGroupKeysOrder(container: HTMLDivElement): void {
+    // 获取所有选中的字段, 按 dom 排序
+    const items = Array.from(container.children) as HTMLDivElement[]
+    const newGroupKeys: string[] = []
+
+    for (const item of items) {
+      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
+      if (checkbox.checked) {
+        const fieldKey = checkbox.dataset.fieldKey
+        if (fieldKey) {
+          newGroupKeys.push(fieldKey)
+        }
+      }
+    }
+    // 更新 currentGroupKeys 
+    this.currentGroupKeys = newGroupKeys
+    // 触发透视表重建, 通过 emitPivotConfig 
+    const valueList = this.pivotConfgSection?.querySelector('.pivot-value-fields-list') as HTMLDivElement
+    if (valueList) {
+      this.emitPivotConfig(valueList)
+    }
+  }
+
   /** 从 DOM 收集透视表配置, 并触发回调 */
   private emitPivotConfig(valueList: HTMLDivElement): void {
-    // 收集分组字段
-    const groupSelects = Array.from(
-      this.pivotConfgSection?.querySelectorAll('select.pivot-select[data-level]') || []
-    ) as HTMLSelectElement[]
-
-    const rowGroups = groupSelects.map(s => s.value).filter(v => v !== '')
-    if (rowGroups.length === 0) return // 没有分组字段则不触发
+    // 使用 currentGroupKeys (已按拖拽顺序排列)
+    const rowGroups = this.currentGroupKeys
+    if (rowGroups.length === 0) return 
 
     // 收集数值字段
     const valueFields: IPivotConfig['valueFields'] = []

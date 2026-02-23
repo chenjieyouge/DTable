@@ -23,3 +23,6 @@ node_modules/
 
 # 测试用例的报告不用上传, 用例需要
 coverage/
+
+# dos 也先不用, 就自己看
+/docs

@@ -132,11 +132,14 @@ export class PivotDataProcessor {
     for (const row of data) {
       const value = row[fieldKey]
 
+      // 分组 key 的值, 若首次出现, 则添加进 Map 作为 k, v 则默认为 []
       if (!groups.has(value)) {
         groups.set(value, [])
       }
+      // 上面已处理好首次情况, 这里一定是保证每行都能有 key 关联
       groups.get(value)!.push(row)
     }
+
     return groups 
   }
 
@@ -144,7 +147,7 @@ export class PivotDataProcessor {
    * 计算聚合数据
    * 
    * @param rows 当前分组的所有行
-   * @param groupKey 当澳门分组字段
+   * @param groupKey 当前分组字段
    * @param groupValue 当前分组值
    * @returns 聚合后的数据对象
    */
@@ -162,6 +165,7 @@ export class PivotDataProcessor {
     // 计算每个数值字段的聚合值
     for (const valueField of this.config.valueFields) {
       const aggValue = this.aggregate(rows, valueField.key, valueField.aggregation)
+      
       aggregatedData[valueField.key] = aggValue
     }
 
