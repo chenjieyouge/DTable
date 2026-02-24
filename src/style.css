@@ -1047,6 +1047,7 @@
 
 /* 分组字段项 */
 .pivot-group-field-item {
+  font-size: 14px;
   display: flex;
   align-items: center;
   padding: 6px 8px;
@@ -1099,6 +1100,100 @@
   user-select: none;
 }
 
+/* 分区标题 */
+.pivot-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  padding-left: 4px;
+}
+
+/* 分区分割线 */
+.pivot-section-divider {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 16px 0;
+}
+
+/* 已选字段区域 */
+.pivot-selected-fields {
+  min-height: 40px;
+  background-color: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+/* 已选区域, 有内容时的样式 */
+.pivot-selected-fields:has(.pivot-group-field-item) {
+  background-color: transparent;
+  border: 1px solid transparent;
+  padding: 0;
+}
+
+/* 可选字段区域 */
+.pivot-available-fields {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 可选字段区域滚动条样式 */
+.pivot-available-fields::-webkit-scrollbar {
+  width: 6px;
+}
+ 
+.pivot-available-fields::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+ 
+.pivot-available-fields::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+ 
+.pivot-available-fields::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+ 
+/* 空状态提示 */
+.pivot-empty-hint {
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* 已选字段项的特殊样式, 区别于未选 */
+.pivot-selected-fields .pivot-group-field-item {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.pivot-selected-fields .pivot-group-field-item:hover {
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+}
+
+/* 未选字段项的样式 */
+.pivot-available-fields .pivot-group-field-item {
+  background-color: #fff;
+  border-color: #e5efeb;
+}
+
+.pivot-available-fields .pivot-group-field-item:hover {
+  background-color: #f9fafb;
+}
+
+/* 禁用状态的字段项 */
+.pivot-group-field-item input[type="checkbox"]:disabled ~ label {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
 
 
 /* 数值字段列表 */
