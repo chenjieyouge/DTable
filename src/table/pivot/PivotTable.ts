@@ -221,7 +221,7 @@ export class PivotTable {
         const flatRow = this.flatRows[i]
         if (!flatRow) continue 
 
-        const rowEl = this.renderer.renderRow(flatRow)
+        const rowEl = this.renderer.renderRow(flatRow, i) // i 传得对吗?
         rowEl.style.height = `${this.ROW_HEIGHT}px`
         rowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
 
@@ -269,12 +269,14 @@ export class PivotTable {
   private updateStickyGroup(startRow: number): void {
     if (!this.stickyGroupEl) return 
 
-    // 从 startRow 往前找最近的 group 行 
+    // 从 startRow 往前找最近的 group 行, 注意: 要排除 "小计行" 和 "总计行"
     let groupRow: IPivotFlatRow | null = null 
     let groupRowIndex = -1
 
     for (let i = startRow; i >= 0; i--) {
-      if (this.flatRows[i]?.type === 'group') {
+      const row = this.flatRows[i]
+      // 只 sticky 普通分组行, 排除小计/总记行
+      if (row?.type === 'group' && row.rowType !== 'subtotal' && row.rowType !== 'grandtotal') {
         groupRow = this.flatRows[i]
         groupRowIndex = i
         break
@@ -289,7 +291,7 @@ export class PivotTable {
 
     // 分组行已滚出视口, 显示吸顶副本
     this.stickyGroupEl.innerHTML = ''
-    const rowEl = this.renderer.renderRow(groupRow)
+    const rowEl = this.renderer.renderRow(groupRow, groupRowIndex)
     rowEl.style.height = `${this.ROW_HEIGHT}px`
     rowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
 

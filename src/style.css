@@ -1195,6 +1195,47 @@
   cursor: not-allowed;
 }
 
+/* 小计行 和 总计行 */
+.pivot-row-subtotal {
+  background-color: #f3f3f6;
+  border-top: 1px solid #d1d5db;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.pivot-row-subtotal:hover {
+  background-color: #e5e7eb;
+}
+
+.pivot-row-subtotal .table-cell {
+  color: #374151;
+  font-weight: 600;
+}
+
+/* 总计行 */
+.pivot-row-grandtotal {
+  position: sticky;
+  bottom: 0;
+  background-color: #e5e7eb;
+  border-top: 1px solid #9ca3af;
+  border-bottom: 1px solid #9ca3af;
+  z-index: 2;
+}
+
+.pivot-row-grandtotal:hover {
+  background-color: #d1d5db;
+}
+
+.pivot-row-grandtotal .table-cell {
+  color: #1f2937;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* 小计和总计, 数值列右对齐 */
+.pivot-total-value-cell {
+  font-variant-numeric: tabular-nums;
+}
+
 
 /* 数值字段列表 */
 .pivot-value-fields-list {

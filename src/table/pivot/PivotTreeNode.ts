@@ -80,35 +80,80 @@ export class PivotTreeNode {
    *  [ USA, Row 1, Row 2, China ]
    */
   static flattenTree(node: IPivotTreeNode): IPivotFlatRow[] {
-    const result: IPivotFlatRow[] = []
-
     // 用栈模拟递归, 避免大数据量时 push(...) 栈溢出
+    const result: IPivotFlatRow[] = []
     const stack: IPivotTreeNode[] = [node]
 
     while (stack.length > 0) {
-      const current = stack.pop()!  // 数组模拟栈, 左侧栈底, 右侧栈顶
+      const current = stack.pop()!
 
-      // 跳过根节点 (level = -1)
-      if (current.level >= 0) {
-        result.push({
-          nodeId: current.id,
-          type: current.type,
-          level: current.level,
-          data: current.aggregatedData,
-          isExpanded: current.isExpanded
-        })
+      // 跳过根节点
+      if (current.level === -1) {
+        // 根节点的子节点, 逆序压栈 (数组的 pop 是后进先出)
+        for (let i = current.children.length -1; i >= 0; i--) {
+          stack.push(current.children[i])
+        }
+        continue
       }
 
-      // 若节点展开, 将子节点逆序压栈 (保证弹出顺序正确)
-      if (current.isExpanded && current.children.length > 0) {
-        // result: [a, b, c, d]; 期望 从左到右 a, b, c, d ; 因为 array.pop() 方法是处理最右
-        // 因此可以逆序压栈, 即 [d, c, b, a] => pop => a, b, c, d 就是为了迁就数组而已啦
-        for (let i = current.children.length - 1; i >= 0; i--) {
-          stack.push(current.children[i]) // 逆序压栈
+      // 添加当前节点到结果集
+      result.push({
+        nodeId: current.id,
+        type: current.type,
+        rowType: 'nomal', // 普通行
+        level: current.level,
+        data: current.aggregatedData,
+        isExpanded: current.isExpanded,
+        rowCount: current.rowCount,
+        groupVale: current.groupValue,
+        parentId: current.id.split('-').slice(0, -1).join('-') || 'root'
+      })
+
+      // 若是分组节点且展开, 则处理子节点
+      if (current.type === 'group' && current.isExpanded) {
+        // 子节点逆序
+        for (let i = current.children.length -1; i >= 0; i--) {
+          stack.push(current.children[i])
         }
+
+        // 在子节点后面插入小计行
+        // 注意: 这里用一个特殊的标记 (__SUBTOTAL__), 作为占位用, 等所有子节点处理完后在插入
+        stack.push({
+          ...current,
+          id: `${current.id}-subtotal`,
+          type: 'group' as NodeType,
+          children: [], // 小计没有子节点
+          isExpanded: false,  // 强制设置 false, 避免无限递归
+          groupValue: '__SUBTOTAL__',  // 添加一个特殊的标记
+        } as IPivotTreeNode)
       }
     }
-    return result
+
+    // 添加总计行
+    if (result.length > 0) {
+      // 计算总计数据, 从根节点的聚合数据中获取
+      const grandTotalData = node.aggregatedData
+
+      result.push({
+        nodeId: 'grand-total',
+        type: 'group' as NodeType,
+        rowType: 'grandtotal',
+        level: 0,
+        data: grandTotalData,
+        isExpanded: false,
+        rowCount: node.rowCount,
+        groupVale: '总计',
+        parentId: 'root'
+      })
+    }
+
+    // 后处理: 将标记为 "小计" 的行转换为真正的 "小计行"
+    return result.map(row => {
+      if (row.groupVale === '__SUBTOTAL__') {
+        return { ...row,rowType: 'subtotal',groupVale: '小计' }
+      }
+      return row 
+    })
   }
 
   /**

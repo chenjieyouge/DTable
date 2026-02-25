@@ -44,9 +44,13 @@ export interface IPivotTreeNode {
 export interface IPivotFlatRow {
   nodeId: string                 // 节点id, 对应 IPivotTreeNode.id 
   type: NodeType                  // 行类型, 分组行 or 数据行
+  rowType?: 'nomal' | 'subtotal' | 'grandtotal'  // 行类型: 普通行, 分组小计行, 总计行
+  groupVale?: any 
   level: number                     // 层级, 用于计算缩进
   data: Record<string, any>           // 显示数据, 分组节点的聚合 or 数据节点的原始值
+  rowCount?: number
   isExpanded?: boolean                  // 是否展开 (仅分组行有效)
+  parentId?: string
 }
 
 

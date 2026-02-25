@@ -64,15 +64,29 @@ export class PivotRenderer {
    * @param flatRow 展平后的行数据
    * @returns 渲染好的 dom 元素
    */
-  public renderRow(flatRow: IPivotFlatRow): HTMLDivElement {
+  public renderRow(flatRow: IPivotFlatRow, rowIndex: number): HTMLDivElement {
+
     const row = document.createElement('div')
     row.className = 'table-row pivot-row'
     row.dataset.nodeId = flatRow.nodeId
     row.dataset.type = flatRow.type
     row.dataset.level = String(flatRow.level)
 
-    if (flatRow.type === 'group') {
+    // 根据 rowType 添加特殊样式类
+    if (flatRow.rowType === 'subtotal') {
+      row.classList.add('pivot-row-subtotal')
+
+    } else if (flatRow.rowType === 'grandtotal') {
+      row.classList.add('pivot-row-grandtotal')
+    }
+
+    // 小计行 和 总计行 的特殊渲染
+    if (flatRow.rowType === 'subtotal' || flatRow.rowType === 'grandtotal') {
+      this.renderTotalRow(row, flatRow)
+
+    } else if  (flatRow.type === 'group') {
       this.renderGroupRow(row, flatRow)
+
     } else {
       this.renderDataRow(row, flatRow)
     }
@@ -157,6 +171,48 @@ export class PivotRenderer {
       cell.className = 'table-cell'
       const value = flatRow.data[valueField.key]
       cell.textContent = value != null ? String(value) : ''
+      row.appendChild(cell)
+    }
+  }
+
+  /** 
+   * 渲染小计行 和 总计行
+   * 
+   * 结构: [缩进] 小计/总计 | 聚合值1 | 聚合值2 | ...
+   */
+  public renderTotalRow(row: HTMLDivElement, flatRow: IPivotFlatRow): void {
+    // 第一列: 小计/总计 标签
+    const fisrtCell = document.createElement('div')
+    fisrtCell.className = 'table-cell pivot-total-cell'
+
+    if (flatRow.rowType === 'subtotal') {
+      // 小计行: 缩进与子项对齐
+      const indent = (flatRow.level + 1) * 20
+      fisrtCell.style.paddingLeft = `${indent + 8}px`
+      fisrtCell.textContent = '小计'
+      fisrtCell.style.color = '#374151'
+      fisrtCell.style.fontWeight = '600'
+
+    } else if (flatRow.rowType === 'grandtotal') {
+      // 总计行: 左对齐
+      fisrtCell.style.paddingLeft = '12px'
+      fisrtCell.textContent = '总计'
+      fisrtCell.style.fontWeight = '700'
+      fisrtCell.style.color = '#1f2937'
+    }
+
+    row.appendChild(fisrtCell)
+
+    // 后续列: 聚合值
+    for (const valueField of this.config.valueFields) {
+      const cell = document.createElement('div')
+      cell.className = 'table-cell pivot-total-value-cell'
+
+      const value = flatRow.data[valueField.key]
+      cell.textContent = value !== null ? String(value) : ''
+
+      cell.style.textAlign = 'right'
+      cell.style.fontWeight = flatRow.rowType === 'grandtotal' ? '700': '600'
       row.appendChild(cell)
     }
   }

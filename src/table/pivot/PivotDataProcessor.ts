@@ -38,7 +38,7 @@ export class PivotDataProcessor {
       type: 'group',
       level: -1, // 约定根节点层级为 -1
       groupValue: null, 
-      aggregatedData: {},
+      aggregatedData: {}, // 先初始化为空, 后面计算
       children: [],
       isExpanded: true,  // 根节点始终展开
       rowCount: data.length
@@ -46,6 +46,9 @@ export class PivotDataProcessor {
 
     // 从第 0 层开始递归构建子树
     root.children = this.buildSubTree(data, rowGroups, 0, 'root')
+
+    // 计算根节点的聚合数据, 用于总结行
+    root.aggregatedData = this.computeRootAggregatedData(data)
 
     return root 
   }
@@ -223,6 +226,23 @@ export class PivotDataProcessor {
       default: 
         return 0
     }
+  }
+
+  /**
+   * 计算根节点的聚合数据 (用户总计行)
+   * 
+   * @param data 全部的原始数据
+   * @returns 聚合后的数据对象
+   */
+  private computeRootAggregatedData(data: Record<string, any>[]): Record<string, any> {
+    const aggregatedData: Record<string, any> = {}
+    // 计算每个数值字段的聚合值
+    for (const valueField of this.config.valueFields) {
+      const aggValue = this.aggregate(data, valueField.key, valueField.aggregation)
+      aggregatedData[valueField.key] = aggValue
+    }
+
+    return aggregatedData
   }
 
   /** 更新配置 */
