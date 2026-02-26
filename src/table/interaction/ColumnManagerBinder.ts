@@ -79,7 +79,7 @@ export class ColumnManagerBinder {
       // 点击外部关闭面板
       this.onClickOutside = (e: MouseEvent) => {
         const target = e.target as HTMLElement
-        if (!target.closest('.column-manager-panel') && target !== triggerBtn) {
+        if (!target.closest('.vt-colmgr-panel') && target !== triggerBtn) {
           this.closePanel()
         }
       }

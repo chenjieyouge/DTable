@@ -28,7 +28,7 @@ export class ColumnMenuBinder {
     // 表头行上事件委托, 监听 click 事件, 并找到最近的 "三点" 按钮
     headerRow.addEventListener('click', (e: MouseEvent) => {
       const target = e.target as HTMLDivElement
-      const btn = target.closest<HTMLDivElement>('.col-menu-btn')
+      const btn = target.closest<HTMLDivElement>('.vt-col-menu-btn')
 
       // 若点击的不是 "三点" 按钮则返回, 并阻止事件冒泡, 以免影响其他点击事件
       if(!btn) return 
@@ -37,7 +37,7 @@ export class ColumnMenuBinder {
       const key = btn.dataset.columnKey 
       if (!key) return 
       // 若菜单已处于打开状态, 则进行关闭, 防止重复打开
-      if (btn.classList.contains('active')) {
+      if (btn.classList.contains('vt-active')) {
         this.closeMenu()
         return 
       }
@@ -46,8 +46,8 @@ export class ColumnMenuBinder {
       // 关闭旧菜单, 如果有其他列的菜单也打开就有点冲突了
       this.closeMenu()
 
-      btn.classList.add('active')  // 标记按钮为激活状态
-      const cell = btn.closest('.header-cell') as HTMLDivElement
+      btn.classList.add('vt-active')  // 标记按钮为激活状态
+      const cell = btn.closest('.vt-header-cell') as HTMLDivElement
 
       const columnKey = cell?.dataset.columnKey
       if(!columnKey) return 
@@ -64,7 +64,7 @@ export class ColumnMenuBinder {
         handleSort: (direction) => {
           // 调用 VirtualTable 传来的 onMenuSort 回调
           onSort(columnKey, direction)
-          btn.classList.remove('active')
+          btn.classList.remove('vt-active')
         }
       }
       // 真正渲染菜单 
@@ -72,7 +72,7 @@ export class ColumnMenuBinder {
       // 点击外部关闭菜单
       this.onClickOutSide = (e: MouseEvent) => {
         const target = e.target as HTMLElement
-        if (!target.closest('.col-menu-popup') && !target.closest('.col-menu-btn')) {
+        if (!target.closest('.vt-col-menu-popup') && !target.closest('.vt-col-menu-btn')) {
           this.closeMenu()
         }
       }
@@ -90,8 +90,8 @@ export class ColumnMenuBinder {
   // 关闭菜单
   public closeMenu() {
     this.menuView.destroy()
-    document.querySelectorAll('.col-menu-btn.active').forEach(btn => {
-      btn.classList.remove('active')
+    document.querySelectorAll('.vt-col-menu-btn.vt-active').forEach(btn => {
+      btn.classList.remove('vt-active')
     })
 
     if (this.onClickOutSide) {

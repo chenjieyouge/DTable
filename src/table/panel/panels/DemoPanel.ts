@@ -19,20 +19,20 @@ export class DemoPanelImpl implements IPanel {
 
   private render(): HTMLDivElement {
     const container = document.createElement('div')
-    container.className = 'demo-panel'
+    container.className = 'vt-demo-panel'
     container.innerHTML = `
-      <div class="panel-header">
+      <div class="vt-panel-header">
         <h3>示例面板</h3>
         <p>这是俺的测试面板, 用于验证面板系统滴</p>
       </div>
-      <div class="panel-body">
+      <div class="vt-panel-body">
         <p>当前表格状态: </p>
-        <pre id="demo-panel-state"></pre>
-        <button id="demo-panel-test-btn">测试按钮</button>
+        <pre id="vt-demo-panel-state"></pre>
+        <button id="vt-demo-panel-test-btn">测试按钮</button>
       </div>
     `
     // 绑定测试按钮
-    const btn = container.querySelector('#demo-panel-test-btn') as HTMLButtonElement
+    const btn = container.querySelector('#vt-demo-panel-test-btn') as HTMLButtonElement
     btn.onclick = () => {
       alert('面板按钮点击成功!')
     }
@@ -75,7 +75,7 @@ export class DemoPanelImpl implements IPanel {
     }
 
     const state = this.store.getState()
-    const stateEl = this.container.querySelector('#demo-panel-state')
+    const stateEl = this.container.querySelector('#vt-demo-panel-state')
     if (stateEl) {
       stateEl.textContent = JSON.stringify({
         mode: state.data.mode,

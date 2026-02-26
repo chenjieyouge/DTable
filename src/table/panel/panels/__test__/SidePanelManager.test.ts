@@ -32,7 +32,7 @@ describe('SidePanelManger', () => {
 
   it('能渲染所有Tab', () => {
     const container = manager.getContainer()
-    const tabs = container.querySelectorAll('.side-panel-tab')
+    const tabs = container.querySelectorAll('.vt-side-tab')
     expect(tabs.length).toBe(2)
   })
 

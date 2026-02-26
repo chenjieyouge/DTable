@@ -75,7 +75,7 @@ export class MountHelper {
     // 清空容器并添加唯一标识
     containerEl.innerHTML = ''
     containerEl.setAttribute('data-table-id', config.tableId)
-    containerEl.classList.add('virtual-table-instance')
+    containerEl.classList.add('vt-instance')
 
     // 创建回调函数集合
     const shellCallbacks = new ShellCallbacks(
@@ -185,7 +185,7 @@ export class MountHelper {
 
     // 初始化时自动调整表格宽度, 消除垂直滚动条, 模拟拖拽列宽效果
     requestAnimationFrame(() => {
-      const scrollContainer = layoutManager.getMainArea()?.querySelector<HTMLDivElement>('.table-container')
+      const scrollContainer = layoutManager.getMainArea()?.querySelector<HTMLDivElement>('.vt-table-container')
 
       if (!scrollContainer) return
       // 检查是否有垂直滚动条, 有则将表格宽度增加 1px 触发表格更新去覆盖调列滚动条    
@@ -235,7 +235,7 @@ export class MountHelper {
 
       // 创建 Tab 容器, 在 SidePanelManager 外部创建
       const tabsContainer = document.createElement('div')
-      tabsContainer.className = 'side-panel-tabs-container' 
+      tabsContainer.className = 'vt-side-tabs-container' 
       sideArea.appendChild(tabsContainer)
       // 创建面板管理器
       sidePanelManager = new SidePanelManager(

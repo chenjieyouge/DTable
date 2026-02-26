@@ -54,13 +54,13 @@ export class PivotPanelImpl implements IPanel {
   /** 渲染面板 */
   private render(): HTMLDivElement {
     const container = document.createElement('div')
-    container.className = 'pivot-panel'
+    container.className = 'vt-pivot-panel'
     // 标题
     const header = document.createElement('div')
-    header.className = 'pivot-panel-header'
+    header.className = 'vt-pivot-panel-header'
     header.innerHTML = `
-      <h3 class="pivot-panel-header">透视表配置</h3>
-      <p class="pivot-panel-desc">选择分组字段和数值字段</p>
+      <h3 class="vt-pivot-panel-header">透视表配置</h3>
+      <p class="vt-pivot-panel-desc">选择分组字段和数值字段</p>
     `
     container.appendChild(header)
     // 行分组选择区域
@@ -73,15 +73,15 @@ export class PivotPanelImpl implements IPanel {
     container.appendChild(divider)
     // 数值字段选择区域
     this.listContainer = document.createElement('div')
-    this.listContainer.className = 'pivot-config-section'
+    this.listContainer.className = 'vt-pivot-config-section'
     // label 
     const label = document.createElement('div')
-    label.className = 'pivot-config-label'
+    label.className = 'vt-pivot-config-label'
     label.textContent = '数值字段'
     this.listContainer.appendChild(label)
     // list
     const list = document.createElement('div')
-    list.className = 'pivot-value-fields-list'
+    list.className = 'vt-pivot-value-fields-list'
     this.listContainer.appendChild(list)
     container.appendChild(this.listContainer)
     // 渲染数值字段列表
@@ -93,15 +93,15 @@ export class PivotPanelImpl implements IPanel {
   /** 创建行分组选择器 */
   private createRowGroupSection(): HTMLDivElement {
     const section = document.createElement('div')
-    section.className = 'pivot-config-label'
+    section.className = 'vt-pivot-config-section'
 
     const label = document.createElement('div')
-    label.className = 'pivot-config-label'
+    label.className = 'vt-pivot-config-label'
     label.textContent = '行分组字段'
     section.appendChild(label)
 
     const select = document.createElement('select')
-    select.className = 'pivot-select'
+    select.className = 'vt-pivot-select'
 
     // 渲染出每个下拉框选项的字段名
     for (const col of this.columns) {
@@ -129,7 +129,7 @@ export class PivotPanelImpl implements IPanel {
       if (col.key === this.pivotConfig.rowGroup) continue 
 
       const item = document.createElement('div')
-      item.className = 'pivot-value-field-item'
+      item.className = 'vt-pivot-value-field-item'
 
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox'
@@ -143,7 +143,7 @@ export class PivotPanelImpl implements IPanel {
 
       // 聚合字段右侧的聚合方法选择下拉框
       const aggSelect = document.createElement('select')
-      aggSelect.className = 'pivot-agg-select'
+      aggSelect.className = 'vt-pivot-agg-select'
       const aggTypes: AggregationType[] = ['sum', 'count', 'avg', 'max', 'min']
       
       for (const aggType of aggTypes) {
@@ -177,11 +177,11 @@ export class PivotPanelImpl implements IPanel {
   /** 从 dom 状态收集 valueFields 并触发回调 */
   private collectValueFields(): void {
     const newValueFields: IPivotConfig['valueFields'] = []
-    const items = this.container.querySelectorAll('.pivot-value-field-item')
+    const items = this.container.querySelectorAll('.vt-pivot-value-field-item')
 
     items.forEach(item => {
       const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
-      const aggSelect = item.querySelector('.pivot-agg-select') as HTMLSelectElement
+      const aggSelect = item.querySelector('.vt-pivot-agg-select') as HTMLSelectElement
 
       if (checkbox?.checked) {
         const key = checkbox.id.replace('pivot-panel-vf-', '')

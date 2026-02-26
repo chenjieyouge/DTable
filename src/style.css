@@ -1,12 +1,34 @@
-/* 所有表格实例的样式都包裹在这个选择器下 */
-.virtual-table-instance {
+/* ============================================================
+ * DTable 样式表
+ * 命名空间: .vt-instance  |  前缀: vt-
+ * ============================================================ */
 
-/* ======== 表格布局系统 ========= */
-/* 布局容器 */
-.table-layout-container {
+/* ========== 1. CSS 变量 ========== */
+.vt-instance {
+  --vt-primary: #1890ff;
+  --vt-primary-hover: #40a9ff;
+  --vt-primary-bg: rgba(24, 144, 255, 0.1);
+  --vt-border: #d3d3d5;
+  --vt-border-light: #e5e7eb;
+  --vt-border-medium: #d1d5db;
+  --vt-border-panel: #d9d9d9;
+  --vt-bg-header: #f9f9fa;
+  --vt-bg-hover: #e6f7ff;
+  --vt-bg-frozen: #f8f8f9;
+  --vt-text-primary: #333;
+  --vt-text-secondary: #666;
+  --vt-text-muted: #999;
+  --vt-text-dark: #374151;
+  --vt-text-darker: #1f2937;
+  --vt-shadow-popup: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --vt-shadow-panel: -2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ========== 2. 布局系统 ========== */
+
+.vt-instance .vt-layout-container {
   position: relative;
   display: flex;
-  /* width: 800px; 初始固定宽度 */
   width: 100%;
   max-width: 100%;
   height: 100%;
@@ -14,18 +36,16 @@
   border-bottom: 1px solid #ccc;
 }
 
-/* 主表格区域 */
-.table-layout-main {
+.vt-instance .vt-layout-main {
   position: relative;
   flex: 1;
-  min-width: 0; /* 防止 flex 子项溢出 */
+  min-width: 0;
   height: 100%;
   display: flex;
-  flex-direction: column; /* 纵向布局, 给底部状态栏留空间 */
+  flex-direction: column;
 }
 
-/* 右侧面板容器, 始终保持 40px 宽度用于显示 Tab */
-.table-layout-side {
+.vt-instance .vt-layout-side {
   position: relative;
   flex-shrink: 0;
   width: 40px;
@@ -37,13 +57,19 @@
   z-index: 100;
 }
 
-/* 面板收起状态: 只保留 40px 的 Tab 区域 */
-.table-layout-side.collapsed {
+.vt-instance .vt-layout-side.vt-collapsed {
   width: 40px;
 }
 
-/* === 侧边栏 Tab 系统 */
-.side-panel-tabs-container {
+.vt-instance .vt-layout-container[data-layout-mode="mobile"] {
+  width: 100% !important;
+  border-left: none;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* ========== 3. 侧边栏 Tab 系统 ========== */
+
+.vt-instance .vt-side-tabs-container {
   position: absolute;
   width: 100%;
   height: 100%;
@@ -53,8 +79,7 @@
   border-left: 1px solid #e0e0e0;
 }
 
-/* Tab 按钮 */
-.side-panel-tab-vertical {
+.vt-instance .vt-side-tab {
   padding: 16px 8px;
   cursor: pointer;
   text-align: center;
@@ -66,31 +91,29 @@
   transition: all 0.2s;
 }
 
-.side-panel-tab-vertical:hover {
+.vt-instance .vt-side-tab:hover {
   background-color: #e8e8e8;
 }
 
-.side-panel-tab-vertical.active {
-  /* background-color: #1890ff; */
+.vt-instance .vt-side-tab.vt-active {
   color: #1890ff;
 }
 
-.side-panel-tab-vertical .tab-icon {
+.vt-instance .vt-side-tab .vt-tab-icon {
   margin-bottom: 4px;
   font-size: 18px;
 }
 
-.side-panel-tab-vertical .tab-title-vertical {
+.vt-instance .vt-side-tab .vt-tab-title {
   font-size: 12px;
   writing-mode: vertical-lr;
   text-orientation: mixed;
   letter-spacing: 1px;
 }
 
-/* 面板内容包装器（可以弹出/收起） */
-.side-panel-content-wrapper {
+.vt-instance .vt-side-panel-wrapper {
   position: absolute;
-  right: 40px;  /* 为 Tab 容器留出 40px */
+  right: 40px;
   top: 0;
   bottom: 0;
   width: 250px;
@@ -105,40 +128,30 @@
   opacity: 1;
   z-index: 100;
 }
- 
-/* 面板收起时，内容区向右隐藏 */
-.side-panel-content-wrapper.hidden {
-  transform: translateX(100%); 
+
+.vt-instance .vt-side-panel-wrapper.vt-hidden {
+  transform: translateX(100%);
   opacity: 0;
   pointer-events: none;
 }
 
-/* 面板内容区*/
-.side-panel-content {
+.vt-instance .vt-side-panel-content {
   flex: 1;
   overflow: hidden;
   padding: 16px;
   box-sizing: border-box;
 }
 
+/* ========== 4. 表格核心结构 ========== */
 
-/* 响应式布局 */
-.table-layout-container[data-layout-mode="mobile"] {
-  width: 100% !important;
-  border-left: none;
-  border-top: 1px solid #e0e0e0;
-}
-
-
-/* portal 容器, 用来承载浮动面板 */
-.table-portal-container {
+.vt-instance .vt-portal-container {
   position: relative;
   overflow: hidden;
-  flex: 1; /* 占满剩余空间, 若配置了底部栏则排除, 否则撑满 */
-  min-height: 0;  /* 防止 flex 子项溢出 */
+  flex: 1;
+  min-height: 0;
 }
 
-.table-container {
+.vt-instance .vt-table-container {
   position: relative;
   overflow: auto;
   border: 1px solid #ddd;
@@ -147,15 +160,14 @@
   height: 100%;
 }
 
-.table-wrapper {
+.vt-instance .vt-table-wrapper {
   position: relative;
   border-bottom: 1px solid #ccc;
   min-height: 100%;
   box-sizing: border-box;
 }
 
-/* 表格外的, 底部状态栏 */
-.table-status-bar {
+.vt-instance .vt-status-bar {
   height: var(--status-bar-height, 32px);
   background-color: #fafafa;
   border-top: 1px solid #e0e0e0;
@@ -167,36 +179,33 @@
   flex-shrink: 0;
 }
 
-.table-status-bar-item {
+.vt-instance .vt-status-bar-item {
   margin-right: 24px;
 }
 
-.table-status-bar-item strong {
+.vt-instance .vt-status-bar-item strong {
   color: #333;
   margin-left: 4px;
 }
 
+/* ========== 5. 表头与单元格 ========== */
 
-.sticky-header {
+.vt-instance .vt-sticky-header {
   position: sticky;
   top: 0;
   z-index: 100;
   background-color: #f9f9fa;
 }
 
-.header-cell {
+.vt-instance .vt-header-cell {
   position: relative;
   user-select: none;
-
   background-color: #f9f9fa;
   font-weight: bold;
-  /* 这个 bug 搞了我好久 !!! 一定要设置行高 */
-  height: var(--header-height, 32px)
+  height: var(--header-height, 32px);
 }
 
-
-.col-resize-handle {
-  /* 列宽拖拽手柄, 放在表头单元格最右侧 */
+.vt-instance .vt-col-resize-handle {
   position: absolute;
   top: 0;
   right: 0;
@@ -205,30 +214,27 @@
   width: 2px;
 }
 
-.col-resize-guide {
-  /* 拖拽时显示竖线辅助线, 视觉反馈, 等 mouseup 才真正 dispatch */
+.vt-instance .vt-col-resize-guide {
   position: absolute;
   top: 0;
   width: 1px;
   background-color: red;
-  height: 100%; /* 这个 100% 是针对整个表格吗 */
+  height: 100%;
   pointer-events: none;
   z-index: 999;
 }
 
-/* 表头排序字段, 点击文字才排序 */
-.header-text {
+.vt-instance .vt-header-text {
   display: inline;
   cursor: pointer;
   padding: 0 4px;
 }
 
-.header-text:hover {
+.vt-instance .vt-header-text:hover {
   color: #1890ff;
 }
 
-/* 排序指示器 */
-.sort-indicator {
+.vt-instance .vt-sort-indicator {
   margin-left: 10px;
   font-size: 12px;
   color: red;
@@ -236,7 +242,7 @@
   text-align: center;
 }
 
-.sticky-summary {
+.vt-instance .vt-sticky-summary {
   position: sticky;
   top: var(--header-height, 30px);
   background-color: #fff;
@@ -244,12 +250,12 @@
   z-index: 99;
 }
 
-.table-row {
+.vt-instance .vt-table-row {
   display: flex;
   height: auto;
 }
 
-.table-cell {
+.vt-instance .vt-table-cell {
   box-sizing: border-box;
   overflow: hidden;
   border-right: 1px solid #d3d3d5;
@@ -257,13 +263,10 @@
   display: flex;
   align-items: center;
   font-size: 16px;
-  /* 用伪元素来模拟下边框, 避免滚动时消失 */
   position: relative;
-
 }
 
-/* 关键一步: 伪元素模拟底部边框, 且不受滚动时变化 */
-.table-cell::after {
+.vt-instance .vt-table-cell::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -271,52 +274,46 @@
   right: 0;
   height: 1px;
   background-color: #d3d3d5;
-  
 }
 
-.cell-frozen {
+.vt-instance .vt-cell-frozen {
   position: sticky;
   background-color: #f8f8f9;
   z-index: 10;
 }
 
-.data-container {
+/* ========== 6. 虚拟滚动 ========== */
+
+.vt-instance .vt-data-container {
   position: relative;
 }
 
-.virtual-content {
+.vt-instance .vt-virtual-content {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   will-change: transform;
-} 
+}
 
-/* 虚拟行的绝对定位 */
-.virtual-row {
+.vt-instance .vt-virtual-row {
   position: absolute;
   width: 100%;
   height: var(--row-height, 20px);
-  transition: background-color 0.15s ease /* 平滑过渡效果 */
+  transition: background-color 0.15s ease;
 }
 
-.virtual-row:hover {
-  background-color: #e6f7ff;
-}
-/* 冻结列也有 hover 效果 */
-.virtual-row:hover .cell-frozen {
+.vt-instance .vt-virtual-row:hover {
   background-color: #e6f7ff;
 }
 
-.page-indicator {
-  margin-top: 10px;
-  color: #666;
-  font-size: 12px;
+.vt-instance .vt-virtual-row:hover .vt-cell-frozen {
+  background-color: #e6f7ff;
 }
 
-/* 筛选按钮和弹层样式 */
-/* 筛选按钮样式（漏斗图标） */
-.col-filter-btn {
+/* ========== 7. 列筛选弹层 ========== */
+
+.vt-instance .vt-col-filter-btn {
   position: absolute;
   top: 50%;
   right: 10px;
@@ -334,18 +331,18 @@
   align-items: center;
   justify-content: center;
 }
-.col-filter-btn:hover {
+
+.vt-instance .vt-col-filter-btn:hover {
   color: #1890ff;
   background-color: rgba(24, 144, 255, 0.1);
   border-radius: 3px;
 }
-/* 筛选按钮激活状态（有筛选条件时） */
-.col-filter-btn.active {
+
+.vt-instance .vt-col-filter-btn.vt-active {
   color: #1890ff;
 }
 
-.col-filter-popup {
-  /* 筛选弹层 */
+.vt-instance .vt-col-filter-popup {
   position: absolute;
   background-color: white;
   border: 1px solid #ccc;
@@ -358,31 +355,30 @@
   border-radius: 10px;
 }
 
-.filter-option {
+.vt-instance .vt-filter-option {
   display: block;
   padding: 4px 0;
   cursor: pointer;
 }
 
-.filter-option input {
+.vt-instance .vt-filter-option input {
   margin-right: 6px;
 }
 
-.filter-popup-footer {
+.vt-instance .vt-filter-popup-footer {
   margin-top: 8px;
   display: flex;
   gap: 8px;
 }
 
-.filter-btn-ok,
-.filter-btn-clear {
+.vt-instance .vt-filter-btn-ok,
+.vt-instance .vt-filter-btn-clear {
   flex: 1;
   padding: 4px 8px;
   cursor: pointer;
 }
 
-/* 文本输入框样式 */
-.filter-text-input {
+.vt-instance .vt-filter-text-input {
   width: 100%;
   padding: 6px;
   margin-bottom: 10px;
@@ -391,8 +387,7 @@
   box-sizing: border-box;
 }
 
-/* 日期输入框格式 */
-.filter-date-input {
+.vt-instance .vt-filter-date-input {
   width: 100%;
   padding: 6px;
   margin: 4px 0;
@@ -401,8 +396,7 @@
   box-sizing: border-box;
 }
 
-/* 数字输入框格式 */
-.filter-number-iuput {
+.vt-instance .vt-filter-number-input {
   width: 100%;
   padding: 6px;
   margin: 4px 0;
@@ -411,18 +405,18 @@
   box-sizing: border-box;
 }
 
-/* 弹层内的标签文字 */
-.col-filter-popup > div {
+.vt-instance .vt-col-filter-popup > div {
   margin-bottom: 8px;
   font-size: 13px;
   color: #333;
 }
 
-/* 宽度拖拽调整按钮*/
-.table-resize-btn {
+/* ========== 8. 表格宽度拖拽 ========== */
+
+.vt-instance .vt-table-resize-btn {
   position: absolute;
   top: 8px;
-  right: 46px; /* 列管理按钮左侧 */
+  right: 46px;
   width: 16px;
   height: 32px;
   background-color: #fff;
@@ -437,17 +431,18 @@
   z-index: 101;
 }
 
-.table-resize-btn:hover {
+.vt-instance .vt-table-resize-btn:hover {
   border-color: #1890ff;
   background-color: #f0f7ff;
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
 }
 
-/* 列按钮样式 (三个竖点) */
-.col-menu-btn {
+/* ========== 9. 列菜单弹窗 ========== */
+
+.vt-instance .vt-col-menu-btn {
   position: absolute;
   top: 50%;
-  right: 32px;  /* 在筛选按钮左侧 */
+  right: 32px;
   transform: translateY(-50%);
   width: 18px;
   height: 18px;
@@ -460,18 +455,17 @@
   border-radius: 3px;
 }
 
-.col-menu-btn:hover {
+.vt-instance .vt-col-menu-btn:hover {
   color: #1890ff;
   background-color: rgba(24, 144, 255, 0.1);
 }
 
-.col-menu-btn.active {
+.vt-instance .vt-col-menu-btn.vt-active {
   color: #1890ff;
   background-color: rgba(24, 144, 255, 0.1);
 }
 
-/* 列菜单弹窗 */
-.col-menu-popup {
+.vt-instance .vt-col-menu-popup {
   position: absolute;
   background-color: #fff;
   border: 1px solid #d9d9d9;
@@ -482,8 +476,7 @@
   z-index: 1002;
 }
 
-/* 菜单项 */
-.col-menu-item {
+.vt-instance .vt-col-menu-item {
   display: flex;
   align-items: center;
   padding: 8px 12px;
@@ -492,44 +485,43 @@
   transition: background-color 0.2s;
 }
 
-.col-menu-item:hover {
+.vt-instance .vt-col-menu-item:hover {
   background-color: #f5f5f5;
 }
 
-.col-menu-item.active {
+.vt-instance .vt-col-menu-item.vt-active {
   background-color: #e6f7ff;
   color: #1890ff;
 }
 
-.col-menu-item.disabled {
+.vt-instance .vt-col-menu-item.vt-disabled {
   color: #bbb;
   cursor: not-allowed;
 }
 
-.col-menu-item.disabled:hover {
+.vt-instance .vt-col-menu-item.vt-disabled:hover {
   background-color: transparent;
 }
 
-/* 菜单图标 */
-.col-menu-icon {
+.vt-instance .vt-col-menu-icon {
   width: 20px;
   font-size: 16px;
   margin-right: 16px;
   text-align: center;
 }
 
-/* 菜单文字 */
-.col-menu-label {
+.vt-instance .vt-col-menu-label {
   flex: 1;
   font-size: 14px;
 }
 
-/* 表格列管理面板触发按钮 (右上角) */
-.column-manager-trigger {
-  position: absolute; 
+/* ========== 10. 列管理面板 (弹窗式) ========== */
+
+.vt-instance .vt-colmgr-trigger {
+  position: absolute;
   top: 8px;
   right: 8px;
-  float: right;  
+  float: right;
   width: 32px;
   height: 32px;
   border: none;
@@ -542,43 +534,38 @@
   color: #666;
   transition: all 0.2s;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  margin-bottom: -32px; /* 避免占有表格空间 */
+  margin-bottom: -32px;
   z-index: 999;
 }
 
-.column-manager-trigger:hover {
+.vt-instance .vt-colmgr-trigger:hover {
   color: #1890ff;
   background-color: #f0f0f0;
-  box-shadow: 0 2px 8px  rgba(24, 144, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
 }
 
-/* 列管理面板 */
-.column-manager-panel {
+.vt-instance .vt-colmgr-panel {
   position: absolute;
   top: 0;
   right: 0;
   width: 250px;
-  height: 100%; /* 占满 portalContainer 高度 */
+  height: 100%;
   background-color: #fff;
   border-left: 1px solid #d9d9d9;
   box-shadow: -2px 0px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  animation: slideInRight 0.2s ease-out; /* 右侧滑入动效 */
+  animation: vt-slideInRight 0.2s ease-out;
   overflow: hidden;
   z-index: 1001;
 }
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0)
-  }
+
+@keyframes vt-slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
-/* 面板标题 */
-.column-manager-header {
+.vt-instance .vt-colmgr-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -586,13 +573,13 @@
   border-bottom: 1px solid #f0f0f0;
 }
 
-.column-manager-title {
+.vt-instance .vt-colmgr-title {
   font-size: 16px;
   font-weight: 600;
   color: #333;
 }
 
-.column-manager-close {
+.vt-instance .vt-colmgr-close {
   width: 24px;
   height: 24px;
   border: none;
@@ -600,21 +587,20 @@
   font-size: 20px;
   color: #999;
   cursor: pointer;
-  transition: color 0.2s
+  transition: color 0.2s;
 }
 
-.column-manager-close:hover {
+.vt-instance .vt-colmgr-close:hover {
   color: #333;
 }
 
-/* 列列表 */
-.column-manager-list {
+.vt-instance .vt-colmgr-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
 }
 
-.column-manager-item {
+.vt-instance .vt-colmgr-item {
   display: flex;
   align-items: center;
   padding: 8px 16px;
@@ -622,30 +608,29 @@
   transition: background-color 0.2s;
 }
 
-.column-manager-item:hover {
+.vt-instance .vt-colmgr-item:hover {
   background-color: #f5f5f5;
 }
 
-.column-manager-item input[type='checkbox'] {
+.vt-instance .vt-colmgr-item input[type='checkbox'] {
   margin-right: 8px;
   cursor: pointer;
 }
 
-.column-manager-item label {
+.vt-instance .vt-colmgr-item label {
   flex: 1;
   cursor: pointer;
   user-select: none;
 }
 
-/* 底部操作按钮 */
-.column-manager-footer {
+.vt-instance .vt-colmgr-footer {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid #f0f0f0;
 }
 
-.column-manager-btn {
+.vt-instance .vt-colmgr-btn {
   flex: 1;
   padding: 6px 12px;
   border: 1px solid #d9d9d9;
@@ -653,50 +638,50 @@
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s; 
+  transition: all 0.2s;
 }
 
-.column-manager-btn:hover {
+.vt-instance .vt-colmgr-btn:hover {
   color: #1890ff;
   border-color: #1890ff;
 }
 
+/* ========== 11. 示例面板 ========== */
 
-/* ######### 测试示例样本样式 ###### */
-.demo-panel {
+.vt-instance .vt-demo-panel {
   height: 100%;
 }
 
-.demo-panel .panel-header {
+.vt-instance .vt-demo-panel .vt-panel-header {
   margin-bottom: 20px;
 }
 
-.demo-panel .panel-header h3 {
+.vt-instance .vt-demo-panel .vt-panel-header h3 {
   margin: 0 0 8px 0;
   font-size: 16px;
   font-weight: 600;
 }
 
-.demo-panel .panel-header p {
+.vt-instance .vt-demo-panel .vt-panel-header p {
   margin: 0;
   font-size: 14px;
   color: #666;
 }
 
-.demo-panel .panel-body {
+.vt-instance .vt-demo-panel .vt-panel-body {
   background-color: #fff;
   padding: 16px;
   border-radius: 4px;
   border: 1px solid #e0e0e0;
 }
 
-.demo-panel .panel-body p {
+.vt-instance .vt-demo-panel .vt-panel-body p {
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 500;
 }
 
-.demo-panel .panel-body pre {
+.vt-instance .vt-demo-panel .vt-panel-body pre {
   background: #f5f5f5;
   padding: 12px;
   border-radius: 4px;
@@ -705,7 +690,7 @@
   margin: 0 0 16px 0;
 }
 
-.demo-panel .panel-body button {
+.vt-instance .vt-demo-panel .vt-panel-body button {
   padding: 8px 16px;
   background-color: #1890ff;
   color: #fff;
@@ -715,27 +700,13 @@
   font-size: 14px;
 }
 
-.demo-panel .panel-body button:hover {
+.vt-instance .vt-demo-panel .vt-panel-body button:hover {
   background-color: #40a9ff;
 }
 
+/* ========== 12. 列管理面板 (侧边栏版) ========== */
 
-/* ######## 测试面板样式, 不然有点丑 */
-#server-test-panel {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin: 8px 0 12px;
-}
-
-#server-test-panel input {
-  height: 28px;
-  padding: 0 8px;
-  width: 220px;
-}
-
-/** ======== 列管理面板样式 ==== */
-.column-panel {
+.vt-instance .vt-column-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -743,8 +714,7 @@
   background-color: #fff;
 }
 
-/* 透视配置区域 - 整体滚动 */
-.column-panel-pivot-config {
+.vt-instance .vt-column-panel-pivot-config {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -755,32 +725,29 @@
   gap: 16px;
 }
 
-/* 配置区域的滚动条样式 */
-.column-panel-pivot-config::-webkit-scrollbar {
+.vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar {
   width: 6px;
 }
- 
-.column-panel-pivot-config::-webkit-scrollbar-track {
+
+.vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 3px;
 }
- 
-.column-panel-pivot-config::-webkit-scrollbar-thumb {
+
+.vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
- 
-.column-panel-pivot-config::-webkit-scrollbar-thumb:hover {
+
+.vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
 
-
-/* 搜索框 */
-.column-panel-search {
+.vt-instance .vt-column-panel-search {
   margin-bottom: 12px;
 }
 
-.column-panel-search-input {
+.vt-instance .vt-column-panel-search-input {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid #d1d5db;
@@ -790,12 +757,11 @@
   transition: border-color 0.2s;
 }
 
-.column-panel-search-input:focus {
+.vt-instance .vt-column-panel-search-input:focus {
   border-color: #3b82f6;
 }
 
-/* 列列表 */
-.column-panel-list {
+.vt-instance .vt-column-panel-list {
   flex: 1;
   overflow-y: auto;
   margin-bottom: 12px;
@@ -804,7 +770,7 @@
   padding: 8px;
 }
 
-.column-panel-item {
+.vt-instance .vt-column-panel-item {
   display: flex;
   align-items: center;
   padding: 8px;
@@ -814,44 +780,43 @@
   user-select: none;
 }
 
-.column-panel-item:hover {
+.vt-instance .vt-column-panel-item:hover {
   background-color: #f3f4f6;
 }
 
-.column-panel-item.dragging {
+.vt-instance .vt-column-panel-item.vt-dragging {
   opacity: 0.5;
   background-color: #e3f2fd;
 }
 
-.column-panel-item--hidden {
+.vt-instance .vt-column-panel-item--hidden {
   opacity: 0.5;
 }
 
-/* 拖拽插入位置提示线 */
-.drop-indicator {
+.vt-instance .vt-drop-indicator {
   margin: 2px;
   height: 2px;
   background-color: #1890ff;
   pointer-events: none;
 }
 
-.column-panel-drag-handle {
+.vt-instance .vt-column-panel-drag-handle {
   margin-right: 8px;
   color: #999;
   cursor: grab;
   font-size: 16px;
 }
 
-.column-panel-drag-handle:active {
+.vt-instance .vt-column-panel-drag-handle:active {
   cursor: grabbing;
 }
 
-.column-panel-item input[type='checkbox'] {
+.vt-instance .vt-column-panel-item input[type='checkbox'] {
   margin-right: 8px;
   cursor: pointer;
 }
 
-.column-panel-item label {
+.vt-instance .vt-column-panel-item label {
   flex: 1;
   font-size: 14px;
   color: #374151;
@@ -859,15 +824,14 @@
   user-select: none;
 }
 
-/* 底部按钮 */
-.column-panel-footer {
+.vt-instance .vt-column-panel-footer {
   display: flex;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid #e5e7eb;
 }
 
-.column-panel-btn {
+.vt-instance .vt-column-panel-btn {
   flex: 1;
   padding: 8px 12px;
   border-radius: 4px;
@@ -878,57 +842,23 @@
   transition: all 0.2s;
 }
 
-.column-panel-btn:hover {
+.vt-instance .vt-column-panel-btn:hover {
   background-color: #f9fafb;
   border-color: #38b2f6;
   color: #3b82f6;
 }
 
-.column-panel-btn:active {
+.vt-instance .vt-column-panel-btn:active {
   background-color: #f3f4f6;
 }
 
-/** 测试表格容器模式样式 */
-#table-small,
-#table-large {
-  width: 100%;
-}
+/* ========== 13. 透视表核心 ========== */
 
-}
-
-
-/* ======== 透视表样式 ========== */
-
-/* 透视表整体布局: 左表格 + 右配置面板 */
-.pivot-layout {
-  display: flex;
-  height: 100%;
-  width: 100%;
-}
-
-/* 左侧表格区域 */
-.pivot-table-area {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-}
-
-/* 右侧配置面板区域 */
-.pivot-config-area {
-  width: 250px;
-  flex-shrink: 0;
-  border-left: 1px solid #e5e7eb;
-  background-color: #fafbfc;
-  overflow-y: auto;
-}
-
-/* 透视表格 */
-.pivot-table {
+.vt-instance .vt-pivot-table {
   min-width: 100%;
 }
 
-/* 透视表表头 */
-.pivot-header {
+.vt-instance .vt-pivot-header {
   position: sticky;
   top: 0;
   z-index: 10;
@@ -936,24 +866,22 @@
   border-bottom: 2px solid #d1d5db;
 }
 
-/* 透视表表头 */
-.pivot-header-cell {
+.vt-instance .vt-pivot-header-cell {
   font-weight: 600;
   color: #374151;
   font-size: 14px;
 }
 
-/* 数值列表头右对齐 */
-.pivot-header-cell:not(:first-child) {
+.vt-instance .vt-pivot-header-cell:not(:first-child) {
   text-align: right;
 }
 
-.pivot-table .table-row {
+.vt-instance .vt-pivot-table .vt-table-row {
   display: flex;
   height: auto;
 }
 
-.pivot-table .table-cell {
+.vt-instance .vt-pivot-table .vt-table-cell {
   box-sizing: border-box;
   overflow: hidden;
   border-right: 1px solid #e5e7eb;
@@ -965,30 +893,26 @@
   min-width: 100px;
 }
 
-/* 透视表行 */
-.pivot-row {
+.vt-instance .vt-pivot-row {
   transition: background-color 0.15s ease;
 }
 
-/* 分组行 */
-.pivot-group-row {
+.vt-instance .vt-pivot-group-row {
   background-color: #f9fafb;
   font-weight: 500;
 }
 
-.pivot-group-row:hover {
+.vt-instance .vt-pivot-group-row:hover {
   background-color: #eff6ff;
 }
 
-/* 分组单元格 */
-.pivot-group-cell {
+.vt-instance .vt-pivot-group-cell {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-/* 展开/折叠 图标 */
-.pivot-expand-icon {
+.vt-instance .vt-pivot-expand-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1003,62 +927,93 @@
   flex-shrink: 0;
 }
 
-.pivot-expand-icon:hover {
+.vt-instance .vt-pivot-expand-icon:hover {
   color: #1890ff;
   background-color: rgba(24, 144, 255, 0.1);
 }
 
-/* 分组标签 */
-.pivot-group-label {
+.vt-instance .vt-pivot-group-label {
   font-weight: 600;
   color: #1f2937;
 }
 
-/* 行数标记 */
-.pivot-count-badge {
+.vt-instance .vt-pivot-count-badge {
   font-size: 12px;
   color: #9ca3af;
   margin-left: 4px;
 }
 
-/* 聚合值单元格 */
-.pivot-agg-cell {
+.vt-instance .vt-pivot-agg-cell {
   color: #1890ff;
   font-weight: 500;
 }
 
-/* 数据行 */
-.pivot-data-row {
+.vt-instance .vt-pivot-data-row {
   background-color: #fff;
 }
 
-.pivot-data-row:hover {
+.vt-instance .vt-pivot-data-row:hover {
   background-color: #f0f7ff;
 }
 
-/* 透视表体 */
-.pivot-table-body {
-  /* 预留, 后续虚拟滚动用 */
-  font-size: 12px;
+/* ========== 14. 透视表小计与总计 ========== */
+
+.vt-instance .vt-pivot-row-subtotal {
+  background-color: #f3f3f6;
+  border-top: 1px solid #d1d5db;
+  border-bottom: 1px solid #d1d5db;
 }
 
-/* ========= 透视表配置面板样式 ========== */
-.pivot-config-panel {
+.vt-instance .vt-pivot-row-subtotal:hover {
+  background-color: #e5e7eb;
+}
+
+.vt-instance .vt-pivot-row-subtotal .vt-table-cell {
+  color: #374151;
+  font-weight: 600;
+}
+
+.vt-instance .vt-pivot-row-grandtotal {
+  position: sticky;
+  bottom: 0;
+  background-color: #e5e7eb;
+  border-top: 1px solid #9ca3af;
+  border-bottom: 1px solid #9ca3af;
+  z-index: 2;
+}
+
+.vt-instance .vt-pivot-row-grandtotal:hover {
+  background-color: #d1d5db;
+}
+
+.vt-instance .vt-pivot-row-grandtotal .vt-table-cell {
+  color: #1f2937;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.vt-instance .vt-pivot-total-value-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========== 15. 透视表配置面板 ========== */
+
+.vt-instance .vt-pivot-config-panel {
   padding: 16px;
 }
 
-.pivot-config-title {
+.vt-instance .vt-pivot-config-title {
   font-size: 16px;
   font-weight: 600;
   color: #1f2937;
   margin-bottom: 16px;
 }
 
-.pivot-config-section {
+.vt-instance .vt-pivot-config-section {
   margin-bottom: 12px;
 }
 
-.pivot-config-label {
+.vt-instance .vt-pivot-config-label {
   margin-bottom: 4px;
   margin-top: 0;
   font-size: 13px;
@@ -1066,8 +1021,65 @@
   color: #374151;
 }
 
-/* 透视表吸顶分组行 */
-.pivot-sticky-group {
+.vt-instance .vt-pivot-select {
+  /* 透视表下拉选择 */
+}
+
+.vt-instance .vt-pivot-value-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+
+.vt-instance .vt-pivot-value-field-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  transition: background-color 0.15s;
+}
+
+.vt-instance .vt-pivot-value-field-item:hover {
+  background-color: #f3f4f6;
+}
+
+.vt-instance .vt-pivot-value-field-item input[type="checkbox"] {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vt-instance .vt-pivot-value-field-item label {
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.vt-instance .vt-pivot-agg-select {
+  padding: 3px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #fff;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.vt-instance .vt-pivot-agg-select:focus {
+  border-color: #1890ff;
+}
+
+.vt-instance .vt-pivot-agg-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ========== 16. 透视表字段分组 ========== */
+
+.vt-instance .vt-pivot-sticky-group {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1075,8 +1087,7 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-/* 透视表分子字段容器 */
-.pivot-group-fields-container {
+.vt-instance .vt-pivot-group-fields-container {
   margin: 4px 0;
   padding: 4px;
   border: 1px solid #e5e7eb;
@@ -1084,8 +1095,7 @@
   background-color: #fafafa;
 }
 
-/* 分组字段项 */
-.pivot-group-field-item {
+.vt-instance .vt-pivot-group-field-item {
   font-size: 14px;
   display: flex;
   align-items: center;
@@ -1097,50 +1107,37 @@
   transition: all 0.2s;
 }
 
-.pivot-group-field-item:hover {
+.vt-instance .vt-pivot-group-field-item:hover {
   background-color: #f9fafb;
 }
 
-/* 拖拽中的样式 */
-.pivot-group-field-item.dragging {
+.vt-instance .vt-pivot-group-field-item.vt-dragging {
   opacity: 0.5;
   background-color: #e0f2fe;
   border-color: #3b82f6;
 }
 
-/* 拖拽手柄 */
-.pivot-drag-handle {
+.vt-instance .vt-pivot-drag-handle {
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* 插入提示线 (蓝色) */
-.drop-indicator {
-  height: 2px;
-  background-color: #38b2f6;
-  margin: 2px 0;
-  border-radius: 1px;
-}
-
-/* 勾选框样式 */
-.pivot-group-field-item input[type="checkbox"] {
+.vt-instance .vt-pivot-group-field-item input[type="checkbox"] {
   margin-right: 8px;
   cursor: pointer;
 }
 
-.pivot-group-field-item input[type="checkbox"]:disabled {
+.vt-instance .vt-pivot-group-field-item input[type="checkbox"]:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-/* 标签样式 */
-.pivot-group-field-item label {
+.vt-instance .vt-pivot-group-field-item label {
   margin: 0;
   user-select: none;
 }
 
-/* 分区标题 */
-.pivot-section-label {
+.vt-instance .vt-pivot-section-label {
   font-size: 12px;
   font-weight: 600;
   color: #6b7280;
@@ -1149,52 +1146,40 @@
   padding-left: 4px;
 }
 
-/* 分区分割线 */
-.pivot-section-divider {
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  margin: 16px 0;
+.vt-instance .vt-pivot-selected-fields {
+  border: 2px dashed #3b82f6;
+  background-color: #eff6ff;
 }
 
-/* 已选字段区域 */
-.pivot-selected-fields {
- border: 2px dashed #3b82f6;
- background-color: #eff6ff;
-}
-
-/* 已选区域, 有内容时的样式 */
-.pivot-selected-fields:has(.pivot-group-field-item) {
+.vt-instance .vt-pivot-selected-fields:has(.vt-pivot-group-field-item) {
   background-color: transparent;
   border: 1px solid transparent;
   padding: 2px;
 }
 
-/* 可选字段区域 */
-.pivot-available-fields {
+.vt-instance .vt-pivot-available-fields {
   padding-right: 4px;
 }
 
-/* 可选字段区域滚动条样式 */
-.pivot-available-fields::-webkit-scrollbar {
+.vt-instance .vt-pivot-available-fields::-webkit-scrollbar {
   width: 6px;
 }
- 
-.pivot-available-fields::-webkit-scrollbar-track {
+
+.vt-instance .vt-pivot-available-fields::-webkit-scrollbar-track {
   background: #f3f4f6;
   border-radius: 3px;
 }
- 
-.pivot-available-fields::-webkit-scrollbar-thumb {
+
+.vt-instance .vt-pivot-available-fields::-webkit-scrollbar-thumb {
   background: #d1d5db;
   border-radius: 3px;
 }
- 
-.pivot-available-fields::-webkit-scrollbar-thumb:hover {
+
+.vt-instance .vt-pivot-available-fields::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
- 
-/* 空状态提示 */
-.pivot-empty-hint {
+
+.vt-instance .vt-pivot-empty-hint {
   padding: 12px;
   text-align: center;
   font-size: 13px;
@@ -1202,133 +1187,33 @@
   font-style: italic;
 }
 
-/* 已选字段项的特殊样式, 区别于未选 */
-.pivot-selected-fields .pivot-group-field-item {
+.vt-instance .vt-pivot-selected-fields .vt-pivot-group-field-item {
   background-color: #eff6ff;
   border-color: #bfdbfe;
 }
 
-.pivot-selected-fields .pivot-group-field-item:hover {
+.vt-instance .vt-pivot-selected-fields .vt-pivot-group-field-item:hover {
   background-color: #dbeafe;
   border-color: #93c5fd;
 }
 
-/* 未选字段项的样式 */
-.pivot-available-fields .pivot-group-field-item {
+.vt-instance .vt-pivot-available-fields .vt-pivot-group-field-item {
   background-color: #fff;
   border-color: #e5efeb;
 }
 
-.pivot-available-fields .pivot-group-field-item:hover {
+.vt-instance .vt-pivot-available-fields .vt-pivot-group-field-item:hover {
   background-color: #f9fafb;
 }
 
-/* 禁用状态的字段项 */
-.pivot-group-field-item input[type="checkbox"]:disabled ~ label {
+.vt-instance .vt-pivot-group-field-item input[type="checkbox"]:disabled ~ label {
   color: #9ca3af;
   cursor: not-allowed;
 }
 
-/* 小计行 和 总计行 */
-.pivot-row-subtotal {
-  background-color: #f3f3f6;
-  border-top: 1px solid #d1d5db;
-  border-bottom: 1px solid #d1d5db;
-}
+/* ========== 17. Pivot Mode 开关 ========== */
 
-.pivot-row-subtotal:hover {
-  background-color: #e5e7eb;
-}
-
-.pivot-row-subtotal .table-cell {
-  color: #374151;
-  font-weight: 600;
-}
-
-/* 总计行 */
-.pivot-row-grandtotal {
-  position: sticky;
-  bottom: 0;
-  background-color: #e5e7eb;
-  border-top: 1px solid #9ca3af;
-  border-bottom: 1px solid #9ca3af;
-  z-index: 2;
-}
-
-.pivot-row-grandtotal:hover {
-  background-color: #d1d5db;
-}
-
-.pivot-row-grandtotal .table-cell {
-  color: #1f2937;
-  font-weight: 700;
-  font-size: 14px;
-}
-
-/* 小计和总计, 数值列右对齐 */
-.pivot-total-value-cell {
-  font-variant-numeric: tabular-nums;
-}
-
-
-/* 数值字段列表 */
-.pivot-value-fields-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 4px;
-}
-
-/* 数值字段选项行 */
-.pivot-value-field-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-  transition: background-color 0.15s;
-}
-
-.pivot-value-field-item:hover {
-  background-color: #f3f4f6;
-}
-
-.pivot-value-field-item input[type="checkbox"] {
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.pivot-value-field-item label {
-  font-size: 14px;
-  color: #374151;
-  cursor: pointer;
-}
-
-/* 聚合方式下拉框 */
-.pivot-agg-select {
-  padding: 3px 6px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #6b7280;
-  background-color: #fff;
-  outline: none;
-  flex-shrink: 0;
-}
-
-.pivot-agg-select:focus {
-  border-color: #1890ff;
-}
-
-.pivot-agg-select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ======== Pivot Mode 开关样式 ======= */
-
-.pivot-mode-title {
+.vt-instance .vt-pivot-mode-title {
   display: inline-block;
   margin-right: 10px;
   margin-bottom: 10px;
@@ -1338,7 +1223,7 @@
   line-height: 20px;
 }
 
-.pivot-switch {
+.vt-instance .vt-pivot-switch {
   position: relative;
   display: inline-block;
   width: 32px;
@@ -1346,13 +1231,13 @@
   cursor: pointer;
 }
 
-.pivot-switch-input {
+.vt-instance .vt-pivot-switch-input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-.pivot-switch-slider {
+.vt-instance .vt-pivot-switch-slider {
   position: absolute;
   top: 0;
   left: 0;
@@ -1363,7 +1248,7 @@
   transition: 0.3s;
 }
 
-.pivot-switch-slider::before {
+.vt-instance .vt-pivot-switch-slider::before {
   content: '';
   position: absolute;
   height: 14px;
@@ -1375,36 +1260,38 @@
   transition: 0.3s;
 }
 
-.pivot-switch:checked + .pivot-switch-slider {
+.vt-instance .vt-pivot-switch-input:checked + .vt-pivot-switch-slider {
   background-color: #1890ff;
 }
 
-.pivot-switch-input:checked + .pivot-switch-slider::before {
+.vt-instance .vt-pivot-switch-input:checked + .vt-pivot-switch-slider::before {
   transform: translateX(14px);
 }
 
-/* 透视表面板样式 */
-.pivot-panel {
+/* ========== 18. 透视表面板 ========== */
+
+.vt-instance .vt-pivot-panel {
   padding: 0;
 }
 
-.pivot-panel-header {
+.vt-instance .vt-pivot-panel-header {
   margin-bottom: 12px;
 }
 
-/* 透视表-虚拟滚动结构 */
-.pivot-scroll-container {
+/* ========== 19. 透视表虚拟滚动 ========== */
+
+.vt-instance .vt-pivot-scroll-container {
   flex: 1;
   overflow: auto;
   position: relative;
 }
 
-.pivot-scroll-spacer {
+.vt-instance .vt-pivot-scroll-spacer {
   position: relative;
   width: 100%;
 }
 
-.pivot-virtual-content {
+.vt-instance .vt-pivot-virtual-content {
   position: absolute;
   top: 0;
   left: 0;
@@ -1412,32 +1299,27 @@
   will-change: transform;
 }
 
-.pivot-header-wrapper {
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  background-color: #fff;
-  z-index: 1;
-}
-
-/* ========== 表头布局 ========== */
-.pivot-header-wrapper {
+.vt-instance .vt-pivot-header-wrapper {
   display: flex;
   align-items: center;
   gap: 8px;
   background-color: #f9fafb;
   border-bottom: 2px solid #e5e7eb;
   padding: 4px 8px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
-.pivot-header-wrapper > .table-row {
+.vt-instance .vt-pivot-header-wrapper > .vt-table-row {
   flex: 1;
-  min-width: 0; 
+  min-width: 0;
 }
 
-/* ========== 展开/折叠全部按钮 ========== */
+/* ========== 20. 展开/折叠按钮 ========== */
 
-.pivot-button-group {
+.vt-instance .vt-pivot-button-group {
   display: flex;
   gap: 4px;
   padding-right: 8px;
@@ -1445,7 +1327,7 @@
   order: -1;
 }
 
-.pivot-control-btn {
+.vt-instance .vt-pivot-control-btn {
   padding: 4px 8px;
   font-size: 12px;
   color: #374151;
@@ -1457,49 +1339,49 @@
   white-space: nowrap;
 }
 
-.pivot-control-btn:hover {
+.vt-instance .vt-pivot-control-btn:hover {
   background-color: #f3f4f6;
   border-color: #9ca3af;
 }
 
-.pivot-control-btn:active {
+.vt-instance .vt-pivot-control-btn:active {
   background-color: #e5e7eb;
 }
 
-/* ========== 面包屑导航 ========== */
- 
-.pivot-breadcrumb-wrapper {
-  display: none; /* 默认隐藏，滚动时显示 */
+/* ========== 21. 面包屑导航 ========== */
+
+.vt-instance .vt-pivot-breadcrumb-wrapper {
+  display: none;
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background-color: #fffbeb; 
+  background-color: #fffbeb;
   border-bottom: 1px solid #e5e7eb;
   font-size: 13px;
   color: #6b7280;
   flex-wrap: wrap;
 }
- 
-.pivot-breadcrumb-item {
+
+.vt-instance .vt-pivot-breadcrumb-item {
   color: #3b82f6;
   cursor: pointer;
   transition: all 0.15s ease;
 }
- 
-.pivot-breadcrumb-item:hover {
+
+.vt-instance .vt-pivot-breadcrumb-item:hover {
   color: #2563eb;
   text-decoration: underline;
 }
- 
-.pivot-breadcrumb-separator {
+
+.vt-instance .vt-pivot-breadcrumb-separator {
   color: #9ca3af;
   margin: 0 4px;
   user-select: none;
 }
 
-/* ========== 小计行开关 ========== */
+/* ========== 22. 小计行开关 ========== */
 
-.pivot-subtotal-toggle {
+.vt-instance .vt-pivot-subtotal-toggle {
   padding: 8px 12px;
   border-top: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
@@ -1507,7 +1389,7 @@
   background-color: #ffffff;
 }
 
-.pivot-subtotal-label {
+.vt-instance .vt-pivot-subtotal-label {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1517,13 +1399,12 @@
   user-select: none;
 }
 
-.pivot-subtotal-label input[type="checkbox"] {
+.vt-instance .vt-pivot-subtotal-label input[type="checkbox"] {
   width: 16px;
   height: 16px;
   cursor: pointer;
 }
 
-.pivot-subtotal-label span {
+.vt-instance .vt-pivot-subtotal-label span {
   flex: 1;
 }
-

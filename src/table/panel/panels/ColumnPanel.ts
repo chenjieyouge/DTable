@@ -36,25 +36,25 @@ export class ColumnPanel implements IPanel {
 
   private render(): HTMLDivElement {
     const container = document.createElement('div')
-    container.className = 'column-panel'
+    container.className = 'vt-column-panel'
 
     // Pivot Mode 开关
     const pivotToggleRow = document.createElement('div')
-    pivotToggleRow.className = 'column-panel-pivot-toggle'
+    pivotToggleRow.className = 'vt-column-panel-pivot-toggle'
 
     const pivotLable = document.createElement('span')
-    pivotLable.className = 'pivot-mode-title'
+    pivotLable.className = 'vt-pivot-mode-title'
     pivotLable.textContent = 'Pivot'
     
     const pivotSwitch = document.createElement('label')
-    pivotSwitch.className = 'pivot-switch'
+    pivotSwitch.className = 'vt-pivot-switch'
 
     const pivotInput = document.createElement('input')
-    pivotInput.className = 'pivot-switch-input'
+    pivotInput.className = 'vt-pivot-switch-input'
     pivotInput.type = 'checkbox'
 
     const pivotSlider = document.createElement('span')
-    pivotSlider.className = 'pivot-switch-slider'
+    pivotSlider.className = 'vt-pivot-switch-slider'
 
     pivotSwitch.appendChild(pivotInput)
     pivotSwitch.appendChild(pivotSlider)
@@ -64,7 +64,7 @@ export class ColumnPanel implements IPanel {
 
     // Pivot 配置区, 默认隐藏
     this.pivotConfgSection = document.createElement('div')
-    this.pivotConfgSection.className = 'column-panel-pivot-config'
+    this.pivotConfgSection.className = 'vt-column-panel-pivot-config'
     this.pivotConfgSection.style.display = 'none'
     container.appendChild(this.pivotConfgSection)
 
@@ -95,10 +95,10 @@ export class ColumnPanel implements IPanel {
 
     // 搜索框 (暂时保留, 后续实现)
     const searchBox = document.createElement('div')
-    searchBox.className = 'column-panel-search'
+    searchBox.className = 'vt-column-panel-search'
     this.searchInput = document.createElement('input')
     this.searchInput.type = 'text'
-    this.searchInput.className = 'column-panel-search-input'
+    this.searchInput.className = 'vt-column-panel-search-input'
     this.searchInput.placeholder = '搜索列名...'
     searchBox.appendChild(this.searchInput)
     container.appendChild(searchBox)
@@ -107,23 +107,23 @@ export class ColumnPanel implements IPanel {
 
     // 列列表容器
     this.listContainer = document.createElement('div')
-    this.listContainer.className = 'column-panel-list'
+    this.listContainer.className = 'vt-column-panel-list'
     container.appendChild(this.listContainer)
 
     // 底部操作按钮
     const footer = document.createElement('div')
-    footer.className = 'column-panel-footer'
+    footer.className = 'vt-column-panel-footer'
 
     const btnShowAll = document.createElement('button')
-    btnShowAll.className = 'column-panel-btn'
+    btnShowAll.className = 'vt-column-panel-btn'
     btnShowAll.textContent = '全选'
 
     const btnHideAll = document.createElement('button')
-    btnHideAll.className = 'column-panel-btn'
+    btnHideAll.className = 'vt-column-panel-btn'
     btnHideAll.textContent = '全隐藏'
 
     const btnReset = document.createElement('button')
-    btnReset.className = 'column-panel-btn'
+    btnReset.className = 'vt-column-panel-btn'
     btnReset.textContent = '重置'
 
     footer.appendChild(btnShowAll)
@@ -210,19 +210,19 @@ export class ColumnPanel implements IPanel {
       const isVisible = !hiddenKeys.includes(key)
       // 每个列表项
       const item = document.createElement('div')
-      item.className = 'column-panel-item'
+      item.className = 'vt-column-panel-item'
       item.draggable = true // 开启可拖拽
       item.dataset.columnKey = key 
       item.dataset.index = String(index)
 
       // 给隐藏列添加样式提示
       if (!isVisible) {
-        item.classList.add('column-panel-item--hidden')
+        item.classList.add('vt-column-panel-item--hidden')
       }
 
       // 拖拽图标, 出现在每列元素左侧
       const dragHandle = document.createElement('span')
-      dragHandle.className = 'column-panel-drag-handle'
+      dragHandle.className = 'vt-column-panel-drag-handle'
       dragHandle.textContent = '⋮⋮'
       item.appendChild(dragHandle)
 
@@ -256,32 +256,32 @@ export class ColumnPanel implements IPanel {
   private bindDragEvents(item: HTMLDivElement): void {
     // 拖拽开始
     item.addEventListener('dragstart', (e) => {
-      item.classList.add('dragging')
+      item.classList.add('vt-dragging')
       e.dataTransfer!.effectAllowed = 'move'  // 拖拽只允许 'move' 效果
     })
 
     // 拖拽结束
     item.addEventListener('dragend', () => {
-      item.classList.remove('dragging')
+      item.classList.remove('vt-dragging')
       // 移除所有插入提示
-      this.listContainer?.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      this.listContainer?.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
     })
 
     // 拖拽经过时的视觉反馈
     item.addEventListener('dragover', (e) => {
       e.preventDefault()
 
-      const draggingItem = this.listContainer?.querySelector('.dragging')
+      const draggingItem = this.listContainer?.querySelector('.vt-dragging')
       if (!draggingItem || draggingItem === item) return 
 
       const rect = item.getBoundingClientRect()
       const midY = rect.top + rect.height / 2 
 
       // 先移除之前的提示线
-      this.listContainer?.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      this.listContainer?.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
       // 再添加蓝色提示线
       const indicator = document.createElement('div')
-      indicator.className = 'drop-indicator'
+      indicator.className = 'vt-drop-indicator'
 
       if (e.clientY < midY) {
         item.parentNode?.insertBefore(indicator, item)
@@ -297,7 +297,7 @@ export class ColumnPanel implements IPanel {
       e.preventDefault()
       
       // 移除提示线
-      this.listContainer?.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      this.listContainer?.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
       // 获取新的顺序
       const items = Array.from(this.listContainer?.children || []) as HTMLDivElement[]
       const newOrder = items.map(el => el.dataset.columnKey).filter(key => key) as string[]
@@ -314,7 +314,7 @@ export class ColumnPanel implements IPanel {
 
     // ======= 行分组字段: 离散型, 最多支持 3-5 层 ========
     const groupLabel = document.createElement('div')
-    groupLabel.className = 'pivot-config-label'
+    groupLabel.className = 'vt-pivot-config-label'
     groupLabel.textContent = '行分组字段(最多3层)'
     this.pivotConfgSection.appendChild(groupLabel)
 
@@ -328,11 +328,11 @@ export class ColumnPanel implements IPanel {
 
     // ======== 已选字段区域 ============
     const selectedSectionLabel = document.createElement('div')
-    selectedSectionLabel.className = 'pivot-section-label'
+    selectedSectionLabel.className = 'vt-pivot-section-label'
     this.pivotConfgSection.appendChild(selectedSectionLabel)
 
     const selectedContainer = document.createElement('div')
-    selectedContainer.className = 'pivot-group-fields-container pivot-selected-fields'
+    selectedContainer.className = 'vt-pivot-group-fields-container vt-pivot-selected-fields'
     this.pivotConfgSection.appendChild(selectedContainer)
 
     // 渲染已选字段 (按 currentGroupKeys 的顺序)
@@ -347,23 +347,23 @@ export class ColumnPanel implements IPanel {
     // 若没有已选字段, 显示提示
     if (this.currentGroupKeys.length === 0) {
       const emptyHint = document.createElement('div')
-      emptyHint.className = 'pivot-empty-hint'
+      emptyHint.className = 'vt-pivot-empty-hint'
       emptyHint.textContent = '请从下方选中分组的字段'
       selectedContainer.appendChild(emptyHint)
     }
 
     // =========== 分割线 ==========
     const divider = document.createElement('hr')
-    divider.className = 'pivot-section-divider'
+    divider.className = 'vt-pivot-section-divider'
 
     // ============ 可选字段区域 ============
     const availableSectionLabel = document.createElement('div')
-    availableSectionLabel.className = 'pivot-section-label'
+    availableSectionLabel.className = 'vt-pivot-section-label'
     availableSectionLabel.textContent = '可选分组字段'
     this.pivotConfgSection.appendChild(availableSectionLabel)
 
     const availableContainer = document.createElement('div')
-    availableContainer.className = 'pivot-group-fields-container pivot-available-field'
+    availableContainer.className = 'vt-pivot-group-fields-container vt-pivot-available-fields'
     this.pivotConfgSection.appendChild(availableContainer)
 
     // 渲染未选字段
@@ -377,10 +377,10 @@ export class ColumnPanel implements IPanel {
 
     // ======= 小计行开关 =========
     const subtotalToggle = document.createElement('div')
-    subtotalToggle.className = 'pivot-subtotal-toggle'
+    subtotalToggle.className = 'vt-pivot-subtotal-toggle'
 
     const subtotalLabel = document.createElement('label')
-    subtotalLabel.className = 'pivot-subtotal-label'
+    subtotalLabel.className = 'vt-pivot-subtotal-label'
     
     const subtotalCheckbox = document.createElement('input')
     subtotalCheckbox.type = 'checkbox'
@@ -401,12 +401,12 @@ export class ColumnPanel implements IPanel {
 
     // ======= 数值字段 选择区 =====
     const valueLabel = document.createElement('div')
-    valueLabel.className = 'pivot-config-label'
+    valueLabel.className = 'vt-pivot-config-label'
     valueLabel.textContent = '数值字段'
     this.pivotConfgSection.appendChild(valueLabel)
 
     const valueList = document.createElement('div')
-    valueList.className = 'pivot-value-fields-list'
+    valueList.className = 'vt-pivot-value-fields-list'
 
     // 只显示数值字段, 且排除已选为分组的字段
     const valueColumns = this.originalColumns.filter(
@@ -421,7 +421,7 @@ export class ColumnPanel implements IPanel {
     // 一个字段一行; (checkbox, lable, title, aggType); 
     for (const col of valueColumns) {
       const item = document.createElement('div')
-      item.className = 'pivot-value-field-item'
+      item.className = 'vt-pivot-value-field-item'
       item.dataset.colKey = col.key 
 
       const checkbox = document.createElement('input')
@@ -436,7 +436,7 @@ export class ColumnPanel implements IPanel {
       label.textContent = col.title
 
       const aggSelect = document.createElement('select')
-      aggSelect.className = 'pivot-agg-select'
+      aggSelect.className = 'vt-pivot-agg-select'
       aggSelect.dataset.colKey = col.key
 
       const aggTypes = ['sum', 'count', 'avg', 'max', 'min']
@@ -480,7 +480,7 @@ export class ColumnPanel implements IPanel {
 
   ): HTMLDivElement {
     const item = document.createElement('div')
-    item.className = 'pivot-group-field-item'
+    item.className = 'vt-pivot-group-field-item'
     item.dataset.fieldKey = col.key
     // 勾选框
     const checkbox = document.createElement('input')
@@ -522,7 +522,7 @@ export class ColumnPanel implements IPanel {
 
     // 拖拽手柄 (已选字段才能显示)
     const dragHandle = document.createElement('span')
-    dragHandle.className = 'pivot-drag-handle'
+    dragHandle.className = 'vt-pivot-drag-handle'
     dragHandle.textContent = '⋮⋮'
     dragHandle.style.cursor = 'grab'
     dragHandle.style.marginLeft = 'auto'
@@ -550,10 +550,10 @@ export class ColumnPanel implements IPanel {
   private bindGroupFieldDragEvents(item: HTMLDivElement) {
     // 拖拽开始
     item.addEventListener('dragstart', (e) => {
-      item.classList.add('dragging')
+      item.classList.add('vt-dragging')
       e.dataTransfer!.effectAllowed = 'move'
       // 改变拖拽手柄样式
-      const handle = item.querySelector('.pivot-drag-handle') as HTMLDivElement
+      const handle = item.querySelector('.vt-pivot-drag-handle') as HTMLDivElement
       if (handle) {
         handle.style.cursor = 'grabbing'
       }
@@ -562,15 +562,15 @@ export class ColumnPanel implements IPanel {
     // 拖拽结束
     item.addEventListener('dragend', () => {
       // 移除拖拽样式
-      item.classList.remove('dragging')
+      item.classList.remove('vt-dragging')
       // 恢复拖拽手柄样式
-      const handle = item.querySelector('.pivot-drag-handle') as HTMLDivElement
+      const handle = item.querySelector('.vt-pivot-drag-handle') as HTMLDivElement
       if (handle) {
         handle.style.cursor = 'grab'
       }
       // 移除所有插入提示线
-      const container = item.closest('.pivot-selected-fields') as HTMLDivElement
-      container.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      const container = item.closest('.vt-pivot-selected-fields') as HTMLDivElement
+      container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
       
       // 更新 currentGroupKeys 顺序
       this.updateGroupKeysOrder()
@@ -580,8 +580,8 @@ export class ColumnPanel implements IPanel {
     item.addEventListener('dragover', (e) => {
       e.preventDefault()
 
-      const container = item.closest('.pivot-selected-fields') as HTMLDivElement
-      const draggingItem = container.querySelector('.dragging')
+      const container = item.closest('.vt-pivot-selected-fields') as HTMLDivElement
+      const draggingItem = container.querySelector('.vt-dragging')
       if (!draggingItem || draggingItem === item) return 
 
       // 只允许在选中的字段之间拖拽
@@ -592,10 +592,10 @@ export class ColumnPanel implements IPanel {
       const minY = rect.top + rect.height / 2 
 
       // 先移除之前的提示线
-      container.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
       // 添加蓝色提示线
       const indicator = document.createElement('div')
-      indicator.className = 'drop-indicator'
+      indicator.className = 'vt-drop-indicator'
 
       if (e.clientY < minY) {
         item.parentNode?.insertBefore(indicator, item)
@@ -610,10 +610,10 @@ export class ColumnPanel implements IPanel {
     item.addEventListener('drop', (e) => {
       e.preventDefault()
       // 移除提示线
-      const container = item.closest('.pivot-selected-fields') as HTMLDivElement
+      const container = item.closest('.vt-pivot-selected-fields') as HTMLDivElement
       if (!container) return 
 
-      container.querySelectorAll('.drop-indicator').forEach(el => el.remove())
+      container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
       // 更新 currentGroupKeys 顺序
       this.updateGroupKeysOrder()
     })
@@ -622,7 +622,7 @@ export class ColumnPanel implements IPanel {
   /** 根据 DOM 顺序, 更新 currentGroupKeys, 并触发透视表重建 */
   private updateGroupKeysOrder(): void {
     // 获取所有选中的字段, 按 dom 排序
-    const container = this.pivotConfgSection?.querySelector('.pivot-selected-fields')
+    const container = this.pivotConfgSection?.querySelector('.vt-pivot-selected-fields')
     if (!container) return 
 
     // 获取所有已选字段, 按 dom 顺序
@@ -631,7 +631,7 @@ export class ColumnPanel implements IPanel {
 
     for (const item of items) {
       // 跳过空提示
-      if (item.classList.contains('pivot-empty-hint')) continue 
+      if (item.classList.contains('vt-pivot-empty-hint')) continue 
 
       const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
       if (checkbox.checked) {
@@ -646,7 +646,7 @@ export class ColumnPanel implements IPanel {
     this.currentGroupKeys = newGroupKeys
 
     // 触发透视表重建, 通过 emitPivotConfig 
-    const valueList = this.pivotConfgSection?.querySelector('.pivot-value-fields-list') as HTMLDivElement
+    const valueList = this.pivotConfgSection?.querySelector('.vt-pivot-value-fields-list') as HTMLDivElement
     if (valueList) {
       this.emitPivotConfig(valueList)
     }
@@ -660,9 +660,9 @@ export class ColumnPanel implements IPanel {
 
     // 收集数值字段
     const valueFields: IPivotConfig['valueFields'] = []
-    valueList.querySelectorAll('.pivot-value-field-item').forEach(item => {
+    valueList.querySelectorAll('.vt-pivot-value-field-item').forEach(item => {
       const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
-      const aggSelect = item.querySelector('.pivot-agg-select') as HTMLSelectElement
+      const aggSelect = item.querySelector('.vt-pivot-agg-select') as HTMLSelectElement
 
       if (checkbox?.checked) {
         const key = checkbox.dataset.colKey!

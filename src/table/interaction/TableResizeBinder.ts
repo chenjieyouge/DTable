@@ -27,7 +27,7 @@ export class TableResizeBinder {
       const startX = e.clientX  // 鼠标按下时, 在可视区距离左侧的距离
       const startWidth = scrollContainer.getBoundingClientRect().width // 容器宽
       // 添加拖拽中的视觉反馈, 提升用户体验
-      scrollContainer.classList.add('table-resizing')
+      scrollContainer.classList.add('vt-table-resizing')
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
       // 开始拖动
@@ -60,7 +60,7 @@ export class TableResizeBinder {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', onUp)
         // 移除拖拽中的视觉反馈
-        scrollContainer.classList.remove('table-resizing')
+        scrollContainer.classList.remove('vt-table-resizing')
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
 
@@ -85,7 +85,7 @@ export class TableResizeBinder {
     // 创建新按钮
     // 创建新按钮
     this.resizeBtn = document.createElement('button')
-    this.resizeBtn.className = 'table-resize-btn'
+    this.resizeBtn.className = 'vt-table-resize-btn'
     this.resizeBtn.innerHTML = `
       <svg width="16" height="16" viewBox="0 0 16 16">
         <path d="M10 2v12M6 2v12" stroke="currentColor" stroke-width="2"/>

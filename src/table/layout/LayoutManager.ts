@@ -40,21 +40,21 @@ export class LayoutManager {
   public render(): HTMLDivElement {
     // 最外层大容器
     this.container = document.createElement('div')
-    this.container.className = 'table-layout-container'
+    this.container.className = 'vt-layout-container'
     // 主表格区域 (占满整个容器)
     this.mainArea = document.createElement('div')
-    this.mainArea.className = 'table-layout-main'
+    this.mainArea.className = 'vt-layout-main'
     this.container.appendChild(this.mainArea)
     // 右侧面板区域 (绝对定位, 从右侧滑入)
     if (this.layoutConfig.sidePanel) {
       this.sideArea = document.createElement('div')
-      this.sideArea.className = 'table-layout-side'
+      this.sideArea.className = 'vt-layout-side'
       // 只设置动态宽度, 其他样式都写在 css 文件中
       // this.sideArea.style.width = `${this.layoutConfig.sidePanel.width}px`
 
       // 默认隐藏 (向右平移到屏幕外)
       if (!this.layoutConfig.sidePanel.defaultOpen) {
-        this.sideArea.classList.add('collapsed')
+        this.sideArea.classList.add('vt-collapsed')
       }
       this.container.appendChild(this.sideArea)
     }
@@ -106,10 +106,10 @@ export class LayoutManager {
   public getTabsArea(): HTMLDivElement {
     if (!this.container) return null as any
     // 查找或创建 Tab 栏容器
-    let tabsArea = this.container.querySelector<HTMLDivElement>('.table-layout-side-tabs')
+    let tabsArea = this.container.querySelector<HTMLDivElement>('.vt-layout-side-tabs')
     if (!tabsArea) {
       tabsArea = document.createElement('div')
-      tabsArea.className = 'table-layout-side-tabs'
+      tabsArea.className = 'vt-layout-side-tabs'
       this.container.appendChild(tabsArea)
     }
     
@@ -119,12 +119,12 @@ export class LayoutManager {
   // 切换面板显示/隐藏
   public togglePanel(show?: boolean): void {
     if (!this.sideArea) return 
-    const shouldShow = show ?? this.sideArea.classList.contains('collapsed')
+    const shouldShow = show ?? this.sideArea.classList.contains('vt-collapsed')
 
     if (shouldShow) {
-      this.sideArea?.classList.remove('collapsed')
+      this.sideArea?.classList.remove('vt-collapsed')
     } else {
-      this.sideArea.classList.add('collapsed')
+      this.sideArea.classList.add('vt-collapsed')
     }
   }
 

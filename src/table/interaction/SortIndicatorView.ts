@@ -6,20 +6,20 @@ export class SortIndicatorView {
     this.clear()
     if (!sort) return 
     const targetHeader = this.scrollContainer.querySelector<HTMLDivElement>(
-      `.header-cell[data-column-key="${sort.key}"]`
+      `.vt-header-cell[data-column-key="${sort.key}"]`
     )
     if (!targetHeader) return 
 
     const indicator = document.createElement('span')
-    indicator.className = 'sort-indicator'
+    indicator.className = 'vt-sort-indicator'
     indicator.textContent = sort.direction === 'asc' ? '↑' : '↓'
     targetHeader.appendChild(indicator)
   }
 
   public clear() {
-    const allHeaders = this.scrollContainer.querySelectorAll('.header-cell')
+    const allHeaders = this.scrollContainer.querySelectorAll('.vt-header-cell')
     allHeaders.forEach((header) => {
-      const indicator = header.querySelector('.sort-indicator')
+      const indicator = header.querySelector('.vt-sort-indicator')
       if (indicator) indicator.remove()
     })
   }

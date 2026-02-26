@@ -29,7 +29,7 @@ export class ColumnResizeBinder {
     // 当鼠标按下时触发
     this.onMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLDivElement | null 
-      const handle = target?.closest<HTMLDivElement>('.col-resize-handle')
+      const handle = target?.closest<HTMLDivElement>('.vt-col-resize-handle')
       if (!handle) return  
       // 阻止触发排序 click (HeaderSortBinder 是 click 事件)
       e.preventDefault()
@@ -51,7 +51,7 @@ export class ColumnResizeBinder {
       // 创建辅助线
       this.guidEl?.remove()
       this.guidEl = document.createElement('div')
-      this.guidEl.className = 'col-resize-guide'
+      this.guidEl.className = 'vt-col-resize-guide'
       scrollContainer.appendChild(this.guidEl)
 
       const containerRect = scrollContainer.getBoundingClientRect() // 容器相对视口位置
@@ -95,7 +95,7 @@ export class ColumnResizeBinder {
     // 双击自动调整列宽
     headerRow.addEventListener('dblclick', (e: MouseEvent) => {
       const target = e.target as HTMLDivElement | null 
-      const handle = target?.closest<HTMLDivElement>('.col-resize-handle')
+      const handle = target?.closest<HTMLDivElement>('.vt-col-resize-handle')
       if (!handle) return 
 
       e.preventDefault()
@@ -124,7 +124,7 @@ export class ColumnResizeBinder {
 
   ): number | null  {
     // 获取该列的所有单元格 
-    const cells = container.querySelectorAll<HTMLDivElement>(`.table-cell[data-column-key="${columnKey}"]`)
+    const cells = container.querySelectorAll<HTMLDivElement>(`.vt-table-cell[data-column-key="${columnKey}"]`)
 
     if (cells.length === 0) return null 
     let fitWidth = minWidth 
@@ -182,7 +182,7 @@ export class ColumnResizeBinder {
     const headerRow = cell.parentElement
     if (!headerRow) return false 
 
-    const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.header-cell'))
+    const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.vt-header-cell'))
     const index = cells.indexOf(cell as HTMLDivElement)
     return index >= 0 && index < this.frozenColumnCount
   }

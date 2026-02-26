@@ -34,11 +34,11 @@ describe('VirtualTable-LayoutManager 集成', () => {
     await table.ready
     table.mount()
     // 验证布局容器存在
-    const layoutContainer = container.querySelector('.table-layout-container')
+    const layoutContainer = container.querySelector('.vt-layout-container')
     expect(layoutContainer).toBeTruthy() // 除 false, 0, '', null, undefined, NaN
     // 验证 mainArea 和 sideArea 都存在
-    const mainArea = container.querySelector('.table-layout-main')
-    const sideArea = container.querySelector('.table-layout-side')
+    const mainArea = container.querySelector('.vt-layout-main')
+    const sideArea = container.querySelector('.vt-layout-side')
     expect(mainArea).toBeTruthy()
     expect(sideArea).toBeTruthy()
   })
@@ -53,10 +53,10 @@ describe('VirtualTable-LayoutManager 集成', () => {
     await table.ready
     table.mount()
     // 不应该有布局容器
-    const layoutContainer = container.querySelector('.table-layout-container')
+    const layoutContainer = container.querySelector('.vt-layout-container')
     expect(layoutContainer).toBeFalsy()
     // 应该直接有表格容器
-    const tableWrapper = container.querySelector('.table-wrapper')
+    const tableWrapper = container.querySelector('.vt-table-wrapper')
     expect(tableWrapper).toBeTruthy()
   })
 })

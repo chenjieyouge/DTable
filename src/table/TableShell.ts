@@ -113,7 +113,7 @@ export function mountTableShell(params: {
   containerEl.innerHTML = ''
   // 2. 创建 Portal 容器 (包裹层), 用来给一些功能做定位父元素参考
   const portalContainer = document.createElement('div')
-  portalContainer.className = 'table-portal-container'
+  portalContainer.className = 'vt-portal-container'
   portalContainer.style.position = 'relative'
 
   portalContainer.style.height = `${config.tableHeight}px`
@@ -125,7 +125,7 @@ export function mountTableShell(params: {
   }
   // 3.创建滚动容器 (原来的 scrollContainer)
   const scrollContainer = document.createElement('div')
-  scrollContainer.className = 'table-container'
+  scrollContainer.className = 'vt-table-container'
   scrollContainer.style.width = '100%'
   scrollContainer.style.height = '100%'
   applyContainerStyles(scrollContainer, config)
@@ -137,19 +137,19 @@ export function mountTableShell(params: {
   let statusBar: HTMLDivElement | null = null 
   if (config.showStatusBar !== false) {
     statusBar = document.createElement('div')
-    statusBar.className = 'table-status-bar'
+    statusBar.className = 'vt-status-bar'
     // client 模式: 显示总行数和已选
     // server 模式: 显示总行数, 当前页面, 已选
     // 使用 tableId 生成唯一 ID, 避免多表格冲突
     const tableId = config.tableId || 'default'
     statusBar.innerHTML = `
-      <div class="table-status-bar-item">
+      <div class="vt-status-bar-item">
         总行数: <strong id="table-total-rows-${tableId}">0</strong>
       </div>
-      <div class="table-status-bar-item" id="table-page-indicator-${tableId}" style="display: none;">
+      <div class="vt-status-bar-item" id="table-page-indicator-${tableId}" style="display: none;">
       当前页: 第 <strong id="table-current-page-${tableId}">1</strong> 页 (共 <strong id="table-total-pages-${tableId}">1</strong> 页)
       </div>
-      <div class="table-status-bar-item">
+      <div class="vt-status-bar-item">
         已选: <strong id="table-selected-rows-${tableId}">0</strong>
       </div>
     `
@@ -222,7 +222,7 @@ export function mountTableShell(params: {
   // 绑定整表宽度拖拽
   const tableResizeBinder = new TableResizeBinder()
   if (onTableResizeEnd) {
-    const layoutContainer = scrollContainer.closest<HTMLDivElement>('.table-layout-container')!
+    const layoutContainer = scrollContainer.closest<HTMLDivElement>('.vt-layout-container')!
     tableResizeBinder.bind({
       scrollContainer,
       portalContainer, 
@@ -245,9 +245,9 @@ export function mountTableShell(params: {
 
   // 4. 数据容器 -> 滚动容器;  dataContainer -> virtualContainer
   const dataContainer = document.createElement('div')
-  dataContainer.className = 'data-container'
+  dataContainer.className = 'vt-data-container'
   const virtualContent = document.createElement('div')
-  virtualContent.className = 'virtual-content'
+  virtualContent.className = 'vt-virtual-content'
 
   // 挂载 scrollContaint -> wrapper -> header / dataContainer -> virtaulContent
   dataContainer.appendChild(virtualContent)
@@ -347,7 +347,7 @@ function applyContainerStyles(container: HTMLDivElement, config: IConfig) {
 // 辅助函数-创建表格容器 wrapper
 function createTableWrapper(config: IConfig): HTMLDivElement {
   const wrapper = document.createElement('div')
-  wrapper.className = 'table-wrapper'
+  wrapper.className = 'vt-table-wrapper'
   const totalWidth = config.columns.reduce((sum, col) => sum + (col.width || 0), 0)
 
   if (typeof config.tableWidth === 'string') {

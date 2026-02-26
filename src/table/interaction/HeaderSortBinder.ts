@@ -8,10 +8,10 @@ export class HeaderSortBinder {
     this.handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null 
       // 只响应 .header-text 的事件
-      const textSpan = target?.closest('.header-text')
+      const textSpan = target?.closest('.vt-header-text')
       if (!textSpan) return 
 
-      const cell = target?.closest<HTMLDivElement>('.header-cell') 
+      const cell = target?.closest<HTMLDivElement>('.vt-header-cell') 
       if (!cell) return 
 
       if (cell.dataset.sortable !==  'true') return 

@@ -20,7 +20,7 @@ export class ColumnMenuView {
     const isSorted = currentSort?.key === column.key  // 判断当前列是否正在排序
     // 创建弹窗容器
     this.popupEl = document.createElement('div')
-    this.popupEl.className = 'col-menu-popup'
+    this.popupEl.className = 'vt-col-menu-popup'
     // 菜单弹窗, 相对于 portalContainer 定位
     const rect = anchorEl.getBoundingClientRect() // "三点"按钮的位置
     const portalRect = portalContainer.getBoundingClientRect()
@@ -62,14 +62,14 @@ export class ColumnMenuView {
     // 渲染菜单项
     menuItems.forEach(item => {
       const menuItem = document.createElement('div')
-      menuItem.className = 'col-menu-item'
+      menuItem.className = 'vt-col-menu-item'
 
-      if(item.active) menuItem.classList.add('active') // 高亮当前激活菜单项
-      if (item.disabled) menuItem.classList.add('disabled')
+      if(item.active) menuItem.classList.add('vt-active') // 高亮当前激活菜单项
+      if (item.disabled) menuItem.classList.add('vt-disabled')
 
       menuItem.innerHTML = `
-        <span class="col-menu-icon">${item.icon}</span>
-        <span class="col-menu-label">${item.label}</span>
+        <span class="vt-col-menu-icon">${item.icon}</span>
+        <span class="vt-col-menu-label">${item.label}</span>
       `
       if (!item.disabled) {
         menuItem.addEventListener('click', (e) => {

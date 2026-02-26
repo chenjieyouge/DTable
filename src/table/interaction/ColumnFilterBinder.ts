@@ -27,7 +27,7 @@ export class ColumnFilterBinder {
 
     headerRow.addEventListener('click', async (e: MouseEvent) => {
       const target = e.target as HTMLDivElement
-      const btn = target?.closest<HTMLDivElement>('.col-filter-btn')
+      const btn = target?.closest<HTMLDivElement>('.vt-col-filter-btn')
       if (!btn) return 
       e.stopPropagation()
 
@@ -46,7 +46,7 @@ export class ColumnFilterBinder {
       const current = getCurrentFilter(key) // 筛选项的值
       // 创建弹层
       this.popEl = document.createElement('div')
-      this.popEl.className = 'col-filter-popup'
+      this.popEl.className = 'vt-col-filter-popup'
       const rect = btn.getBoundingClientRect()
       const portalRect = portalContainer.getBoundingClientRect()
 
@@ -95,7 +95,7 @@ export class ColumnFilterBinder {
     // 渲染下拉框的每行元素
     options.forEach(val => {
       const label = document.createElement('label')
-      label.className = 'filter-option'
+      label.className = 'vt-filter-option'
 
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox' // 原生多选下拉框
@@ -136,7 +136,7 @@ export class ColumnFilterBinder {
   ) {
     const input = document.createElement('input')
     input.type = 'text'
-    input.className = 'filter-text-input'
+    input.className = 'vt-filter-text-input'
     input.placeholder = '输入文本筛选...'
     input.value = current?.kind === 'text' ? current.value: ''
     // 挂载
@@ -170,12 +170,12 @@ export class ColumnFilterBinder {
     // 开始日期
     const startInput = document.createElement('input')
     startInput.type = 'date' // 日期输入框
-    startInput.className = 'filter-date-input'
+    startInput.className = 'vt-filter-date-input'
     startInput.value = current?.kind === 'dateRange' ? current.start ?? '' : ''
     // 结束日期
     const endInput = document.createElement('input')
     endInput.type = 'date'
-    endInput.className = 'filter-date-input'
+    endInput.className = 'vt-filter-date-input'
     endInput.value = current?.kind === 'dateRange' ? current.end ?? '' : ''
     // 标签 label 
     const startLabel = document.createElement('div')
@@ -219,13 +219,13 @@ export class ColumnFilterBinder {
     // 最小数字输入框
     const minInput = document.createElement('input')
     minInput.type = 'number'
-    minInput.className = 'filter-number-input'
+    minInput.className = 'vt-filter-number-input'
     minInput.placeholder = '最小值'
     minInput.value = current?.kind === 'numberRange' && current.min !== undefined ? String(current.min) : ''
     // 最大值输入框
     const maxInput = document.createElement('input')
     maxInput.type = 'number'
-    maxInput.className = 'filter-number-input'
+    maxInput.className = 'vt-filter-number-input'
     maxInput.placeholder = '最大值'
     maxInput.value = current?.kind === 'numberRange' && current.max !== undefined ? String(current.max) : ''
     // 标签 label 
@@ -267,19 +267,19 @@ export class ColumnFilterBinder {
   private appendFooter(onOk: () => void, onClear: () => void) {
     // 确认按钮
     const btnOk = document.createElement('button')
-    btnOk.className = 'filter-btn-ok'
+    btnOk.className = 'vt-filter-btn-ok'
     btnOk.textContent = '确定'
     btnOk.onclick = onOk 
 
     // 清空按钮
     const btnClear = document.createElement('button')
-    btnClear.className = 'filter-btn-clear'
+    btnClear.className = 'vt-filter-btn-clear'
     btnClear.textContent = '清空'
     btnClear.onclick = onClear
 
     // 页脚
     const footer = document.createElement('div')
-    footer.className = 'filter-popup-footer'
+    footer.className = 'vt-filter-popup-footer'
     footer.appendChild(btnOk)
     footer.appendChild(btnClear)
     this.popEl!.appendChild(footer)

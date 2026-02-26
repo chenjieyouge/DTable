@@ -92,37 +92,37 @@ export class PivotTable {
     if (!this.tableArea) return 
 
     const wrapper = document.createElement('div')
-    wrapper.className = 'pivot-table'
+    wrapper.className = 'vt-pivot-table'
     wrapper.style.height = '100%'
     wrapper.style.display = 'flex'
     wrapper.style.flexDirection = 'column'
 
     // 表头 (固定, 不随滚动)
     this.headerEl = document.createElement('div')
-    this.headerEl.className = 'pivot-header-wrapper'
+    this.headerEl.className = 'vt-pivot-header-wrapper'
     wrapper.appendChild(this.headerEl)
 
     // 面包屑导航 (固定, 不随滚动)
     this.breadcrumbEl = document.createElement('div')
-    this.breadcrumbEl.className = 'pivot-breadcrumb-wrapper'
+    this.breadcrumbEl.className = 'vt-pivot-breadcrumb-wrapper'
     wrapper.appendChild(this.breadcrumbEl)
 
     // 滚动容器
     this.scrollContainer = document.createElement('div')
-    this.scrollContainer.className = 'pivot-scroll-container'
+    this.scrollContainer.className = 'vt-pivot-scroll-container'
 
     // 吸顶分组行, 介于 scrollContiner 和 scrollSpacer 之间, 不有 transform 影响
     this.stickyGroupEl = document.createElement('div')
-    this.stickyGroupEl.className = 'pivot-sticky-group'
+    this.stickyGroupEl.className = 'vt-pivot-sticky-group'
     this.stickyGroupEl.style.display = 'none'
 
     // 撑高度的而 spacer
     this.scrollSpacer = document.createElement('div')
-    this.scrollSpacer.className = 'pivot-scroll-spacer'
+    this.scrollSpacer.className = 'vt-pivot-scroll-spacer'
 
     // 虚拟内容区
     this.virtualContent = document.createElement('div')
-    this.virtualContent.className = 'pivot-virtual-content'
+    this.virtualContent.className = 'vt-pivot-virtual-content'
 
     // 挂载
     this.scrollContainer.appendChild(this.stickyGroupEl)
@@ -166,18 +166,18 @@ export class PivotTable {
   
     // 展开 / 折叠 按钮容器 (放在左侧)
     const buttonGroup = document.createElement('div')
-    buttonGroup.className = 'pivot-button-group'
+    buttonGroup.className = 'vt-pivot-button-group'
 
     // 展开全部按钮
     const expandAllBtn = document.createElement('button')
-    expandAllBtn.className = 'pivot-control-btn'
+    expandAllBtn.className = 'vt-pivot-control-btn'
     expandAllBtn.textContent = '展开'
     expandAllBtn.title = '展开所有分组'
     expandAllBtn.addEventListener('click', () => this.expandAll())
 
     // 折叠全部按钮
     const collapseAllBtn = document.createElement('button')
-    collapseAllBtn.className = 'pivot-control-btn'
+    collapseAllBtn.className = 'vt-pivot-control-btn'
     collapseAllBtn.textContent = '折叠'
     collapseAllBtn.title = '折叠所有分组'
     collapseAllBtn.addEventListener('click', () => this.collapseAll())
@@ -448,7 +448,7 @@ export class PivotTable {
     breadcrumbs.forEach((crumb, index) => {
       // 面包屑项
       const crumbItem = document.createElement('span')
-      crumbItem.className = 'pivot-breadcrumb-item'
+      crumbItem.className = 'vt-pivot-breadcrumb-item'
       crumbItem.textContent = crumb.label
       crumbItem.addEventListener('click', () => this.scrollToRow(crumb.rowIndex))
 
@@ -457,7 +457,7 @@ export class PivotTable {
       // 分隔符
       if (index < breadcrumbs.length - 1) {
         const separator = document.createElement('span')
-        separator.className = 'pivot-breadcrumb-separator'
+        separator.className = 'vt-pivot-breadcrumb-separator'
         separator.textContent = ' > '
         this.breadcrumbEl!.appendChild(separator)
       }

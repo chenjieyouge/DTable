@@ -39,13 +39,13 @@ export class SidePanelManager {
   private render(): HTMLDivElement {
     // 只渲染面板内容容器, 不包含 Tab
     const container = document.createElement('div')
-    container.className = 'side-panel-content-wrapper'
+    container.className = 'vt-side-panel-wrapper'
 
     // 默认隐藏面板内容
-    container.classList.add('hidden')
+    container.classList.add('vt-hidden')
     // 渲染面板内容区
     this.contentContainer = document.createElement('div')
-    this.contentContainer.className = 'side-panel-content'
+    this.contentContainer.className = 'vt-side-panel-content'
     container.appendChild(this.contentContainer)
     // 在外部传入的 tabsContainer 中渲染 Tab
     this.renderTabsToContainer()
@@ -59,19 +59,19 @@ export class SidePanelManager {
     // 为每个面板创建一个 tab
     this.configs.forEach(config => {
       const tab = document.createElement('div')
-      tab.className = 'side-panel-tab-vertical'
+      tab.className = 'vt-side-tab'
       tab.dataset.panelId = config.id
       // Tab 内容: 图标 + 标题
       if (config.icon) {
         const icon = document.createElement('div')
-        icon.className = 'tab-icon'
+        icon.className = 'vt-tab-icon'
         icon.textContent = config.icon 
         tab.appendChild(icon)
       }
 
       // 标题 (垂直显示)
       const title = document.createElement('div')
-      title.className = 'tab-title-vertical'
+      title.className = 'vt-tab-title'
       title.textContent = config.title
       tab.appendChild(title)
 
@@ -114,7 +114,7 @@ export class SidePanelManager {
       return 
     }
 
-    this.container.classList.remove('hidden')
+    this.container.classList.remove('vt-hidden')
 
     // 1. 隐藏当前活跃面板
     if (this.activePanel) {
@@ -141,13 +141,13 @@ export class SidePanelManager {
 
   /** 更新 Tab 激活状态 */
   public updateTabsActiveState(activeId: string): void {
-    const tabs = this.tabsContainer.querySelectorAll<HTMLDivElement>('.side-panel-tab-vertical')
+    const tabs = this.tabsContainer.querySelectorAll<HTMLDivElement>('.vt-side-tab')
     tabs.forEach(tab => {
       const tabId = tab.dataset.panelId 
       if (tabId === activeId) {
-        tab.classList.add('active')
+        tab.classList.add('vt-active')
       } else {
-        tab.classList.remove('active')
+        tab.classList.remove('vt-active')
       }
     })
   }
@@ -157,7 +157,7 @@ export class SidePanelManager {
     if (this.activePanel) {
       const panel = this.panels.get(this.activePanel)
       panel?.onHide?.()
-      this.container.classList.add('hidden')
+      this.container.classList.add('vt-hidden')
       this.contentContainer.innerHTML = ''
       this.activePanel = null 
       this.updateTabsActiveState('')

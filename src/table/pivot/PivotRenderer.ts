@@ -29,7 +29,7 @@ export class PivotRenderer {
    */
   public renderHeader(): HTMLDivElement {
     const header = document.createElement('div')
-    header.className = 'table-row pivot-header'
+    header.className = 'vt-table-row vt-pivot-header'
 
     // 第一列: 分组字段 (多个时用 "/" 连接)
     const rowGroups = this.config.rowGroups
@@ -39,7 +39,7 @@ export class PivotRenderer {
     })
 
     const firstCell = document.createElement('div')
-    firstCell.className = 'table-cell pivot-header-cell'
+    firstCell.className = 'vt-table-cell vt-pivot-header-cell'
     firstCell.textContent = groupLabels.join('/') // 如: "大区/城市"
     firstCell.style.fontWeight = 'bold'
     header.appendChild(firstCell)
@@ -48,7 +48,7 @@ export class PivotRenderer {
     for (const valueField of this.config.valueFields) {
       const col = this.columns.find(c => c.key === valueField.key)
       const cell = document.createElement('div')
-      cell.className = 'table-cell pivot-header-cell'
+      cell.className = 'vt-table-cell vt-pivot-header-cell'
       // 显示: 字段名(聚合方式), 如 "销售额(sum)"
       const label = valueField.label || col?.title || valueField.key
       cell.textContent = `${label}(${valueField.aggregation})`
@@ -67,17 +67,17 @@ export class PivotRenderer {
   public renderRow(flatRow: IPivotFlatRow, rowIndex: number): HTMLDivElement {
 
     const row = document.createElement('div')
-    row.className = 'table-row pivot-row'
+    row.className = 'vt-table-row vt-pivot-row'
     row.dataset.nodeId = flatRow.nodeId
     row.dataset.type = flatRow.type
     row.dataset.level = String(flatRow.level)
 
     // 根据 rowType 添加特殊样式类
     if (flatRow.rowType === 'subtotal') {
-      row.classList.add('pivot-row-subtotal')
+      row.classList.add('vt-pivot-row-subtotal')
 
     } else if (flatRow.rowType === 'grandtotal') {
-      row.classList.add('pivot-row-grandtotal')
+      row.classList.add('vt-pivot-row-grandtotal')
     }
 
     // 小计行 和 总计行 的特殊渲染
@@ -100,24 +100,24 @@ export class PivotRenderer {
    * 结构: [▶/▼ 图标] [分组值 (行数)] | 聚合值1 | 聚合值2 | ...
    */
   private renderGroupRow(row: HTMLDivElement, flatRow: IPivotFlatRow): void {
-    row.classList.add('pivot-group-row')
+    row.classList.add('vt-pivot-group-row')
     // 缩进量: 每层 20px 
     const indent = flatRow.level * 20
 
     // 第一个单元格: 展开图标 + 分组值
     const firstCell = document.createElement('div')
-    firstCell.className = 'table-cell pivot-group-cell'
+    firstCell.className = 'vt-table-cell vt-pivot-group-cell'
     firstCell.style.paddingLeft = `${indent + 8}px`
 
     // 展开 / 折叠 图标
     const expandIcon = document.createElement('span')
-    expandIcon.className = 'pivot-expand-icon'
+    expandIcon.className = 'vt-pivot-expand-icon'
     expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
     firstCell.appendChild(expandIcon)
 
     // 分组值 + 行数
     const groupLabel = document.createElement('span')
-    groupLabel.className = 'pivot-group-label'
+    groupLabel.className = 'vt-pivot-group-label'
     const currentGroupKey = this.config.rowGroups[flatRow.level] || this.config.rowGroups[0]
     const groupValue = flatRow.data[currentGroupKey] ?? '(空)'
     groupLabel.textContent = `${groupValue}`
@@ -125,7 +125,7 @@ export class PivotRenderer {
 
     // 行数标记
     const countBadge = document.createElement('span')
-    countBadge.className = 'pivot-count-badge'
+    countBadge.className = 'vt-pivot-count-badge'
     // 从聚合数据中找 count 或者用 valuesFields 中的 count 字段
     const countField = this.config.valueFields.find(vf => vf.aggregation === 'count') 
     const count = countField ? flatRow.data[countField.key] : ''
@@ -139,7 +139,7 @@ export class PivotRenderer {
     // 后续单元格: 聚合值
     for (const valueField of this.config.valueFields) {
       const cell = document.createElement('div')
-      cell.className = 'table-cell pivot-agg-cell'
+      cell.className = 'vt-table-cell vt-pivot-agg-cell'
       const value = flatRow.data[valueField.key]
       cell.textContent = value !== null ? String(value): ''
       // 设置数值字段都右对齐 (感觉应该不起作用)
@@ -156,13 +156,13 @@ export class PivotRenderer {
    * 结构: [缩进] 分组字段值 | 值1 | 值2 | ...
    */
   private renderDataRow(row: HTMLDivElement, flatRow: IPivotFlatRow): void {
-    row.classList.add('pivot-data-row')
+    row.classList.add('vt-pivot-data-row')
     // 缩进量
     const indent = flatRow.level * 20
 
     // 第一列: 分组字段值 (带缩进)
     const firstCell = document.createElement('div')
-    firstCell.className = 'table-cell'
+    firstCell.className = 'vt-table-cell'
     firstCell.style.paddingLeft = `${indent + 28}px` // 20px 图标 + 8px padding
     const firstKey = Object.keys(flatRow.data)[0]
     firstCell.textContent = String(flatRow.data[firstKey] ?? '')
@@ -172,7 +172,7 @@ export class PivotRenderer {
     // 后续列: 数值字段值
     for (const valueField of this.config.valueFields) {
       const cell = document.createElement('div')
-      cell.className = 'table-cell'
+      cell.className = 'vt-table-cell'
       const value = flatRow.data[valueField.key]
       cell.textContent = value != null ? String(value) : ''
       cell.style.textAlign = 'right'
@@ -189,7 +189,7 @@ export class PivotRenderer {
   public renderTotalRow(row: HTMLDivElement, flatRow: IPivotFlatRow): void {
     // 第一列: 小计/总计 标签
     const fisrtCell = document.createElement('div')
-    fisrtCell.className = 'table-cell pivot-total-cell'
+    fisrtCell.className = 'vt-table-cell vt-pivot-total-cell'
 
     if (flatRow.rowType === 'subtotal') {
       // 小计行: 缩进与子项对齐
@@ -212,7 +212,7 @@ export class PivotRenderer {
     // 后续列: 聚合值
     for (const valueField of this.config.valueFields) {
       const cell = document.createElement('div')
-      cell.className = 'table-cell pivot-total-value-cell'
+      cell.className = 'vt-table-cell vt-pivot-total-value-cell'
 
       const value = flatRow.data[valueField.key]
       cell.textContent = value !== null ? String(value) : ''

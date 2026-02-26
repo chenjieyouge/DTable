@@ -19,16 +19,16 @@ export class ColumnDragBinder {
     this.onMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLDivElement
       // 点到 resize handle 不参与列拖拽, 避免冲突
-      if (target?.closest('.col-resize-handle')) return 
+      if (target?.closest('.vt-col-resize-handle')) return 
 
-      const cell = target?.closest<HTMLDivElement>('.header-cell')
+      const cell = target?.closest<HTMLDivElement>('.vt-header-cell')
       if (!cell) return 
       
       const fromKey = cell.dataset.columnKey // 获取表头单元格字段的 key 值
       if (!fromKey) return 
       
       // 获取所有表头字段, 包装为数组,  通过类名 .header-cell
-      const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.header-cell'))
+      const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.vt-header-cell'))
       const keys = cells
         .map((col) => col.dataset.columnKey)
         .filter((key): key is string => Boolean(key))
@@ -41,7 +41,7 @@ export class ColumnDragBinder {
 
       // 拖拽辅助线, 复用列宽拖拽辅助线的样式
       let indicator: HTMLDivElement | null = document.createElement('div')
-      indicator.className = 'col-resize-guide'
+      indicator.className = 'vt-col-resize-guide'
       scrollContainer.appendChild(indicator)
       
       const containerRect = scrollContainer.getBoundingClientRect()

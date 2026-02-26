@@ -57,7 +57,7 @@ export class ColumnManager {
 
   private updateHeaderRow(row: HTMLDivElement, columns: IColumn[]): void {
     // 更新表头行
-    const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+    const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.vt-table-cell'))
     const cellMap = new Map<string, HTMLDivElement>()
     // 把将要被更新的表头行的每个单元格组成 map: <key: cell>{}
     existingCells.forEach(cell => {
@@ -94,7 +94,7 @@ export class ColumnManager {
 
   private updateSummaryRow(row: HTMLDivElement, columns: IColumn[]): void {
     // 更新汇总行
-    const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+    const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.vt-table-cell'))
     const cellMap = new Map<string, HTMLDivElement>()
 
     existingCells.forEach(cell => {
@@ -129,7 +129,7 @@ export class ColumnManager {
   private updateDataRows(rows: HTMLDivElement[], columns: IColumn[]): void {
     // 批量更新数据行, 也是循环一行行啦
     rows.forEach(row => {
-      const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+      const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.vt-table-cell'))
       const cellMap = new Map<string, HTMLDivElement>()
 
       existingCells.forEach(cell => {

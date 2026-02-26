@@ -33,29 +33,29 @@ export class ColumnManagerView {
 
     // 创建面板容器
     this.panelEl = document.createElement('div')
-    this.panelEl.className = 'column-manager-panel'
+    this.panelEl.className = 'vt-colmgr-panel'
 
     // 面板标题
     const header = document.createElement('div')
-    header.className = 'column-manager-header'
+    header.className = 'vt-colmgr-header'
     header.innerHTML = `
-      <span class="column-manager-title">列管理</span>
-      <button class="column-manager-close" title="关闭">×</button>
+      <span class="vt-colmgr-title">列管理</span>
+      <button class="vt-colmgr-close" title="关闭">×</button>
     `
     this.panelEl.appendChild(header)
     // 关闭按钮
-    const closeBtn = header.querySelector('.column-manager-close') as HTMLButtonElement
+    const closeBtn = header.querySelector('.vt-colmgr-close') as HTMLButtonElement
     closeBtn.addEventListener('click', () => this.destroy())
     // 列列表
     const listContainer = document.createElement('div')
-    listContainer.className = 'column-manager-list'
+    listContainer.className = 'vt-colmgr-list'
 
     // 遍历每列, 显示出字段列表
     allColumns.forEach(col => {
       const isVisible = !hiddenKeys.includes(col.key)
 
       const item = document.createElement('div')
-      item.className = 'column-manager-item'
+      item.className = 'vt-colmgr-item'
       // 每个字段后面配置一个单选框
       const checkbox = document.createElement('input')
       checkbox.type = 'checkbox'
@@ -78,10 +78,10 @@ export class ColumnManagerView {
     this.panelEl.appendChild(listContainer)
     // 底部操作按钮, 后续直接改为在顶部, 全选/全不选 得了
     const footer = document.createElement('div')
-    footer.className = 'column-manager-footer'
+    footer.className = 'vt-colmgr-footer'
     // 全选按钮
     const btnShowAll = document.createElement('button')
-    btnShowAll.className = 'column-manager-btn'
+    btnShowAll.className = 'vt-colmgr-btn'
     btnShowAll.textContent = '全选'
     btnShowAll.addEventListener('click', () => {
       onShowAll()
@@ -89,7 +89,7 @@ export class ColumnManagerView {
     })
     // 取消全选
     const btnHideAll = document.createElement('button')
-    btnHideAll.className = 'column-manager-btn'
+    btnHideAll.className = 'vt-colmgr-btn'
     btnHideAll.textContent = '全不选'
     btnHideAll.addEventListener('click', () => {
       onHideAll()
@@ -97,7 +97,7 @@ export class ColumnManagerView {
     })
     // 重置按钮
     const btnReset = document.createElement('button')
-    btnReset.className = 'column-manager-btn'
+    btnReset.className = 'vt-colmgr-btn'
     btnReset.textContent = '重置'
     btnReset.addEventListener('click', () => {
       onReset()
