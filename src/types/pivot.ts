@@ -22,6 +22,7 @@ export interface IPivotConfig {
     aggregation: AggregationType
     label?: string // 显示名称(可选)
   }[]
+  showSubtotals?: boolean // 是否显示分组小计行, 默认 true
 }
 
 // 树节点类型: 分组行 or 数据行

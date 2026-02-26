@@ -1,5 +1,5 @@
 import type { TableStore } from "@/table/state/createTableStore";
-import type { IColumn } from "@/types";
+
 
 /**
  * 面板接口: 所有右侧面板均要实现这个接口

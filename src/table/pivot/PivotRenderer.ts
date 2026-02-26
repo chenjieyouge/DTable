@@ -142,6 +142,10 @@ export class PivotRenderer {
       cell.className = 'table-cell pivot-agg-cell'
       const value = flatRow.data[valueField.key]
       cell.textContent = value !== null ? String(value): ''
+      // 设置数值字段都右对齐 (感觉应该不起作用)
+      cell.style.textAlign = 'right'
+      cell.style.paddingRight = '12px'
+
       row.appendChild(cell)
     }
   }
@@ -171,6 +175,8 @@ export class PivotRenderer {
       cell.className = 'table-cell'
       const value = flatRow.data[valueField.key]
       cell.textContent = value != null ? String(value) : ''
+      cell.style.textAlign = 'right'
+      cell.style.paddingRight = '12px'
       row.appendChild(cell)
     }
   }

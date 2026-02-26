@@ -41,6 +41,7 @@ export class PivotTable {
   private virtualContent: HTMLDivElement | null = null 
   private headerEl: HTMLDivElement | null = null 
   private stickyGroupEl: HTMLDivElement | null = null 
+  private breadcrumbEl: HTMLDivElement | null = null  // 面包屑导航
 
   private visibleRowMap = new Map<number, HTMLDivElement>()
   private visibleSet = new Set<number>()
@@ -101,6 +102,11 @@ export class PivotTable {
     this.headerEl.className = 'pivot-header-wrapper'
     wrapper.appendChild(this.headerEl)
 
+    // 面包屑导航 (固定, 不随滚动)
+    this.breadcrumbEl = document.createElement('div')
+    this.breadcrumbEl.className = 'pivot-breadcrumb-wrapper'
+    wrapper.appendChild(this.breadcrumbEl)
+
     // 滚动容器
     this.scrollContainer = document.createElement('div')
     this.scrollContainer.className = 'pivot-scroll-container'
@@ -144,7 +150,7 @@ export class PivotTable {
     // 构建透视树
     this.treeRoot = this.processor.buildPivotTree(this.data)
     // 展平
-    this.flatRows = PivotTreeNode.flattenTree(this.treeRoot)
+    this.flatRows = PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
     // 渲染表头, 更新滚动高度, 清空并重新渲染可视区
     this.renderHeader()
     this.updateScrollHeight()
@@ -157,6 +163,31 @@ export class PivotTable {
     if (!this.headerEl) return 
 
     this.headerEl.innerHTML = ''
+  
+    // 展开 / 折叠 按钮容器 (放在左侧)
+    const buttonGroup = document.createElement('div')
+    buttonGroup.className = 'pivot-button-group'
+
+    // 展开全部按钮
+    const expandAllBtn = document.createElement('button')
+    expandAllBtn.className = 'pivot-control-btn'
+    expandAllBtn.textContent = '展开'
+    expandAllBtn.title = '展开所有分组'
+    expandAllBtn.addEventListener('click', () => this.expandAll())
+
+    // 折叠全部按钮
+    const collapseAllBtn = document.createElement('button')
+    collapseAllBtn.className = 'pivot-control-btn'
+    collapseAllBtn.textContent = '折叠'
+    collapseAllBtn.title = '折叠所有分组'
+    collapseAllBtn.addEventListener('click', () => this.collapseAll())
+
+    // 挂载
+    buttonGroup.appendChild(expandAllBtn)
+    buttonGroup.appendChild(collapseAllBtn)
+    this.headerEl.appendChild(buttonGroup)
+
+    // 表头内容
     const header = this.renderer.renderHeader()
     this.headerEl.appendChild(header)
   }
@@ -256,6 +287,8 @@ export class PivotTable {
     this.visibleSet = newVisibleSet
     // 更新吸顶分组行
     this.updateStickyGroup(startRow)
+    // 更新面包屑导航 
+    this.updateBreadcrumb(startRow)
   }
 
   /**
@@ -321,12 +354,131 @@ export class PivotTable {
     // 切换状态
     PivotTreeNode.toggleNode(this.treeRoot, nodeId)
     // 重新展平 (无需重新构建树, 只需重新展平即可)
-    this.flatRows = PivotTreeNode.flattenTree(this.treeRoot)
+    this.flatRows = PivotTreeNode.flattenTree(
+      this.treeRoot,
+      this.pivotConfig.showSubtotals ?? true
+    )
     // 更新滚动高度 + 清理可视区缓存 + 重渲染可视区行
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
   }
+
+  /** 展开-所有分组节点 */
+  private expandAll(): void {
+    if (!this.treeRoot) return 
+    // 递归设置, 所有分组节点为 "展开" 状态
+    this.setAllNodesExpanded(this.treeRoot, true)
+    // 重新展平树
+    this.flatRows = PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
+    // 更新视图
+    this.updateScrollHeight()
+    this.clearVisibleRows()
+    this.updateVisibleRows()
+  }
+
+  /** 折叠-所有分子节点 */
+  private collapseAll(): void {
+    if (!this.treeRoot) return 
+    // 递归设置, 所有分组节点为 "折叠" 状态
+    this.setAllNodesExpanded(this.treeRoot, false)
+    // 重新展平树
+    this.flatRows = PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
+    // 更新视图
+    this.updateScrollHeight()
+    this.clearVisibleRows()
+    this.updateVisibleRows()
+  }
+
+  /**
+   * 递归设置, 所有节点的展开状态
+   * 
+   * @param node 当前节点
+   * @param expanded 展开状态, true 展开, false 闭合
+   */
+  private setAllNodesExpanded(node: IPivotTreeNode, expanded: boolean): void {
+    // 根节点始终展开
+    if (node.level === -1) {
+      node.isExpanded = true
+
+    } else if (node.type === 'group') {
+      node.isExpanded = expanded
+    }
+
+    // 递归处理子节点
+    for (const child of node.children) {
+      this.setAllNodesExpanded(child, expanded)
+    }
+  }
+
+  /** 更新面包屑导航 */
+  private updateBreadcrumb(startRow: number): void {
+    if (!this.breadcrumbEl) return 
+
+    const currentRow = this.flatRows[startRow]
+    if (!currentRow) {
+      this.breadcrumbEl.style.display = 'none'
+      return 
+    }
+
+    // 构建面包屑路径
+    const breadcrumbs: { label: string; rowIndex: number }[] = []
+    for (let i = startRow; i >= 0; i--) {
+      const row = this.flatRows[i]
+      if (!row || row.type !== 'group') continue
+
+      const label = this.getBreadcrumbLabel(row)
+      breadcrumbs.unshift({ label, rowIndex: i })
+
+      // 若是顶层分组 (非小计行) 则停止 
+      if (row.level === 0 && row.rowType !== 'subtotal') {
+        break
+      }
+    }
+
+    if (breadcrumbs.length === 0) {
+      this.breadcrumbEl.style.display = 'none'
+      return 
+    }
+
+    // 渲染面包屑
+    this.breadcrumbEl.innerHTML = ''
+    this.breadcrumbEl.style.display = 'flex'
+
+    breadcrumbs.forEach((crumb, index) => {
+      // 面包屑项
+      const crumbItem = document.createElement('span')
+      crumbItem.className = 'pivot-breadcrumb-item'
+      crumbItem.textContent = crumb.label
+      crumbItem.addEventListener('click', () => this.scrollToRow(crumb.rowIndex))
+
+      this.breadcrumbEl!.appendChild(crumbItem)
+
+      // 分隔符
+      if (index < breadcrumbs.length - 1) {
+        const separator = document.createElement('span')
+        separator.className = 'pivot-breadcrumb-separator'
+        separator.textContent = ' > '
+        this.breadcrumbEl!.appendChild(separator)
+      }
+    })
+  }
+
+  /** 获取面包屑标签 */
+  private getBreadcrumbLabel(row: IPivotFlatRow): string {
+    if (row.rowType === 'subtotal') return '小计'
+    if (row.rowType === 'grandtotal') return '总计'
+
+    const groupKey = this.pivotConfig.rowGroups[row.level]
+    return String(row.data[groupKey] || row.groupVale || '(空)')
+  }
+
+  /** 滚动到指定行 */
+  private scrollToRow(rowIndex: number): void {
+    if (!this.scrollContainer) return 
+    this.scrollContainer.scrollTop = rowIndex * this.ROW_HEIGHT
+  }
+
 
   /**
    * 配置变化回调

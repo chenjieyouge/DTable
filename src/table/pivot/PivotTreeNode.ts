@@ -79,7 +79,7 @@ export class PivotTreeNode {
    * 展平后: 
    *  [ USA, Row 1, Row 2, China ]
    */
-  static flattenTree(node: IPivotTreeNode): IPivotFlatRow[] {
+  static flattenTree(node: IPivotTreeNode, showSubtotals: boolean = true): IPivotFlatRow[] {
     // 用栈模拟递归, 避免大数据量时 push(...) 栈溢出
     const result: IPivotFlatRow[] = []
     const stack: IPivotTreeNode[] = [node]
@@ -116,16 +116,18 @@ export class PivotTreeNode {
           stack.push(current.children[i])
         }
 
-        // 在子节点后面插入小计行
+        // 根据配置, 决定是否在子节点后面插入小计行
         // 注意: 这里用一个特殊的标记 (__SUBTOTAL__), 作为占位用, 等所有子节点处理完后在插入
-        stack.push({
-          ...current,
-          id: `${current.id}-subtotal`,
-          type: 'group' as NodeType,
-          children: [], // 小计没有子节点
-          isExpanded: false,  // 强制设置 false, 避免无限递归
-          groupValue: '__SUBTOTAL__',  // 添加一个特殊的标记
-        } as IPivotTreeNode)
+        if (showSubtotals) {
+            stack.push({
+            ...current,
+            id: `${current.id}-subtotal`,
+            type: 'group' as NodeType,
+            children: [], // 小计没有子节点
+            isExpanded: false,  // 强制设置 false, 避免无限递归
+            groupValue: '__SUBTOTAL__',  // 添加一个特殊的标记
+          } as IPivotTreeNode)
+        }
       }
     }
 

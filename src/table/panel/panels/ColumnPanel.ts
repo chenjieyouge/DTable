@@ -15,10 +15,13 @@ export class ColumnPanel implements IPanel {
   private container: HTMLDivElement
   private unsubscribe: (() => void) | null = null 
   private searchInput: HTMLInputElement | null = null 
+  private searchBox: HTMLDivElement | null = null 
   private listContainer: HTMLDivElement | null = null 
   private allColumnKeys: string[] = [] // 保存所有列的 key, 包括隐藏的
   private pivotConfgSection: HTMLDivElement | null = null 
   private currentGroupKeys: string[] = []  // 保存当前选中的多层分组字段
+  private pivotConfig: Partial<IPivotConfig> = { showSubtotals: true } // 保存透视配置
+  private footerEl: HTMLDivElement | null = null  // 保存底部按钮容器引用
 
   constructor(
     private store: TableStore,
@@ -70,6 +73,20 @@ export class ColumnPanel implements IPanel {
       const enabled = pivotInput.checked
       this.onPivotModeToggle?.(enabled)
       this.pivotConfgSection!.style.display = enabled ? 'block': 'none'
+
+      // 透视模式下, 隐藏列管理列表等相关元素
+      if (this.searchBox) {
+        this.searchBox.style.display = enabled ? 'none' : 'block'
+      }
+
+      if (this.listContainer) {
+        this.listContainer.style.display = enabled ? 'none' : 'block'
+      }
+
+      if (this.footerEl) {
+        this.footerEl.style.display = enabled ? 'none' : 'flex'
+      }
+
       if (enabled) {
         this.renderPivotConfig()
       }
@@ -85,6 +102,8 @@ export class ColumnPanel implements IPanel {
     this.searchInput.placeholder = '搜索列名...'
     searchBox.appendChild(this.searchInput)
     container.appendChild(searchBox)
+
+    this.searchBox = searchBox // 保养搜索框引用
 
     // 列列表容器
     this.listContainer = document.createElement('div')
@@ -111,6 +130,9 @@ export class ColumnPanel implements IPanel {
     footer.appendChild(btnHideAll)
     footer.appendChild(btnReset)
     container.appendChild(footer)
+
+    // 保存 footer 引用, 方便后续控制 显示 / 隐藏
+    this.footerEl = footer
 
     // 绑定事件
     this.bindEvents(btnShowAll, btnHideAll, btnReset)
@@ -326,7 +348,7 @@ export class ColumnPanel implements IPanel {
     if (this.currentGroupKeys.length === 0) {
       const emptyHint = document.createElement('div')
       emptyHint.className = 'pivot-empty-hint'
-      emptyHint.textContent = '请从下方选中要分组的字段'
+      emptyHint.textContent = '请从下方选中分组的字段'
       selectedContainer.appendChild(emptyHint)
     }
 
@@ -353,10 +375,29 @@ export class ColumnPanel implements IPanel {
       availableContainer.appendChild(item)
     }
 
-    // 分割线 (数值字段区域)
-    const divider2 = document.createElement('hr')
-    divider2.className = 'pivot-section-divider'
-    this.pivotConfgSection.appendChild(divider2)
+    // ======= 小计行开关 =========
+    const subtotalToggle = document.createElement('div')
+    subtotalToggle.className = 'pivot-subtotal-toggle'
+
+    const subtotalLabel = document.createElement('label')
+    subtotalLabel.className = 'pivot-subtotal-label'
+    
+    const subtotalCheckbox = document.createElement('input')
+    subtotalCheckbox.type = 'checkbox'
+    subtotalCheckbox.checked = this.pivotConfig.showSubtotals ?? true 
+    subtotalCheckbox.addEventListener('change', () => {
+      this.pivotConfig.showSubtotals = subtotalCheckbox.checked 
+      this.emitPivotConfig(valueList) // 触发配置更新
+    })
+
+    const labelText = document.createElement('span')
+    labelText.textContent = '显示小计行'
+
+    // 挂载
+    subtotalLabel.appendChild(subtotalCheckbox)
+    subtotalLabel.appendChild(labelText)
+    subtotalToggle.appendChild(subtotalLabel)
+    this.pivotConfgSection.appendChild(subtotalToggle)
 
     // ======= 数值字段 选择区 =====
     const valueLabel = document.createElement('div')
@@ -371,6 +412,11 @@ export class ColumnPanel implements IPanel {
     const valueColumns = this.originalColumns.filter(
       col => col.dataType === 'number' && !this.currentGroupKeys.includes(col.key)
     )
+
+    // 没有数值字段就提前返回
+    if (valueColumns.length === 0) {
+      return 
+    }
 
     // 一个字段一行; (checkbox, lable, title, aggType); 
     for (const col of valueColumns) {
@@ -632,7 +678,8 @@ export class ColumnPanel implements IPanel {
     this.onPivotConfigChange?.({
       enabled: true,
       rowGroups,
-      valueFields
+      valueFields,
+      showSubtotals: this.pivotConfig.showSubtotals ?? true // 传递小计行开关状态
     } as IPivotConfig)
   }
 
