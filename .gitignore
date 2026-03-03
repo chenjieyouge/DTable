@@ -26,3 +26,15 @@ coverage/
 
 # dos 也先不用, 就自己看
 /docs
+
+# 后端服务 (本地开发用的 gin + mysql, 不用提交到前端仓库)
+/server/
+
+# Go 工作区文件（本地开发配置）
+go.work
+go.work.sum
+
+
+# 其他一些不需要的
+div_table.*
+TEST_GUIDE.md
