@@ -160,6 +160,8 @@ export class PivotTable {
 
     // 将展开值注入 renderer, 让有所的行渲染都用统一的列定义
     this.renderer.currentValueCols = this.renderer.buildValueColumns(this.expandValues)
+    // 同时注入给 processor, 确保聚合时用统一的 key 
+    this.processor.setExpandValues(this.expandValues)
 
     // 构建透视树
     this.treeRoot = this.processor.buildPivotTree(this.data)

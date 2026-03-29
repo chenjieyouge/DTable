@@ -485,9 +485,11 @@ export class ColumnPanel implements IPanel {
       noneOpt.textContent = '--不展开--'
       expandSelect.appendChild(noneOpt)
 
-      // 只允许非数值字段作为展开字段
+      // 只允许非数值字段作为展开字段, 分组字段, 也不能列展开
       for (const col of this.originalColumns) {
-        if (col.dataType === 'number') continue 
+        if (col.dataType === 'number') continue
+        if (this.currentGroupKeys.includes(col.key)) continue 
+         
         const opt = document.createElement('option')
         opt.value = col.key 
         opt.textContent = col.title

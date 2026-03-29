@@ -129,7 +129,14 @@ export class PivotRenderer {
     countBadge.className = 'vt-pivot-count-badge'
     // 从聚合数据中找 count 或者用 valuesFields 中的 count 字段
     const countField = this.config.valueFields.find(vf => vf.aggregation === 'count') 
-    const count = countField ? flatRow.data[countField.key] : ''
+    let count = ''
+    if (countField) {
+      // 优先取原始 key, 不存在则取第一个展开列的 key, 否则再用 rowCout
+      count = flatRow.data[countField.key]
+        ?? (this.currentValueCols.length > 0 ? flatRow.data[this.currentValueCols[0].key] : '')
+        ?? flatRow.rowCount
+    }
+
     if (count) {
       countBadge.textContent = `(${count})`
     }

@@ -18,6 +18,7 @@ import { PivotTreeNode } from "@/table/pivot/PivotTreeNode";
  */
 export class PivotDataProcessor {
   private config: IPivotConfig
+  private globalExpandValues: string[] = []  // 全局展开值列表
 
   constructor(config: IPivotConfig) {
     this.config = config 
@@ -76,6 +77,11 @@ export class PivotDataProcessor {
   ): IPivotTreeNode[] {
     // 递归终止条件: 达到叶子层, 创建数据节点
     if (level >= rowGroups.length) {
+      // 有列展开时, 叶子层不渲染原始数据行, 只保留分组汇总层, 减少视觉噪音
+      if (this.config.expandValueBy) {
+        return []
+      }
+      
       return data.map((row, i) => 
         PivotTreeNode.createDataNode(`${parentId}-data-${i}`, level, row)
       )
@@ -170,8 +176,8 @@ export class PivotDataProcessor {
     
     if (expandBy) {
       // 方案2: 按展开字段, 分列聚合
-      // 取展开字段的 TopN 唯一值 (限当前分组行里取, 不是全量数据)
-      const expandValues = this.getTopNValues(rows, expandBy, maxValues)
+      // 使用全局统一的展开值列表, 避免每个分组值不同导致 key 对不上
+      const expandValues = this.globalExpandValues
 
       for (const valueField of this.config.valueFields) {
         for (const expandVal of expandValues) {
@@ -260,7 +266,7 @@ export class PivotDataProcessor {
     const maxValues = this.config.expandMaxValues?? 10
 
     if (expandBy) {
-      const expandValues = this.getTopNValues(data, expandBy, maxValues)
+      const expandValues = this.globalExpandValues
       for (const valueField of this.config.valueFields) {
         for (const expandVal of expandValues) {
           const filteredRows = data.filter(r => String(r[expandBy] ?? '') === expandVal)
@@ -301,6 +307,11 @@ export class PivotDataProcessor {
       .sort((a, b) => b[1] - a[1])
       .slice(0, maxN)
       .map(([val]) => val)
+  }
+
+  /** 设置全局展开值列表, 从外部注入, 避免面哥分组单独计算, 导致 key 不一致 */
+  public setExpandValues(values: string[]): void {
+    this.globalExpandValues = values 
   }
 
   /** 更新配置 */
