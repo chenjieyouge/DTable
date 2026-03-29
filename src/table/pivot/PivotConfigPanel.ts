@@ -41,18 +41,67 @@ export class PivotConfigPanel {
 
     // 行分组选择区域
     panel.appendChild(this.createRowGroupSection())
-
+    // 分割线
+    panel.appendChild(this.createDivider())
+    // 列展开字段选择器
+    panel.appendChild(this.createExpandValueSection())
     // 分割线 
-    const divider = document.createElement('hr')
-    divider.style.border = 'none'
-    divider.style.borderTop = '1px solid #e5e7eb'
-    divider.style.margin = '12px 0'
-    panel.appendChild(divider)
-
+    panel.appendChild(this.createDivider())
     // 数值字段选择区域
     panel.appendChild(this.createValueFieldsSection())
 
     return panel
+  }
+
+  /** 创建分割线 (抽出来复用) */
+  private createDivider(): HTMLHRElement {
+    const divider = document.createElement('hr')
+    divider.style.cssText = `border: none; border-top: 1px solid #e5e7eb; margin: 12px 0;`
+    return divider
+  }
+
+  /** 创建列展开字段选择器 */
+  private createExpandValueSection(): HTMLDivElement {
+    const section = document.createElement('div')
+    section.className = 'vt-pivot-config-section'
+
+    const label = document.createElement('div')
+    label.className = 'vt-pivot-config-label'
+    label.textContent = '列展开字段'
+
+    const hint = document.createElement('div')
+    hint.style.cssText = 'font-size:11px; color:#9ca3af; margin-bottom:6px'
+    hint.textContent = '选择后, 值将展开为一列'
+    
+    const select = document.createElement('select')
+    select.className = 'vt-pivot-select'
+
+    // 第一项: 不展开 (默认)
+    const oneOpt = document.createElement('option')
+    oneOpt.value = ''
+    oneOpt.textContent = '-- 不展开 --'
+    select.appendChild(oneOpt)
+
+    // 只允许离散字段, 作为展开字段
+    for (const col of this.columns) {
+      if (col.dataType === 'number') continue  // 数值字段禁止展开
+      const option = document.createElement('option')
+      option.value = col.key
+      option.textContent = col.title
+      option.selected = col.key === this.config.expandValueBy 
+      select.appendChild(option)
+    }
+
+    select.addEventListener('change', () => {
+      this.config.expandValueBy = select.value || undefined // 这里是列展开的实参
+      this.onChange({ ...this.config })
+    })
+
+    section.appendChild(label)
+    section.appendChild(hint)
+    section.appendChild(select)
+
+    return section
   }
 
   /** 创建行分组选择器 */
@@ -73,13 +122,13 @@ export class PivotConfigPanel {
       const option = document.createElement('option')
       option.value = col.key
       option.textContent = col.title
-      option.selected = col.key === this.config.rowGroup
+      option.selected = this.config.rowGroups.includes(col.key)
       select.appendChild(option)
     }
 
     // 监听变化
     select.addEventListener('change', () => {
-      this.config.rowGroup = select.value 
+      this.config.rowGroups = [select.value] 
       this.onChange({...this.config})
     })
 
@@ -103,7 +152,7 @@ export class PivotConfigPanel {
     // 为每列创建一个选项行
     for (const col of this.columns) {
       // 跳过分组字段本身
-      if (col.key === this.config.rowGroup) continue 
+      if (col.key === this.config.rowGroups[0]) continue 
 
       const item = document.createElement('div')
       item.className = 'vt-pivot-value-field-item'

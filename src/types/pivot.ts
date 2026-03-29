@@ -17,6 +17,13 @@ export const MAX_GROUP_LEVELS = 5
 export interface IPivotConfig {
   enabled: boolean // 是否启用透视模式
   rowGroups: string[] // 行分组字段数字, 顺序决定层级 (最多 5 层)
+
+  // 方案2: 列展开(一层方案)
+  expandValueBy?: string  // 按哪个字段展开列, 如 'region'
+  expandMaxValues?: number // 展开列上线, 默认 10列, 防止列数爆炸
+  // 预留 方案1 的 excel 风格架构空间 (暂不实现, 仅占位)
+  // colGroups?: string[] // 方案1: 自由列分组字段数组 (列虚拟滚动)
+
   valueFields: {  // 数值字段配置
     key: string
     aggregation: AggregationType

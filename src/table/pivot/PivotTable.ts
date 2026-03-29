@@ -24,6 +24,7 @@ export class PivotTable {
   private pivotConfig: IPivotConfig
   private columns: IColumn[]
   private data: Record<string, any>[]
+  private expandValues: string[] = [] // 缓存当前展开值列表
 
   private processor: PivotDataProcessor
   private renderer: PivotRenderer
@@ -147,6 +148,19 @@ export class PivotTable {
    */
   private refresh(): void {
     if (!this.tableArea) return 
+
+    // 计算展开值, 有 expandValueBy 时才计算, 然后再进行 buildTruee 操作
+    const expandBy = this.pivotConfig.expandValueBy 
+    const maxValues = this.pivotConfig.expandMaxValues ?? 10 
+    if (expandBy && this.data.length > 0) {
+      this.expandValues = this.getTopNValuesFromData(this.data, expandBy, maxValues)
+    } else {
+      this.expandValues = []
+    }
+
+    // 将展开值注入 renderer, 让有所的行渲染都用统一的列定义
+    this.renderer.currentValueCols = this.renderer.buildValueColumns(this.expandValues)
+
     // 构建透视树
     this.treeRoot = this.processor.buildPivotTree(this.data)
     // 展平
@@ -156,6 +170,25 @@ export class PivotTable {
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
+  }
+
+  /** 辅助: topN 的列选择, 避免列太多卡死 */
+  private getTopNValuesFromData(
+    data: Record<string, any>[],
+    fieldKey: string,
+    maxN: number 
+  ): string[] {
+    const countMap = new Map<string, number>()
+    for (const row of data) {
+      const val = String(row[fieldKey] ?? '')
+      if (!val || val === 'undefined' || val === 'null') continue 
+      countMap.set(val, (countMap.get(val) ?? 0) + 1)
+    }
+
+    return Array.from(countMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxN)
+      .map(([val]) => val)
   }
 
   /** 渲染表头 */
@@ -188,7 +221,7 @@ export class PivotTable {
     this.headerEl.appendChild(buttonGroup)
 
     // 表头内容
-    const header = this.renderer.renderHeader()
+    const header = this.renderer.renderHeader(this.expandValues)
     this.headerEl.appendChild(header)
   }
 

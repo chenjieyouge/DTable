@@ -165,11 +165,31 @@ export class PivotDataProcessor {
       [groupKey]: groupValue  
     }
 
-    // 计算每个数值字段的聚合值
-    for (const valueField of this.config.valueFields) {
-      const aggValue = this.aggregate(rows, valueField.key, valueField.aggregation)
-      
-      aggregatedData[valueField.key] = aggValue
+    const expandBy = this.config.expandValueBy 
+    const maxValues = this.config.expandMaxValues ?? 10  // 最多展开 10列
+    
+    if (expandBy) {
+      // 方案2: 按展开字段, 分列聚合
+      // 取展开字段的 TopN 唯一值 (限当前分组行里取, 不是全量数据)
+      const expandValues = this.getTopNValues(rows, expandBy, maxValues)
+
+      for (const valueField of this.config.valueFields) {
+        for (const expandVal of expandValues) {
+          // 筛选出 expandBy 字段 等于 当前展开值的行
+          const filteredRows = rows.filter(r => String(r[expandBy] ?? '') === expandVal)
+          const aggValue = this.aggregate(filteredRows, valueField.key, valueField.aggregation)
+          // key 格式: 薪资_滑动, 薪资_华北 
+          aggregatedData[`${valueField.key}_${expandVal}`] = aggValue
+        }
+      }
+
+    } else {
+      // 无展开, 保留原来的逻辑不变
+      // 计算每个数值字段的聚合值
+      for (const valueField of this.config.valueFields) {
+        const aggValue = this.aggregate(rows, valueField.key, valueField.aggregation)
+        aggregatedData[valueField.key] = aggValue
+      }
     }
 
     return aggregatedData
@@ -236,13 +256,51 @@ export class PivotDataProcessor {
    */
   private computeRootAggregatedData(data: Record<string, any>[]): Record<string, any> {
     const aggregatedData: Record<string, any> = {}
-    // 计算每个数值字段的聚合值
-    for (const valueField of this.config.valueFields) {
-      const aggValue = this.aggregate(data, valueField.key, valueField.aggregation)
-      aggregatedData[valueField.key] = aggValue
+    const expandBy = this.config.expandValueBy 
+    const maxValues = this.config.expandMaxValues?? 10
+
+    if (expandBy) {
+      const expandValues = this.getTopNValues(data, expandBy, maxValues)
+      for (const valueField of this.config.valueFields) {
+        for (const expandVal of expandValues) {
+          const filteredRows = data.filter(r => String(r[expandBy] ?? '') === expandVal)
+          aggregatedData[`${valueField.key}_${expandVal}`] = this.aggregate(filteredRows, valueField.key, valueField.aggregation)
+        }
+      }
+
+    } else {
+      // 计算每个数值字段的聚合值
+      for (const valueField of this.config.valueFields) {
+        const aggValue = this.aggregate(data, valueField.key, valueField.aggregation)
+        aggregatedData[valueField.key] = aggValue
+      }
     }
 
     return aggregatedData
+  }
+
+  /**
+   * 从数据中提取某字段的 tooN 唯一值 (按出现频率降序)
+   * 用于 expandValueBy 时限制列数
+   */
+  private getTopNValues(
+    data: Record<string,any>[],
+    fieldKey: string,
+    maxN: number
+  ): string[] {
+
+    const countMap = new Map<string, number>()
+    for (const row of data) {
+      const val = String(row[fieldKey] ?? '')
+      if (val === '' || val === 'undefined' || val === null) continue 
+      countMap.set(val, (countMap.get(val) ?? 0) + 1)
+    }
+
+    // 按出现次数降序, 取前 maxN 个
+    return Array.from(countMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxN)
+      .map(([val]) => val)
   }
 
   /** 更新配置 */

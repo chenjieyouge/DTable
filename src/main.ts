@@ -87,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof window !== 'undefined') {
     (window as any).table = table 
   }
-  const tableLarge = new VirtualTable(configLarge)
-  // ready 后在绑定时间, 避免初始化前调用 sort/filter/dispatch
+  // const tableLarge = new VirtualTable(configLarge)
 
 })

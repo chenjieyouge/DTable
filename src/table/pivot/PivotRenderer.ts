@@ -16,6 +16,7 @@ import { IColumn } from "@/types";
 export class PivotRenderer {
   private config: IPivotConfig
   private columns: IColumn[]
+  public currentValueCols: { key: string; title: string }[] = []  // 外部注入
 
   constructor(config: IPivotConfig, columns: IColumn[]) {
     this.config = config
@@ -27,7 +28,7 @@ export class PivotRenderer {
    * 
    * 表头结构: 分组字段 | 数值字段1 | 数值字段2 | ...
    */
-  public renderHeader(): HTMLDivElement {
+  public renderHeader(expandValues: string[]): HTMLDivElement {
     const header = document.createElement('div')
     header.className = 'vt-table-row vt-pivot-header'
 
@@ -44,17 +45,17 @@ export class PivotRenderer {
     firstCell.style.fontWeight = 'bold'
     header.appendChild(firstCell)
 
-    // 后续列: 数值字段
-    for (const valueField of this.config.valueFields) {
-      const col = this.columns.find(c => c.key === valueField.key)
+    // 后续列: 由 buildValueColumns 统一生成
+    const valueCols = this.buildValueColumns(expandValues)
+    for (const col of valueCols) {
       const cell = document.createElement('div')
       cell.className = 'vt-table-cell vt-pivot-header-cell'
       // 显示: 字段名(聚合方式), 如 "销售额(sum)"
-      const label = valueField.label || col?.title || valueField.key
-      cell.textContent = `${label}(${valueField.aggregation})`
+      cell.textContent = col.title
       cell.style.fontWeight = 'bold'
       header.appendChild(cell)
     }
+
     return header
   }
 
@@ -136,8 +137,9 @@ export class PivotRenderer {
     firstCell.appendChild(countBadge)
     row.appendChild(firstCell)
 
-    // 后续单元格: 聚合值
-    for (const valueField of this.config.valueFields) {
+    // 后续单元格: 由 valueCols 驱动, 统一渲染 (支持展开 和 非展开 两种模式)
+    const valueCols = this.currentValueCols
+    for (const valueField of valueCols) {
       const cell = document.createElement('div')
       cell.className = 'vt-table-cell vt-pivot-agg-cell'
       const value = flatRow.data[valueField.key]
@@ -170,10 +172,11 @@ export class PivotRenderer {
     row.appendChild(firstCell)
 
     // 后续列: 数值字段值
-    for (const valueField of this.config.valueFields) {
+    const valueCols = this.currentValueCols
+    for (const col of valueCols) {
       const cell = document.createElement('div')
       cell.className = 'vt-table-cell'
-      const value = flatRow.data[valueField.key]
+      const value = flatRow.data[col.key]
       cell.textContent = value != null ? String(value) : ''
       cell.style.textAlign = 'right'
       cell.style.paddingRight = '12px'
@@ -210,17 +213,51 @@ export class PivotRenderer {
     row.appendChild(fisrtCell)
 
     // 后续列: 聚合值
-    for (const valueField of this.config.valueFields) {
+    const valueCols = this.currentValueCols
+    for (const col of valueCols) {
       const cell = document.createElement('div')
       cell.className = 'vt-table-cell vt-pivot-total-value-cell'
 
-      const value = flatRow.data[valueField.key]
+      const value = flatRow.data[col.key]
       cell.textContent = value !== null ? String(value) : ''
 
       cell.style.textAlign = 'right'
       cell.style.fontWeight = flatRow.rowType === 'grandtotal' ? '700': '600'
       row.appendChild(cell)
     }
+  }
+
+  /**
+   * 获取当前配置下的所有 "列值" 定义
+   * 无展开时: [{key: 'salary', title: '薪资(avg)'}]
+   * 有展开时: [{key: 'salary_华东', title: '薪资-华东'}, {key: 'salary_华北', title: '薪资-华北'}]
+   * 
+   * 注意: expandValues 需从外部传入 (PivotTable 在 refresh 时缓存)
+   */
+  public buildValueColumns(
+    expandValues: string[]
+  ): { key: string; title: string }[] {
+    const expandBy = this.config.expandValueBy 
+
+    if (expandBy && expandValues.length > 0) {
+      // 方案2: 展开模式
+      return this.config.valueFields.flatMap(vf => {
+        const col = this.columns.find(c => c.key === vf.key)
+        const baseLabel = vf.label || col?.title || vf.key 
+        return expandValues.map(ev => ({
+          key: `${vf.key}_${ev}`,
+          title: `${baseLabel}-${ev}`
+        }))
+      })
+    }
+
+    // 原有模式: 无展开
+    return this.config.valueFields.map(vf => {
+      const col = this.columns.find(c => c.key === vf.key)
+      const label = vf.label || col?.title || vf.key 
+      return { key: vf.key, title: `${label}(${vf.aggregation})`}
+    })
+
   }
 
   /** 更新配置 */

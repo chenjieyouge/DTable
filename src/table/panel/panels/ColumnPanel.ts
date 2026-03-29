@@ -413,61 +413,96 @@ export class ColumnPanel implements IPanel {
       col => col.dataType === 'number' && !this.currentGroupKeys.includes(col.key)
     )
 
-    // 没有数值字段就提前返回
-    if (valueColumns.length === 0) {
-      return 
-    }
+    // 没有数值字段, 跳过 数值字段列表渲染, 但不提前 return 以免造成 emitPivotConfig 出现循环引用
+    if (valueColumns.length > 0) {
+      // 一个字段一行; (checkbox, lable, title, aggType); 
+      for (const col of valueColumns) {
+        const item = document.createElement('div')
+        item.className = 'vt-pivot-value-field-item'
+        item.dataset.colKey = col.key 
 
-    // 一个字段一行; (checkbox, lable, title, aggType); 
-    for (const col of valueColumns) {
-      const item = document.createElement('div')
-      item.className = 'vt-pivot-value-field-item'
-      item.dataset.colKey = col.key 
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.dataset.colKey = col.key
+        // 数值字段默认值显示前 3个, 都显示就看不到重点了
+        const index = valueColumns.indexOf(col)
+        checkbox.checked = (index < 3)
 
-      const checkbox = document.createElement('input')
-      checkbox.type = 'checkbox'
-      checkbox.dataset.colKey = col.key
-      // 数值字段默认值显示前 3个, 都显示就看不到重点了
-      const index = valueColumns.indexOf(col)
-      checkbox.checked = (index < 3)
+        const label = document.createElement('label')
+        label.style.flex = '1'
+        label.textContent = col.title
 
-      const label = document.createElement('label')
-      label.style.flex = '1'
-      label.textContent = col.title
+        const aggSelect = document.createElement('select')
+        aggSelect.className = 'vt-pivot-agg-select'
+        aggSelect.dataset.colKey = col.key
 
-      const aggSelect = document.createElement('select')
-      aggSelect.className = 'vt-pivot-agg-select'
-      aggSelect.dataset.colKey = col.key
+        const aggTypes = ['sum', 'count', 'avg', 'max', 'min']
+        for (const agg of aggTypes) {
+          const opt = document.createElement('option')
+          opt.value = agg 
+          opt.textContent = agg 
+          aggSelect.appendChild(opt)
+        }
 
-      const aggTypes = ['sum', 'count', 'avg', 'max', 'min']
-      for (const agg of aggTypes) {
-        const opt = document.createElement('option')
-        opt.value = agg 
-        opt.textContent = agg 
-        aggSelect.appendChild(opt)
+        // 若无配置聚合方式, 则默认为 'sum'
+        aggSelect.value = (col.summaryType && col.summaryType !== 'none')  ? col.summaryType : 'sum'
+        aggSelect.disabled = !checkbox.checked 
+
+        // 监听字段勾选 和 聚合方法 的变化, 并从 DOM 收集 透视配置, 并触发回调
+        checkbox.addEventListener('change', () => {
+          aggSelect.disabled = !checkbox.checked 
+          this.emitPivotConfig(valueList)
+        })
+
+        aggSelect.addEventListener('change', () => {
+          this.emitPivotConfig(valueList)
+        })
+
+        item.appendChild(checkbox)
+        item.appendChild(label)
+        item.appendChild(aggSelect)
+        valueList.appendChild(item)
       }
 
-      // 若无配置聚合方式, 则默认为 'sum'
-      aggSelect.value = (col.summaryType && col.summaryType !== 'none')  ? col.summaryType : 'sum'
-      aggSelect.disabled = !checkbox.checked 
+      this.pivotConfgSection.appendChild(valueList)
+       // 列展开字段, 选择区
+      const expandLabel = document.createElement('div')
+      expandLabel.className = 'vt-pivot-config-label'
+      expandLabel.textContent = '列展开字段'
+      this.pivotConfgSection.appendChild(expandLabel)
 
-      // 监听字段勾选 和 聚合方法 的变化, 并从 DOM 收集 透视配置, 并触发回调
-      checkbox.addEventListener('change', () => {
-        aggSelect.disabled = !checkbox.checked 
+      const expandHint = document.createElement('div')
+      expandHint.style.cssText = 'font-size:12px; color:#9ca3af; margin-bottom:6px'
+      expandHint.textContent = '选择后, 值将展开为一列'
+      this.pivotConfgSection.appendChild(expandHint)
+
+      const expandSelect = document.createElement('select')
+      expandSelect.className = 'vt-pivot-select'
+      expandSelect.id = 'pivot-expand-select'
+
+      const noneOpt = document.createElement('option')
+      noneOpt.value = ''
+      noneOpt.textContent = '--不展开--'
+      expandSelect.appendChild(noneOpt)
+
+      // 只允许非数值字段作为展开字段
+      for (const col of this.originalColumns) {
+        if (col.dataType === 'number') continue 
+        const opt = document.createElement('option')
+        opt.value = col.key 
+        opt.textContent = col.title
+        opt.selected = col.key === this.pivotConfig.expandValueBy 
+        expandSelect.appendChild(opt)
+      }
+
+      expandSelect.addEventListener('change', () => {
+        this.pivotConfig.expandValueBy = expandSelect.value || undefined 
         this.emitPivotConfig(valueList)
       })
 
-      aggSelect.addEventListener('change', () => {
-        this.emitPivotConfig(valueList)
-      })
-
-      item.appendChild(checkbox)
-      item.appendChild(label)
-      item.appendChild(aggSelect)
-      valueList.appendChild(item)
+      this.pivotConfgSection.appendChild(expandSelect)
     }
 
-    this.pivotConfgSection.appendChild(valueList)
     // 首次触发一次回调, 让透视表用默认配置渲染
     this.emitPivotConfig(valueList)
   }
@@ -679,7 +714,9 @@ export class ColumnPanel implements IPanel {
       enabled: true,
       rowGroups,
       valueFields,
-      showSubtotals: this.pivotConfig.showSubtotals ?? true // 传递小计行开关状态
+      showSubtotals: this.pivotConfig.showSubtotals ?? true, // 传递小计行开关状态
+      expandValueBy: this.pivotConfig.expandValueBy,
+      expandMaxValues: this.pivotConfig.expandMaxValues,
     } as IPivotConfig)
   }
 

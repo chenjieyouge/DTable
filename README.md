@@ -1,85 +1,118 @@
-## 🚀 项目概述
+# DTable — 高性能虚拟滚动表格组件
 
-DTable 是一个用原生 div 构建的高性能虚拟滚动表格组件，纯原生JS/TS, 不引入任何外部库, 专为大数据量场景设计，提供流畅的用户体验和丰富的交互功能。
+> 面向大数据分析、报表与 BI 场景的前端表格解决方案，基于原生 TypeScript 实现，无任何 UI 框架依赖。
 
-## 🌟 主要特性
-虚拟滚动 - 仅渲染可视区域内容，支持万级数据流畅展示
-智能模式 - 自动切换客户端/服务端模式，优化不同数据量级性能
-丰富交互 - 支持列拖拽、宽度调整、排序、多类型筛选
-状态管理 - 基于 Redux 风格的状态管理，类型安全
-模块化架构 - 职责分离设计，易于扩展和维护
+## 应用场景
 
-## ✨ 核心优势
-高性能渲染 - 虚拟滚动技术确保大数据量下的流畅体验
-灵活配置 - 支持列冻结、自定义高度、分页等多样化配置
-完整功能 - 内置排序、筛选、汇总统计等企业级表格功能
-TypeScript 支持 - 完整类型定义，提供优秀的开发体验
-轻量易用 - 简洁 API 设计，快速集成到现有项目
-适用于数据密集型应用、企业级后台、报表系统等需要展示大量数据的场景。
+- **大数据量展示**：百万级行数据的流畅渲染与交互，财务报表、销售数据、运营看板
+- **数据分析报表**：多维分组聚合透视、动态字段配置、条件格式高亮
+- **企业管理后台**：员工数据、订单列表、日志查询等需要灵活筛选排序的场景
+- **嵌入式 BI**：支持 Client / Server 两种数据模式，可独立部署也可集成到现有系统
 
-## ✨ 具体优势与特点
-### 1. 虚拟滚动技术
-采用虚拟滚动算法，只渲染可视区域内的行数据
-支持大数据量（万级甚至百万级）的流畅展示
-通过 VirtualScroller 和 VirtualViewport 实现高效的滚动性能
-### 2. 智能客户端/服务端模式切换
-智能模式识别：根据数据量自动判断使用客户端模式或服务端模式
-客户端模式：数据量小于阈值时，数据全量加载到内存，支持实时排序筛选
-服务端模式：大数据量时采用分页加载，减少内存占用
-### 3. 丰富的交互功能
-列宽拖拽：支持鼠标拖拽调整列宽度
-列顺序拖拽：支持拖拽改变列的显示顺序
-列筛选：支持多种筛选类型（set/text/dateRange/numberRange）
-排序功能：支持多字段排序，可视化排序指示器
-### 4. 响应式状态管理
-采用 Redux 风格的状态管理机制
-通过 TableStore 统一管理表格状态
-支持订阅状态变化，驱动 UI 更新
-完整的 Action 类型定义和状态类型安全
-### 5. 高性能渲染架构
-骨架屏渲染：滚动时先显示骨架屏，异步加载数据
-DOM 复用：通过 rowElementMap 实现 DOM 元素复用
-分页缓存：支持数据分页缓存，避免重复请求
-requestAnimationFrame 优化：滚动事件使用 RAF 优化性能
-### 6. 模块化设计
-职责分离：TableShell 负责 UI 层，VirtualViewport 负责渲染，DataManager 负责数据
-插件化交互：HeaderSortBinder、ColumnResizeBinder、ColumnDragBinder 等
-可扩展性：易于添加新功能和交互
-### 7. 灵活的配置系统
-支持丰富的用户配置选项
-类型安全的配置接口定义
-支持列冻结、自定义高度、分页大小等配置
-### 8. 完善的数据管理
-支持客户端和服务端两种数据管理模式
-数据缓存机制，减少重复请求
-支持数据排序、筛选、汇总统计
-### 9. 优雅的事件处理
-使用事件委托机制处理表头点击
-滚动事件防抖优化，使用 cancelAnimationFrame 避免过度触发
-鼠标事件精确处理，避免冲突
-### 10. TypeScript 完全支持
-完整的类型定义
-类型安全的状态管理
-接口定义清晰，易于使用
-## 🎯 适用场景
-大数据表格展示：适合展示大量数据的表格应用
-企业级应用：需要复杂交互的数据表格
-数据分析工具：需要排序、筛选、汇总功能的场景
-报表系统：支持汇总行的报表展示
-## 📋 技术栈
-纯 TypeScript
+---
 
-## 🚀 快速开始
-```ts
-import { VirtualTable } from 'virtual-table';
+## 核心特性
 
+### 🚀 虚拟滚动引擎
+- 仅渲染可视区 DOM，行数从 1 万到 100 万无感知卡顿
+- 增量更新策略：新进入可视区的行创建，离开的行销毁，无全量重绘
+- 可配置缓冲区行数与最大缓存页数，平衡内存与流畅度
+
+### 📊 双模式数据架构
+| 模式 | 数据来源 | 适用场景 |
+|------|----------|----------|
+| **Client 模式** | 一次性加载全量数据，客户端处理排序/筛选/聚合 | 数据量 ≤ 50w，分析场景，响应极快 |
+| **Server 模式** | 分页 API，每次交互请求后端 | 数据量无上限，实时数据，权限管控 |
+
+### 🔍 多维筛选
+- **Set 筛选**：下拉多选，适合枚举类字段（地区、状态、部门）
+- **文本筛选**：模糊匹配，适合姓名、编号等字段
+- **数值范围筛选**：min/max 区间，适合金额、年龄等
+- **日期范围筛选**：起止日期选择，适合入职日期、账期等
+
+### 📐 透视表（Pivot Table）
+- 支持最多 5 层嵌套行分组，递归树形展示
+- 内置聚合：`sum` / `avg` / `count` / `max` / `min`
+- 展开/折叠节点，吸顶分组行，面包屑导航
+- 透视模式与普通表格无缝切换，数据共享
+- 虚拟滚动透视渲染，大分组数据依然流畅
+
+### 🎛️ 列管理面板
+- 拖拽调整列顺序
+- 显示/隐藏列
+- 列宽调整，自动持久化到 `localStorage`
+- 冻结列支持
+
+### 💅 条件格式与自定义渲染
+```typescript
+cellStyle: (value, row) => value < 0 ? { color: 'red' } : null,
+render: (value, row) => `<span class="tag">${value}</span>`
+```
+
+### ⚡ 性能设计
+- 开发模式内置性能监控（`PerformanceMonitor`）
+- 列类型自动推断（`inferColumnTypes`），无需手动标注
+- Store 订阅白名单机制，避免未知 Action 触发全量重绘
+- 列宽、列顺序本地持久化，刷新后自动恢复
+
+---
+
+## 快速开始
+
+```bash
+pnpm install
+pnpm dev
+```
+
+```typescript
+import { VirtualTable } from '@/table/VirtualTable'
+
+// Client 模式：传入全量数据
 const table = new VirtualTable({
-  container: '#table-container',
+  container: '#app',
+  initialData: myData,          // Record<string, any>[]
   columns: [
-    { key: 'name', title: '姓名', width: 150 },
-    { key: 'age', title: '年龄', width: 100, sortable: true }
+    { key: 'name',   title: '姓名', filter: { type: 'text' } },
+    { key: 'region', title: '区域', filter: { type: 'set' }, sortable: true },
+    { key: 'salary', title: '薪资', summaryType: 'avg' },
   ],
-  data: yourDataArray,
-  tableHeight: 400
-});
+})
+
+// Server 模式：传入分页 fetch 函数
+const table = new VirtualTable({
+  container: '#app',
+  columns: [...],
+  fetchPageData: async (pageIndex, query) => {
+    return fetch(`/api/table/page`, { method: 'POST', body: JSON.stringify({ pageIndex, ...query }) })
+  },
+  fetchFilterOptions: async ({ key, query }) => { ... },
+})
+```
+
+---
+
+## 技术栈
+
+- **TypeScript** — 全量类型覆盖，无运行时框架
+- **Vite** — 构建与开发服务器
+- **原生 DOM API** — 零框架依赖，可嵌入任意技术栈
+- **Go + Gin + MySQL**（可选后端）— 提供 Server 模式演示接口
+
+---
+
+## 项目结构
+
+```
+src/
+├── table/
+│   ├── VirtualTable.ts        # 主协调类
+│   ├── core/                  # 查询协调、生命周期、状态同步
+│   ├── data/                  # Client/Server 数据策略
+│   ├── pivot/                 # 透视表引擎
+│   ├── panel/                 # 右侧面板系统
+│   ├── interaction/           # 排序、筛选、列宽交互
+│   └── viewport/              # 虚拟滚动视口
+├── types/                     # 类型定义
+├── api/                       # 后端接口封装
+└── utils/                     # 工具函数
 ```
