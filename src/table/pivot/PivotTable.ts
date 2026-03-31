@@ -1,5 +1,5 @@
 import type { IColumn, IConfig } from "@/types";
-import type { IPivotConfig, IPivotFlatRow, IPivotTreeNode } from "@/types/pivot";
+import type { IPivotConfig, IPivotFlatRow, IPivotTreeNode, IPivotColNode } from "@/types/pivot";
 import { PivotDataProcessor } from "@/table/pivot/PivotDataProcessor";
 import { PivotRenderer } from "@/table/pivot/PivotRenderer";
 import { PivotConfigPanel } from "@/table/pivot/PivotConfigPanel";
@@ -24,8 +24,6 @@ export class PivotTable {
   private pivotConfig: IPivotConfig
   private columns: IColumn[]
   private data: Record<string, any>[]
-  private expandValues: string[] = [] // 缓存当前展开值列表
-
   private processor: PivotDataProcessor
   private renderer: PivotRenderer
   private configPanel: PivotConfigPanel
@@ -98,9 +96,9 @@ export class PivotTable {
     wrapper.style.display = 'flex'
     wrapper.style.flexDirection = 'column'
 
-    // 表头 (固定, 不随滚动)
+    // 表头容器 (固定, 不随滚动)
     this.headerEl = document.createElement('div')
-    this.headerEl.className = 'vt-pivot-header-wrapper'
+    this.headerEl.className = 'vt-pivot-header-area'
     wrapper.appendChild(this.headerEl)
 
     // 面包屑导航 (固定, 不随滚动)
@@ -147,83 +145,58 @@ export class PivotTable {
    * 5. 清空可视区缓存 并 重新渲染可视区
    */
   private refresh(): void {
-    if (!this.tableArea) return 
+    if (!this.tableArea) return
 
-    // 计算展开值, 有 expandValueBy 时才计算, 然后再进行 buildTruee 操作
-    const expandBy = this.pivotConfig.expandValueBy 
-    const maxValues = this.pivotConfig.expandMaxValues ?? 10 
-    if (expandBy && this.data.length > 0) {
-      this.expandValues = this.getTopNValuesFromData(this.data, expandBy, maxValues)
-    } else {
-      this.expandValues = []
-    }
+    // 1. 先构建列树 (有 colGroups 时生成多层列树, 无则生成 valueField 叶子)
+    this.processor.buildColTree(this.data)
+    const colLeaves = this.processor.getColLeaves()
+    const colTree = this.processor.getColTree()
 
-    // 将展开值注入 renderer, 让有所的行渲染都用统一的列定义
-    this.renderer.currentValueCols = this.renderer.buildValueColumns(this.expandValues)
-    // 同时注入给 processor, 确保聚合时用统一的 key 
-    this.processor.setExpandValues(this.expandValues)
+    // 2. 注入列叶子给渲染器
+    this.renderer.setColLeaves(colLeaves)
 
-    // 构建透视树
+    // 3. 构建行树
     this.treeRoot = this.processor.buildPivotTree(this.data)
-    // 展平
+
+    // 4. 展平为虚拟滚动行
     this.flatRows = PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
-    // 渲染表头, 更新滚动高度, 清空并重新渲染可视区
-    this.renderHeader()
+
+    // 5. 渲染表头 (列结构变了需要重建)
+    this.renderHeader(colTree)
+
+    // 6. 更新滚动高度 + 重渲染
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
   }
 
-  /** 辅助: topN 的列选择, 避免列太多卡死 */
-  private getTopNValuesFromData(
-    data: Record<string, any>[],
-    fieldKey: string,
-    maxN: number 
-  ): string[] {
-    const countMap = new Map<string, number>()
-    for (const row of data) {
-      const val = String(row[fieldKey] ?? '')
-      if (!val || val === 'undefined' || val === 'null') continue 
-      countMap.set(val, (countMap.get(val) ?? 0) + 1)
-    }
-
-    return Array.from(countMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, maxN)
-      .map(([val]) => val)
-  }
-
   /** 渲染表头 */
-  private renderHeader(): void {
-    if (!this.headerEl) return 
+  private renderHeader(colTree: IPivotColNode | null): void {
+    if (!this.headerEl) return
 
     this.headerEl.innerHTML = ''
-  
-    // 展开 / 折叠 按钮容器 (放在左侧)
+
+    // 展开 / 折叠 按钮
     const buttonGroup = document.createElement('div')
     buttonGroup.className = 'vt-pivot-button-group'
 
-    // 展开全部按钮
     const expandAllBtn = document.createElement('button')
     expandAllBtn.className = 'vt-pivot-control-btn'
     expandAllBtn.textContent = '展开'
     expandAllBtn.title = '展开所有分组'
     expandAllBtn.addEventListener('click', () => this.expandAll())
 
-    // 折叠全部按钮
     const collapseAllBtn = document.createElement('button')
     collapseAllBtn.className = 'vt-pivot-control-btn'
     collapseAllBtn.textContent = '折叠'
     collapseAllBtn.title = '折叠所有分组'
     collapseAllBtn.addEventListener('click', () => this.collapseAll())
 
-    // 挂载
     buttonGroup.appendChild(expandAllBtn)
     buttonGroup.appendChild(collapseAllBtn)
     this.headerEl.appendChild(buttonGroup)
 
-    // 表头内容
-    const header = this.renderer.renderHeader(this.expandValues)
+    const header = this.renderer.renderHeader(colTree)
     this.headerEl.appendChild(header)
   }
 
@@ -523,9 +496,8 @@ export class PivotTable {
    */
   private onConfigChange(newConfig: IPivotConfig): void {
     this.pivotConfig = newConfig
-    this.processor = new PivotDataProcessor(newConfig)
-    this.renderer = new PivotRenderer(newConfig, this.columns)
-    // 重新构建透树, 并渲染
+    this.processor.updateConfig(newConfig)
+    this.renderer.updateConfig(newConfig, this.columns)
     this.refresh()
   }
 
@@ -546,8 +518,8 @@ export class PivotTable {
   public updateConfig(config: IPivotConfig, columns: IColumn[]): void {
     this.pivotConfig = config
     this.columns = columns
-    this.processor = new PivotDataProcessor(config)
-    this.renderer = new PivotRenderer(config, columns)
+    this.processor.updateConfig(config)
+    this.renderer.updateConfig(config, columns)
     this.refresh()
   }
 

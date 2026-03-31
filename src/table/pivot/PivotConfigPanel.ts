@@ -88,12 +88,12 @@ export class PivotConfigPanel {
       const option = document.createElement('option')
       option.value = col.key
       option.textContent = col.title
-      option.selected = col.key === this.config.expandValueBy 
+      option.selected = false // expandValueBy 已废弃，改用 colGroups
       select.appendChild(option)
     }
 
     select.addEventListener('change', () => {
-      this.config.expandValueBy = select.value || undefined // 这里是列展开的实参
+      // expandValueBy 已废弃，colGroups 由 ColumnPanel 管理
       this.onChange({ ...this.config })
     })
 

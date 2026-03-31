@@ -3,6 +3,15 @@ import type { TableStore } from "@/table/state/createTableStore";
 import type { IColumn } from "@/types";
 import type { IPivotConfig, AggregationType } from "@/types/pivot";
 
+// 四个区域的名称
+type ZoneName = 'filters' | 'columns' | 'rows' | 'values'
+
+// 字段在某区域中的配置
+interface ZoneField {
+  key: string
+  aggregation?: AggregationType  // 仅 values 区使用
+}
+
 /**
  * 列管理面板: 管理列的显示, 隐藏, 搜索, 全选, 重置
  * 
@@ -17,11 +26,23 @@ export class ColumnPanel implements IPanel {
   private searchInput: HTMLInputElement | null = null 
   private searchBox: HTMLDivElement | null = null 
   private listContainer: HTMLDivElement | null = null 
-  private allColumnKeys: string[] = [] // 保存所有列的 key, 包括隐藏的
+  private allColumnKeys: string[] = []
   private pivotConfgSection: HTMLDivElement | null = null 
-  private currentGroupKeys: string[] = []  // 保存当前选中的多层分组字段
-  private pivotConfig: Partial<IPivotConfig> = { showSubtotals: true } // 保存透视配置
-  private footerEl: HTMLDivElement | null = null  // 保存底部按钮容器引用
+  private footerEl: HTMLDivElement | null = null
+
+  // Excel 四区域的字段状态
+  private zones: Record<ZoneName, ZoneField[]> = {
+    filters: [],
+    columns: [],
+    rows: [],
+    values: [],
+  }
+
+  // 正在拖拽的字段信息
+  private dragState: { key: string; fromZone: ZoneName | 'pool' } | null = null
+
+  // 显示小计行开关
+  private showSubtotals = true
 
   constructor(
     private store: TableStore,
@@ -72,20 +93,23 @@ export class ColumnPanel implements IPanel {
     pivotInput.addEventListener('change', () => {
       const enabled = pivotInput.checked
       this.onPivotModeToggle?.(enabled)
-      this.pivotConfgSection!.style.display = enabled ? 'block': 'none'
+      this.pivotConfgSection!.style.display = enabled ? 'flex': 'none'
 
       // 透视模式下, 隐藏列管理列表等相关元素
       if (this.searchBox) {
         this.searchBox.style.display = enabled ? 'none' : 'block'
       }
-
       if (this.listContainer) {
         this.listContainer.style.display = enabled ? 'none' : 'block'
       }
-
       if (this.footerEl) {
         this.footerEl.style.display = enabled ? 'none' : 'flex'
       }
+
+      // 透视模式下移除 container padding，让四区域撑满高度
+      container.style.padding = enabled ? '0' : ''
+      // 开关行保留 padding
+      pivotToggleRow.style.padding = enabled ? '10px 12px 8px' : ''
 
       if (enabled) {
         this.renderPivotConfig()
@@ -307,424 +331,479 @@ export class ColumnPanel implements IPanel {
     })
   }
 
-  /** 渲染透视表配置区 (分组字段 + 数值字段) */
+  // ─────────────────────────────────────────────────────────
+  //  Excel 四区域透视配置 UI
+  // ─────────────────────────────────────────────────────────
+
+  /** 渲染透视配置区（Excel 四区域风格） */
   private renderPivotConfig(): void {
-    if (!this.pivotConfgSection) return 
+    if (!this.pivotConfgSection) return
     this.pivotConfgSection.innerHTML = ''
 
-    // ======= 行分组字段: 离散型, 最多支持 3-5 层 ========
-    const groupLabel = document.createElement('div')
-    groupLabel.className = 'vt-pivot-config-label'
-    groupLabel.textContent = '行分组字段(最多3层)'
-    this.pivotConfgSection.appendChild(groupLabel)
+    // ── 1. 字段列表区 ──────────────────────────────────────
+    const poolSection = document.createElement('div')
+    poolSection.className = 'vt-px-pool-section'
 
-    // 离散型字段列表 (可分组的字段)
-    const groupColumns = this.originalColumns.filter(
-      col => !col.dataType || col.dataType === 'string' || col.dataType === 'date'
-    )
+    const poolHeader = document.createElement('div')
+    poolHeader.className = 'vt-px-section-header'
+    poolHeader.textContent = '字段列表'
+    poolSection.appendChild(poolHeader)
 
-    // 业务约定当前, 最大层级为 3层, 后续加钱可改
-    const MAX_GROUP_LEVELS = 3
+    const poolSearch = document.createElement('input')
+    poolSearch.type = 'text'
+    poolSearch.className = 'vt-px-pool-search'
+    poolSearch.placeholder = '搜索字段...'
+    poolSection.appendChild(poolSearch)
 
-    // ======== 已选字段区域 ============
-    const selectedSectionLabel = document.createElement('div')
-    selectedSectionLabel.className = 'vt-pivot-section-label'
-    this.pivotConfgSection.appendChild(selectedSectionLabel)
+    const poolList = document.createElement('div')
+    poolList.className = 'vt-px-pool-list'
+    poolSection.appendChild(poolList)
 
-    const selectedContainer = document.createElement('div')
-    selectedContainer.className = 'vt-pivot-group-fields-container vt-pivot-selected-fields'
-    this.pivotConfgSection.appendChild(selectedContainer)
+    this.pivotConfgSection.appendChild(poolSection)
 
-    // 渲染已选字段 (按 currentGroupKeys 的顺序)
-    for (const fieldKey of this.currentGroupKeys) {
-      const col = groupColumns.find(c => c.key === fieldKey)
-      if (!col) continue  // 若字段不存在, 则跳过
-
-      const item = this.createGroupFieldItem(col, true, MAX_GROUP_LEVELS)
-      selectedContainer.appendChild(item)
-    }
-
-    // 若没有已选字段, 显示提示
-    if (this.currentGroupKeys.length === 0) {
-      const emptyHint = document.createElement('div')
-      emptyHint.className = 'vt-pivot-empty-hint'
-      emptyHint.textContent = '请从下方选中分组的字段'
-      selectedContainer.appendChild(emptyHint)
-    }
-
-    // =========== 分割线 ==========
-    const divider = document.createElement('hr')
-    divider.className = 'vt-pivot-section-divider'
-
-    // ============ 可选字段区域 ============
-    const availableSectionLabel = document.createElement('div')
-    availableSectionLabel.className = 'vt-pivot-section-label'
-    availableSectionLabel.textContent = '可选分组字段'
-    this.pivotConfgSection.appendChild(availableSectionLabel)
-
-    const availableContainer = document.createElement('div')
-    availableContainer.className = 'vt-pivot-group-fields-container vt-pivot-available-fields'
-    this.pivotConfgSection.appendChild(availableContainer)
-
-    // 渲染未选字段
-    for (const col of groupColumns) {
-      // 跳过已选字段
-      if (this.currentGroupKeys.includes(col.key)) continue
-
-      const item = this.createGroupFieldItem(col, false, MAX_GROUP_LEVELS)
-      availableContainer.appendChild(item)
-    }
-
-    // ======= 小计行开关 =========
-    const subtotalToggle = document.createElement('div')
-    subtotalToggle.className = 'vt-pivot-subtotal-toggle'
-
-    const subtotalLabel = document.createElement('label')
-    subtotalLabel.className = 'vt-pivot-subtotal-label'
-    
-    const subtotalCheckbox = document.createElement('input')
-    subtotalCheckbox.type = 'checkbox'
-    subtotalCheckbox.checked = this.pivotConfig.showSubtotals ?? true 
-    subtotalCheckbox.addEventListener('change', () => {
-      this.pivotConfig.showSubtotals = subtotalCheckbox.checked 
-      this.emitPivotConfig(valueList) // 触发配置更新
+    // 渲染字段池
+    this.renderPool(poolList, '')
+    poolSearch.addEventListener('input', () => {
+      this.renderPool(poolList, poolSearch.value.trim())
     })
 
-    const labelText = document.createElement('span')
-    labelText.textContent = '显示小计行'
+    // ── 2. 分割线 ──────────────────────────────────────────
+    const divider = document.createElement('div')
+    divider.className = 'vt-px-divider'
+    divider.textContent = '在下面区域中拖动字段'
+    this.pivotConfgSection.appendChild(divider)
 
-    // 挂载
-    subtotalLabel.appendChild(subtotalCheckbox)
-    subtotalLabel.appendChild(labelText)
-    subtotalToggle.appendChild(subtotalLabel)
-    this.pivotConfgSection.appendChild(subtotalToggle)
+    // ── 3. 四区域网格 ──────────────────────────────────────
+    const grid = document.createElement('div')
+    grid.className = 'vt-px-zones-grid'
 
-    // ======= 数值字段 选择区 =====
-    const valueLabel = document.createElement('div')
-    valueLabel.className = 'vt-pivot-config-label'
-    valueLabel.textContent = '数值字段'
-    this.pivotConfgSection.appendChild(valueLabel)
+    const zonesMeta: { name: ZoneName; icon: string; label: string }[] = [
+      { name: 'filters', icon: '▼', label: '筛选器' },
+      { name: 'columns', icon: '⫿', label: '列' },
+      { name: 'rows',    icon: '≡', label: '行' },
+      { name: 'values',  icon: 'Σ', label: '值' },
+    ]
 
-    const valueList = document.createElement('div')
-    valueList.className = 'vt-pivot-value-fields-list'
+    for (const meta of zonesMeta) {
+      const zone = this.createZone(meta.name, meta.icon, meta.label)
+      grid.appendChild(zone)
+    }
 
-    // 只显示数值字段, 且排除已选为分组的字段
-    const valueColumns = this.originalColumns.filter(
-      col => col.dataType === 'number' && !this.currentGroupKeys.includes(col.key)
-    )
+    this.pivotConfgSection.appendChild(grid)
 
-    // 没有数值字段, 跳过 数值字段列表渲染, 但不提前 return 以免造成 emitPivotConfig 出现循环引用
-    if (valueColumns.length > 0) {
-      // 一个字段一行; (checkbox, lable, title, aggType); 
-      for (const col of valueColumns) {
-        const item = document.createElement('div')
-        item.className = 'vt-pivot-value-field-item'
-        item.dataset.colKey = col.key 
+    // ── 4. 小计行开关 ──────────────────────────────────────
+    const subtotalRow = document.createElement('label')
+    subtotalRow.className = 'vt-px-subtotal-row'
 
-        const checkbox = document.createElement('input')
-        checkbox.type = 'checkbox'
-        checkbox.dataset.colKey = col.key
-        // 数值字段默认值显示前 3个, 都显示就看不到重点了
-        const index = valueColumns.indexOf(col)
-        checkbox.checked = (index < 3)
+    const subtotalCb = document.createElement('input')
+    subtotalCb.type = 'checkbox'
+    subtotalCb.checked = this.showSubtotals
+    subtotalCb.addEventListener('change', () => {
+      this.showSubtotals = subtotalCb.checked
+      this.emitConfig()
+    })
 
-        const label = document.createElement('label')
-        label.style.flex = '1'
-        label.textContent = col.title
+    subtotalRow.appendChild(subtotalCb)
+    subtotalRow.appendChild(document.createTextNode(' 显示小计行'))
+    this.pivotConfgSection.appendChild(subtotalRow)
 
-        const aggSelect = document.createElement('select')
-        aggSelect.className = 'vt-pivot-agg-select'
-        aggSelect.dataset.colKey = col.key
+    // ── 5. 初始触发 ────────────────────────────────────────
+    this.emitConfig()
+  }
 
-        const aggTypes = ['sum', 'count', 'avg', 'max', 'min']
-        for (const agg of aggTypes) {
-          const opt = document.createElement('option')
-          opt.value = agg 
-          opt.textContent = agg 
-          aggSelect.appendChild(opt)
-        }
+  /** 渲染字段池列表 */
+  private renderPool(container: HTMLDivElement, filter: string): void {
+    container.innerHTML = ''
+    const usedKeys = new Set([
+      ...this.zones.filters.map(f => f.key),
+      ...this.zones.columns.map(f => f.key),
+      ...this.zones.rows.map(f => f.key),
+      ...this.zones.values.map(f => f.key),
+    ])
 
-        // 若无配置聚合方式, 则默认为 'sum'
-        aggSelect.value = (col.summaryType && col.summaryType !== 'none')  ? col.summaryType : 'sum'
-        aggSelect.disabled = !checkbox.checked 
+    const keyword = filter.toLowerCase()
+    for (const col of this.originalColumns) {
+      if (usedKeys.has(col.key)) continue
+      if (keyword && !col.title.toLowerCase().includes(keyword)) continue
 
-        // 监听字段勾选 和 聚合方法 的变化, 并从 DOM 收集 透视配置, 并触发回调
-        checkbox.addEventListener('change', () => {
-          aggSelect.disabled = !checkbox.checked 
-          this.emitPivotConfig(valueList)
-        })
+      const item = document.createElement('div')
+      item.className = 'vt-px-pool-item'
+      item.draggable = true
+      item.dataset.fieldKey = col.key
 
-        aggSelect.addEventListener('change', () => {
-          this.emitPivotConfig(valueList)
-        })
+      const handle = document.createElement('span')
+      handle.className = 'vt-px-handle'
+      handle.textContent = '⠿'
 
-        item.appendChild(checkbox)
-        item.appendChild(label)
-        item.appendChild(aggSelect)
-        valueList.appendChild(item)
-      }
+      const name = document.createElement('span')
+      name.className = 'vt-px-field-name'
+      name.textContent = col.title
 
-      this.pivotConfgSection.appendChild(valueList)
-       // 列展开字段, 选择区
-      const expandLabel = document.createElement('div')
-      expandLabel.className = 'vt-pivot-config-label'
-      expandLabel.textContent = '列展开字段'
-      this.pivotConfgSection.appendChild(expandLabel)
+      // 类型标记
+      const badge = document.createElement('span')
+      badge.className = 'vt-px-field-badge'
+      badge.textContent = col.dataType === 'number' ? 'Σ' : 'A'
+      badge.title = col.dataType === 'number' ? '数值字段' : '文本字段'
 
-      const expandHint = document.createElement('div')
-      expandHint.style.cssText = 'font-size:12px; color:#9ca3af; margin-bottom:6px'
-      expandHint.textContent = '选择后, 值将展开为一列'
-      this.pivotConfgSection.appendChild(expandHint)
+      item.appendChild(handle)
+      item.appendChild(name)
+      item.appendChild(badge)
 
-      const expandSelect = document.createElement('select')
-      expandSelect.className = 'vt-pivot-select'
-      expandSelect.id = 'pivot-expand-select'
-
-      const noneOpt = document.createElement('option')
-      noneOpt.value = ''
-      noneOpt.textContent = '--不展开--'
-      expandSelect.appendChild(noneOpt)
-
-      // 只允许非数值字段作为展开字段, 分组字段, 也不能列展开
-      for (const col of this.originalColumns) {
-        if (col.dataType === 'number') continue
-        if (this.currentGroupKeys.includes(col.key)) continue 
-         
-        const opt = document.createElement('option')
-        opt.value = col.key 
-        opt.textContent = col.title
-        opt.selected = col.key === this.pivotConfig.expandValueBy 
-        expandSelect.appendChild(opt)
-      }
-
-      expandSelect.addEventListener('change', () => {
-        this.pivotConfig.expandValueBy = expandSelect.value || undefined 
-        this.emitPivotConfig(valueList)
+      // 拖拽事件：从字段池拖出
+      item.addEventListener('dragstart', (e) => {
+        this.dragState = { key: col.key, fromZone: 'pool' }
+        e.dataTransfer!.effectAllowed = 'move'
+        item.classList.add('vt-dragging')
+      })
+      item.addEventListener('dragend', () => {
+        item.classList.remove('vt-dragging')
+        this.dragState = null
+        this.clearAllDropIndicators()
       })
 
-      this.pivotConfgSection.appendChild(expandSelect)
+      // 双击快速添加到默认区域
+      item.addEventListener('dblclick', () => {
+        const targetZone: ZoneName = col.dataType === 'number' ? 'values' : 'rows'
+        this.addToZone(col.key, targetZone)
+      })
+
+      container.appendChild(item)
     }
 
-    // 首次触发一次回调, 让透视表用默认配置渲染
-    this.emitPivotConfig(valueList)
+    if (container.children.length === 0) {
+      const hint = document.createElement('div')
+      hint.className = 'vt-px-pool-empty'
+      hint.textContent = filter ? '无匹配字段' : '所有字段已分配'
+      container.appendChild(hint)
+    }
   }
 
-  /** 创建分组字段项 (已选或未选) */
-  private createGroupFieldItem(
-    col: IColumn,
-    isSelected: boolean,
-    maxLevels: number
+  /** 创建一个区域（筛选/列/行/值） */
+  private createZone(zoneName: ZoneName, icon: string, label: string): HTMLDivElement {
+    const zone = document.createElement('div')
+    zone.className = 'vt-px-zone'
+    zone.dataset.zone = zoneName
 
-  ): HTMLDivElement {
-    const item = document.createElement('div')
-    item.className = 'vt-pivot-group-field-item'
-    item.dataset.fieldKey = col.key
-    // 勾选框
-    const checkbox = document.createElement('input')
-    checkbox.type = 'checkbox'
-    checkbox.id = `pivot-group-${col.key}`
-    checkbox.dataset.fieldKey = col.key
-    checkbox.checked = isSelected
+    // 区域标题行
+    const header = document.createElement('div')
+    header.className = 'vt-px-zone-header'
 
-    // 若已选 3 个且当前未选中, 则禁用
-    const selectedCount = this.currentGroupKeys.length
-    if (selectedCount >= maxLevels && !isSelected) {
-      checkbox.disabled = true
-    }
+    const headerLeft = document.createElement('span')
+    headerLeft.className = 'vt-px-zone-label'
+    headerLeft.innerHTML = `<span class="vt-px-zone-icon">${icon}</span>${label}`
 
-    // 勾选事件
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) {
-        if (this.currentGroupKeys.length < maxLevels) {
-          this.currentGroupKeys.push(col.key)
-          this.renderPivotConfig() // 重新渲染, 字段会移到已选区域
-        }
+    const addBtn = document.createElement('button')
+    addBtn.className = 'vt-px-zone-add'
+    addBtn.textContent = '+'
+    addBtn.title = `添加字段到${label}`
+    addBtn.addEventListener('click', () => this.showFieldPicker(zoneName, addBtn))
 
-      } else {
-        // 取消勾选, 从 currentGroupKeys 移除
-        const index = this.currentGroupKeys.indexOf(col.key)
-        if (index > -1) {
-          this.currentGroupKeys.splice(index, 1)
-          this.renderPivotConfig() // 也是要重新渲染
-        }
-      }
-    })
+    header.appendChild(headerLeft)
+    header.appendChild(addBtn)
+    zone.appendChild(header)
 
-    // 标签
-    const label = document.createElement('label')
-    label.htmlFor = `pivot-group-${col.key}`
-    label.textContent = col.title
-    label.style.flex = '1'
-    label.style.cursor = 'pointer'
+    // 字段列表容器
+    const body = document.createElement('div')
+    body.className = 'vt-px-zone-body'
+    body.dataset.zone = zoneName
 
-    // 拖拽手柄 (已选字段才能显示)
-    const dragHandle = document.createElement('span')
-    dragHandle.className = 'vt-pivot-drag-handle'
-    dragHandle.textContent = '⋮⋮'
-    dragHandle.style.cursor = 'grab'
-    dragHandle.style.marginLeft = 'auto'
-    dragHandle.style.fontSize = '16px'
-    dragHandle.style.color = '#999'
-    dragHandle.style.userSelect = 'none'
-    dragHandle.style.visibility = isSelected ? 'visible': 'hidden'
+    this.renderZoneFields(body, zoneName)
 
-    // 只有已选字段才能拖拽
-    if (isSelected) {
-      item.draggable = true 
-      // 这里绑定的是已选区域的容器, 需要在拖拽事件中动态获取容器
-      this.bindGroupFieldDragEvents(item)
-    }
-
-    // 挂载
-    item.appendChild(checkbox)
-    item.appendChild(label)
-    item.appendChild(dragHandle)
-
-    return item 
-  }
-
-  /** 绑定分组字段拖拽事件, 只在已选区域内拖拽 */
-  private bindGroupFieldDragEvents(item: HTMLDivElement) {
-    // 拖拽开始
-    item.addEventListener('dragstart', (e) => {
-      item.classList.add('vt-dragging')
-      e.dataTransfer!.effectAllowed = 'move'
-      // 改变拖拽手柄样式
-      const handle = item.querySelector('.vt-pivot-drag-handle') as HTMLDivElement
-      if (handle) {
-        handle.style.cursor = 'grabbing'
-      }
-    })
-
-    // 拖拽结束
-    item.addEventListener('dragend', () => {
-      // 移除拖拽样式
-      item.classList.remove('vt-dragging')
-      // 恢复拖拽手柄样式
-      const handle = item.querySelector('.vt-pivot-drag-handle') as HTMLDivElement
-      if (handle) {
-        handle.style.cursor = 'grab'
-      }
-      // 移除所有插入提示线
-      const container = item.closest('.vt-pivot-selected-fields') as HTMLDivElement
-      container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
-      
-      // 更新 currentGroupKeys 顺序
-      this.updateGroupKeysOrder()
-    })
-
-    // 拖拽经过时的视觉反馈
-    item.addEventListener('dragover', (e) => {
+    // 区域拖拽接收事件
+    body.addEventListener('dragover', (e) => {
       e.preventDefault()
-
-      const container = item.closest('.vt-pivot-selected-fields') as HTMLDivElement
-      const draggingItem = container.querySelector('.vt-dragging')
-      if (!draggingItem || draggingItem === item) return 
-
-      // 只允许在选中的字段之间拖拽
-      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
-      if (!checkbox.checked) return 
-
-      const rect = item.getBoundingClientRect()
-      const minY = rect.top + rect.height / 2 
-
-      // 先移除之前的提示线
-      container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
-      // 添加蓝色提示线
-      const indicator = document.createElement('div')
-      indicator.className = 'vt-drop-indicator'
-
-      if (e.clientY < minY) {
-        item.parentNode?.insertBefore(indicator, item)
-        item.parentNode?.insertBefore(draggingItem, item)
-      } else {
-        item.parentNode?.insertBefore(indicator, item.nextSibling)
-        item.parentNode?.insertBefore(draggingItem, item.nextSibling)
+      if (!this.dragState) return
+      e.dataTransfer!.dropEffect = 'move'
+      zone.classList.add('vt-px-zone--over')
+    })
+    body.addEventListener('dragleave', (e) => {
+      if (!zone.contains(e.relatedTarget as Node)) {
+        zone.classList.remove('vt-px-zone--over')
       }
     })
-
-    // 拖拽放置
-    item.addEventListener('drop', (e) => {
+    body.addEventListener('drop', (e) => {
       e.preventDefault()
-      // 移除提示线
-      const container = item.closest('.vt-pivot-selected-fields') as HTMLDivElement
-      if (!container) return 
-
-      container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
-      // 更新 currentGroupKeys 顺序
-      this.updateGroupKeysOrder()
+      zone.classList.remove('vt-px-zone--over')
+      if (!this.dragState) return
+      const { key, fromZone } = this.dragState
+      this.dragState = null
+      this.moveField(key, fromZone, zoneName)
     })
+
+    zone.appendChild(body)
+    return zone
   }
 
-  /** 根据 DOM 顺序, 更新 currentGroupKeys, 并触发透视表重建 */
-  private updateGroupKeysOrder(): void {
-    // 获取所有选中的字段, 按 dom 排序
-    const container = this.pivotConfgSection?.querySelector('.vt-pivot-selected-fields')
-    if (!container) return 
+  /** 渲染某个区域的字段 chip 列表 */
+  private renderZoneFields(body: HTMLDivElement, zoneName: ZoneName): void {
+    body.innerHTML = ''
+    const fields = this.zones[zoneName]
 
-    // 获取所有已选字段, 按 dom 顺序
-    const items = Array.from(container.children) as HTMLDivElement[]
-    const newGroupKeys: string[] = []
+    if (fields.length === 0) {
+      const hint = document.createElement('div')
+      hint.className = 'vt-px-zone-hint'
+      hint.textContent = '拖入字段'
+      body.appendChild(hint)
+      return
+    }
 
-    for (const item of items) {
-      // 跳过空提示
-      if (item.classList.contains('vt-pivot-empty-hint')) continue 
+    for (const field of fields) {
+      const col = this.originalColumns.find(c => c.key === field.key)
+      if (!col) continue
 
-      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
-      if (checkbox.checked) {
-        const fieldKey = checkbox.dataset.fieldKey
-        if (fieldKey) {
-          newGroupKeys.push(fieldKey)
+      const chip = document.createElement('div')
+      chip.className = 'vt-px-chip'
+      chip.draggable = true
+      chip.dataset.fieldKey = field.key
+
+      const chipHandle = document.createElement('span')
+      chipHandle.className = 'vt-px-handle'
+      chipHandle.textContent = '⠿'
+
+      const chipName = document.createElement('span')
+      chipName.className = 'vt-px-chip-name'
+
+      // values 区域显示聚合方式
+      if (zoneName === 'values') {
+        const aggSelect = document.createElement('select')
+        aggSelect.className = 'vt-px-agg-select'
+        aggSelect.title = '聚合方式'
+        for (const agg of ['sum', 'count', 'avg', 'max', 'min']) {
+          const opt = document.createElement('option')
+          opt.value = agg
+          opt.textContent = agg
+          aggSelect.appendChild(opt)
         }
-      }
-    }
-
-    // 更新 currentGroupKeys 
-    this.currentGroupKeys = newGroupKeys
-
-    // 触发透视表重建, 通过 emitPivotConfig 
-    const valueList = this.pivotConfgSection?.querySelector('.vt-pivot-value-fields-list') as HTMLDivElement
-    if (valueList) {
-      this.emitPivotConfig(valueList)
-    }
-  }
-
-  /** 从 DOM 收集透视表配置, 并触发回调 */
-  private emitPivotConfig(valueList: HTMLDivElement): void {
-    // 使用 currentGroupKeys (已按拖拽顺序排列)
-    const rowGroups = this.currentGroupKeys
-    if (rowGroups.length === 0) return 
-
-    // 收集数值字段
-    const valueFields: IPivotConfig['valueFields'] = []
-    valueList.querySelectorAll('.vt-pivot-value-field-item').forEach(item => {
-      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement
-      const aggSelect = item.querySelector('.vt-pivot-agg-select') as HTMLSelectElement
-
-      if (checkbox?.checked) {
-        const key = checkbox.dataset.colKey!
-        const col = this.originalColumns.find(c => c.key === key)
-        valueFields.push({
-          key, 
-          aggregation: aggSelect.value as AggregationType,
-          label: col?.title
+        aggSelect.value = field.aggregation ?? (
+          (col.summaryType && col.summaryType !== 'none') ? col.summaryType : 'sum'
+        )
+        aggSelect.addEventListener('change', () => {
+          field.aggregation = aggSelect.value as AggregationType
+          this.emitConfig()
         })
+        chipName.textContent = col.title
+        chip.appendChild(chipHandle)
+        chip.appendChild(chipName)
+        chip.appendChild(aggSelect)
+      } else {
+        chipName.textContent = col.title
+        chip.appendChild(chipHandle)
+        chip.appendChild(chipName)
+      }
+
+      // 移除按钮
+      const removeBtn = document.createElement('button')
+      removeBtn.className = 'vt-px-chip-remove'
+      removeBtn.textContent = '×'
+      removeBtn.title = '移出区域'
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.removeFromZone(field.key, zoneName)
+      })
+      chip.appendChild(removeBtn)
+
+      // chip 内部拖拽排序
+      chip.addEventListener('dragstart', (e) => {
+        this.dragState = { key: field.key, fromZone: zoneName }
+        e.dataTransfer!.effectAllowed = 'move'
+        chip.classList.add('vt-dragging')
+      })
+      chip.addEventListener('dragend', () => {
+        chip.classList.remove('vt-dragging')
+        this.dragState = null
+        this.clearAllDropIndicators()
+        this.refreshAllZones()
+      })
+      chip.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!this.dragState || this.dragState.key === field.key) return
+        const dragging = body.querySelector('.vt-dragging')
+        if (!dragging) return
+        this.clearDropIndicatorsIn(body)
+        const indicator = document.createElement('div')
+        indicator.className = 'vt-drop-indicator'
+        const rect = chip.getBoundingClientRect()
+        if (e.clientY < rect.top + rect.height / 2) {
+          body.insertBefore(indicator, chip)
+          body.insertBefore(dragging, chip)
+        } else {
+          body.insertBefore(indicator, chip.nextSibling)
+          body.insertBefore(dragging, chip.nextSibling)
+        }
+      })
+      chip.addEventListener('drop', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        this.clearDropIndicatorsIn(body)
+        // 同区域排序：从 DOM 顺序同步到 zones 数组
+        if (this.dragState?.fromZone === zoneName) {
+          this.syncZoneOrderFromDOM(body, zoneName)
+          this.dragState = null
+        }
+      })
+
+      body.appendChild(chip)
+    }
+  }
+
+  /** 将字段移动到某个区域（来自字段池或其他区域） */
+  private moveField(key: string, fromZone: ZoneName | 'pool', toZone: ZoneName): void {
+    // 先从来源移除
+    if (fromZone !== 'pool') {
+      this.zones[fromZone] = this.zones[fromZone].filter(f => f.key !== key)
+    }
+
+    // 加入目标区域（避免重复）
+    const alreadyIn = this.zones[toZone].some(f => f.key === key)
+    if (!alreadyIn) {
+      const col = this.originalColumns.find(c => c.key === key)
+      const defaultAgg: AggregationType =
+        (col?.summaryType && col.summaryType !== 'none') ? col.summaryType as AggregationType : 'sum'
+      this.zones[toZone].push({
+        key,
+        aggregation: toZone === 'values' ? defaultAgg : undefined,
+      })
+    }
+
+    this.refreshAllZones()
+    this.emitConfig()
+  }
+
+  /** 从区域移除字段（返回字段池） */
+  private removeFromZone(key: string, zoneName: ZoneName): void {
+    this.zones[zoneName] = this.zones[zoneName].filter(f => f.key !== key)
+    this.refreshAllZones()
+    this.emitConfig()
+  }
+
+  /** 将字段添加到指定区域（双击或 + 按钮） */
+  private addToZone(key: string, zoneName: ZoneName): void {
+    // 从其他区域移除（一个字段只能在一个区域）
+    for (const z of Object.keys(this.zones) as ZoneName[]) {
+      this.zones[z] = this.zones[z].filter(f => f.key !== key)
+    }
+    this.moveField(key, 'pool', zoneName)
+  }
+
+  /** 弹出字段选择器（点击 + 按钮时） */
+  private showFieldPicker(zoneName: ZoneName, anchor: HTMLElement): void {
+    // 移除已存在的 picker
+    document.querySelectorAll('.vt-px-picker').forEach(el => el.remove())
+
+    const usedKeys = new Set([
+      ...this.zones.filters.map(f => f.key),
+      ...this.zones.columns.map(f => f.key),
+      ...this.zones.rows.map(f => f.key),
+      ...this.zones.values.map(f => f.key),
+    ])
+
+    const availCols = this.originalColumns.filter(c => !usedKeys.has(c.key))
+    if (availCols.length === 0) return
+
+    const picker = document.createElement('div')
+    picker.className = 'vt-px-picker'
+
+    for (const col of availCols) {
+      const opt = document.createElement('div')
+      opt.className = 'vt-px-picker-item'
+      opt.textContent = col.title
+      opt.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        picker.remove()
+        this.addToZone(col.key, zoneName)
+      })
+      picker.appendChild(opt)
+    }
+
+    // 定位在 anchor 旁
+    const rect = anchor.getBoundingClientRect()
+    picker.style.position = 'fixed'
+    picker.style.top = `${rect.bottom + 4}px`
+    picker.style.left = `${rect.left}px`
+    document.body.appendChild(picker)
+
+    // 点外部关闭
+    const close = (e: MouseEvent) => {
+      if (!picker.contains(e.target as Node)) {
+        picker.remove()
+        document.removeEventListener('mousedown', close)
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', close), 0)
+  }
+
+  /** 从 DOM 顺序同步同区域字段顺序 */
+  private syncZoneOrderFromDOM(body: HTMLDivElement, zoneName: ZoneName): void {
+    const chips = Array.from(body.querySelectorAll('.vt-px-chip')) as HTMLDivElement[]
+    const newOrder: ZoneField[] = []
+    for (const chip of chips) {
+      const key = chip.dataset.fieldKey
+      if (!key) continue
+      const existing = this.zones[zoneName].find(f => f.key === key)
+      if (existing) newOrder.push(existing)
+    }
+    this.zones[zoneName] = newOrder
+    this.emitConfig()
+  }
+
+  /** 刷新所有区域和字段池的显示 */
+  private refreshAllZones(): void {
+    if (!this.pivotConfgSection) return
+
+    // 刷新字段池
+    const poolList = this.pivotConfgSection.querySelector('.vt-px-pool-list') as HTMLDivElement
+    const poolSearch = this.pivotConfgSection.querySelector('.vt-px-pool-search') as HTMLInputElement
+    if (poolList) this.renderPool(poolList, poolSearch?.value.trim() ?? '')
+
+    // 刷新四区域
+    const zoneBodies = this.pivotConfgSection.querySelectorAll('.vt-px-zone-body')
+    zoneBodies.forEach(body => {
+      const zoneEl = body as HTMLDivElement
+      const z = zoneEl.dataset.zone as ZoneName
+      if (z) this.renderZoneFields(zoneEl, z)
+    })
+  }
+
+  /** 清除所有放置提示线 */
+  private clearAllDropIndicators(): void {
+    this.pivotConfgSection?.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
+  }
+
+  /** 清除某容器内的放置提示线 */
+  private clearDropIndicatorsIn(container: HTMLElement): void {
+    container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
+  }
+
+  /** 收集配置并触发回调 */
+  private emitConfig(): void {
+    const rowGroups = this.zones.rows.map(f => f.key)
+    if (rowGroups.length === 0) return
+
+    const colGroups = this.zones.columns.map(f => f.key)
+    const valueFields: IPivotConfig['valueFields'] = this.zones.values.map(f => {
+      const col = this.originalColumns.find(c => c.key === f.key)
+      return {
+        key: f.key,
+        aggregation: f.aggregation ?? 'sum',
+        label: col?.title,
       }
     })
+
+    if (valueFields.length === 0) return
 
     this.onPivotConfigChange?.({
       enabled: true,
       rowGroups,
+      colGroups: colGroups.length > 0 ? colGroups : undefined,
       valueFields,
-      showSubtotals: this.pivotConfig.showSubtotals ?? true, // 传递小计行开关状态
-      expandValueBy: this.pivotConfig.expandValueBy,
-      expandMaxValues: this.pivotConfig.expandMaxValues,
+      showSubtotals: this.showSubtotals,
     } as IPivotConfig)
   }
 
   public onHide(): void {
     this.unsubscribe?.()
-    this.unsubscribe = null 
+    this.unsubscribe = null
   }
 
   public destroy(): void {

@@ -716,13 +716,10 @@
 
 .vt-instance .vt-column-panel-pivot-config {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 2px 0;
-  margin-bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar {
@@ -1022,7 +1019,14 @@
 }
 
 .vt-instance .vt-pivot-select {
-  /* 透视表下拉选择 */
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #374151;
+  background: white;
+  cursor: pointer;
 }
 
 .vt-instance .vt-pivot-value-fields-list {
@@ -1299,22 +1303,29 @@
   will-change: transform;
 }
 
-.vt-instance .vt-pivot-header-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background-color: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
-  padding: 4px 8px;
-  flex-shrink: 0;
+.vt-instance .vt-pivot-header-area {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.vt-instance .vt-pivot-header-wrapper {
+  display: flex;
+  flex-direction: column;
+  background-color: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .vt-instance .vt-pivot-header-wrapper > .vt-table-row {
-  flex: 1;
+  flex: 0 0 auto;
+  width: 100%;
   min-width: 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.vt-instance .vt-pivot-header-wrapper > .vt-table-row:last-child {
+  border-bottom: none;
 }
 
 /* ========== 20. 展开/折叠按钮 ========== */
@@ -1407,4 +1418,322 @@
 
 .vt-instance .vt-pivot-subtotal-label span {
   flex: 1;
+}
+
+/* ========== 23. Excel 四区域透视面板 (vt-px-*) ========== */
+
+/* ── 字段池区 ── */
+.vt-instance .vt-px-pool-section {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  max-height: 220px;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 8px 0 0;
+}
+
+.vt-instance .vt-px-section-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 10px 6px;
+}
+
+.vt-instance .vt-px-pool-search {
+  margin: 0 10px 6px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  color: #374151;
+}
+.vt-instance .vt-px-pool-search:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+
+.vt-instance .vt-px-pool-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 2px 6px 6px;
+}
+
+.vt-instance .vt-px-pool-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: grab;
+  font-size: 13px;
+  color: #374151;
+  user-select: none;
+  transition: background 0.1s;
+}
+.vt-instance .vt-px-pool-item:hover {
+  background: #f3f4f6;
+}
+.vt-instance .vt-px-pool-item.vt-dragging {
+  opacity: 0.4;
+}
+
+.vt-instance .vt-px-handle {
+  color: #9ca3af;
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.vt-instance .vt-px-field-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vt-instance .vt-px-field-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  background: #f3f4f6;
+  border-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1.4;
+}
+
+.vt-instance .vt-px-pool-empty {
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* ── 分割线提示 ── */
+.vt-instance .vt-px-divider {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 5px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafafa;
+  letter-spacing: 0.02em;
+}
+
+/* ── 四区域网格 ── */
+.vt-instance .vt-px-zones-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.vt-instance .vt-px-zone {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  min-height: 0;
+  transition: background 0.15s;
+}
+.vt-instance .vt-px-zone:nth-child(2n) {
+  border-right: none;
+}
+.vt-instance .vt-px-zone:nth-child(3),
+.vt-instance .vt-px-zone:nth-child(4) {
+  border-bottom: none;
+}
+.vt-instance .vt-px-zone--over {
+  background: #eef2ff;
+}
+
+.vt-instance .vt-px-zone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.vt-instance .vt-px-zone-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vt-instance .vt-px-zone-icon {
+  font-size: 12px;
+  color: #6366f1;
+}
+
+.vt-instance .vt-px-zone-add {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  background: white;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.1s;
+}
+.vt-instance .vt-px-zone-add:hover {
+  background: #6366f1;
+  color: white;
+  border-color: #6366f1;
+}
+
+.vt-instance .vt-px-zone-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+}
+
+.vt-instance .vt-px-zone-hint {
+  font-size: 11px;
+  color: #d1d5db;
+  text-align: center;
+  padding: 8px 4px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #e5e7eb;
+  border-radius: 4px;
+  margin: 2px 0;
+}
+
+/* ── 字段 chip ── */
+.vt-instance .vt-px-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 4px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #374151;
+  cursor: grab;
+  user-select: none;
+  min-width: 0;
+  transition: box-shadow 0.1s;
+}
+.vt-instance .vt-px-chip:hover {
+  border-color: #6366f1;
+  box-shadow: 0 1px 3px rgba(99,102,241,0.15);
+}
+.vt-instance .vt-px-chip.vt-dragging {
+  opacity: 0.4;
+}
+
+.vt-instance .vt-px-chip-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.vt-instance .vt-px-chip-remove {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: none;
+  color: #9ca3af;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+.vt-instance .vt-px-chip-remove:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* values 区 agg 下拉 */
+.vt-instance .vt-px-agg-select {
+  flex-shrink: 0;
+  font-size: 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  background: #f9fafb;
+  color: #6b7280;
+  padding: 0 2px;
+  height: 18px;
+  max-width: 46px;
+  cursor: pointer;
+  outline: none;
+}
+
+/* ── 小计行开关 ── */
+.vt-instance .vt-px-subtotal-row {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #6b7280;
+  border-top: 1px solid #e5e7eb;
+  cursor: pointer;
+  user-select: none;
+  background: #fafafa;
+}
+.vt-instance .vt-px-subtotal-row:hover {
+  color: #374151;
+}
+
+/* ── 字段选择 picker 弹窗 ── */
+.vt-px-picker {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 9999;
+  min-width: 140px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.vt-px-picker-item {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #374151;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.vt-px-picker-item:hover {
+  background: #f3f4f6;
+  color: #6366f1;
 }

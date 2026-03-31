@@ -46,7 +46,7 @@ export class PivotPanelImpl implements IPanel {
   
     return {
       enabled: true,
-      rowGroup: groupCol?.key || '',
+      rowGroups: groupCol?.key ? [groupCol.key] : [],
       valueFields: valueFields.length > 0 ? valueFields : []
     }
   }
@@ -108,13 +108,13 @@ export class PivotPanelImpl implements IPanel {
       const option = document.createElement('option')
       option.value = col.key
       option.textContent = col.title
-      option.selected = col.key === this.pivotConfig.rowGroup
+      option.selected = this.pivotConfig.rowGroups?.includes(col.key) ?? false
       select.appendChild(option)
     }
 
     // 监听字段选择的变化, 并 emit 出去, 通知外部变化
     select.addEventListener('change', () => {
-      this.pivotConfig.rowGroup = select.value
+      this.pivotConfig.rowGroups = [select.value]
       this.notifyChange()
     })
 
@@ -126,7 +126,7 @@ export class PivotPanelImpl implements IPanel {
   private renderValueFieldsList(list: HTMLDivElement): void {
     for (const col of this.columns) {
       // 分组字段就跳过, 数值字段才保留
-      if (col.key === this.pivotConfig.rowGroup) continue 
+      if (this.pivotConfig.rowGroups?.includes(col.key)) continue 
 
       const item = document.createElement('div')
       item.className = 'vt-pivot-value-field-item'

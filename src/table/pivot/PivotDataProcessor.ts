@@ -1,27 +1,192 @@
-import type { IPivotConfig, IPivotTreeNode, AggregationType } from "@/types/pivot";
+import type { IPivotConfig, IPivotTreeNode, IPivotColNode, AggregationType } from "@/types/pivot";
 import { PivotTreeNode } from "@/table/pivot/PivotTreeNode";
 
 /**
- * 透视表数据处理器 (支持多层递归分组)
- * 
- * 职责: 
- * 1. 将平铺数据 转为 树形结构
- * 2. 按 rowGrops 数组递归分组 (支持 1~5 层)
- * 3. 计算聚合值 (sum, avg, count, max min)
- * 
- * 核心算法: 
- * - 递归深度 = rowGroups.length, 业务限定最多 5层, 不会栈溢出
- * - 时间复杂度: O(nxm),  n 为数据行数, m 为分组层数
- * - 50w 行 x 3 层 = 150w 次 Map 操作, 约占用 200-500ms
- * 
- * 时间复杂度: O(n), n 为数据行数
+ * 透视表数据处理器 (Excel 风格: 行树 × 列树 二维交叉聚合)
+ *
+ * 职责:
+ * 1. buildColTree(data)   → 构建列树 (按 colGroups 递归分组)
+ * 2. buildPivotTree(data) → 构建行树 (按 rowGroups 递归分组)
+ * 3. 每个行节点的 aggregatedData 中, 每个 key 对应一个列叶子的聚合值
+ *
+ * cellKey 格式: 'salary__华东__Product-0'
+ *   = valueField.key + '__' + 各列分组值 (按 colGroups 层级顺序)
+ *
+ * 性能说明:
+ * - 50w 行 × 3行层 × 9列叶子 × 3值字段 ≈ 405w 次聚合操作 (~500ms)
+ * - 建议超过 100w 行时移入 Web Worker
  */
 export class PivotDataProcessor {
   private config: IPivotConfig
-  private globalExpandValues: string[] = []  // 全局展开值列表
+  private colTree: IPivotColNode | null = null   // 列树根节点
+  private colLeaves: IPivotColNode[] = []         // 列叶子节点列表 (按序)
 
   constructor(config: IPivotConfig) {
-    this.config = config 
+    this.config = config
+  }
+
+  /**
+   * 构建列树 (入口方法), 类似 Excel 的 colGroups 支持
+   * 原理: 与行树完全堆成, 只是字段来源是 colGroups 而非 rowGrops
+   * 调用时机: PivotTable.refresh() 里,  buildPivotTree 之前先调这个
+   * 
+   * @param data 全量原始数据 (采样唯一值用)
+   */
+  public buildColTree(data: Record<string, any>[]): IPivotColNode {
+    const colGroups = this.config.colGroups ?? []
+    const maxLeaf = this.config.colMaxLeafCols ?? 50
+
+    // 构建虚拟根节点
+    const root: IPivotColNode = {
+      id: 'col-root',
+      level: -1,
+      colValue: null,
+      colKey: '',
+      children: [],
+      isLeaf: false,
+      leafCount: 0,
+    }
+
+    if (colGroups.length === 0) {
+      // 没有列分组: valueFields 本身就是叶子列
+      root.children = this.config.valueFields.map((vf, i) => ({
+        id: `col-vf-${i}`,
+        level: 0,
+        colValue: vf.label ?? vf.key,
+        colKey: '__value__', // 特殊标记: 代表数值字段本身 
+        children: [],
+        isLeaf: true,
+        leafCount: 1,
+      }))
+      root.leafCount = root.children.length
+
+    } else {
+      // 有分组列: 递归构建列树
+      root.children = this.buildColSubTree(data, colGroups, 0, 'col-root', maxLeaf)
+      root.leafCount = root.children.reduce((sum, c) => sum + c.leafCount, 0)
+    }
+
+    this.colTree = root
+
+    // 收集叶子节点, 按深度优先顺序, 对应表头最后一行顺序
+    this.colLeaves = this.collectColLeaves(root)
+
+    return root 
+  }
+
+  /**
+   * 递归构建列子树 
+   * 
+   * 与 buildSubTree (行树)原理一致: 
+   * 1. 按 colGroups[level] 分组取唯一值
+   * 2. 为每个唯一值创建列节点
+   * 3. 递归到下一层, 指导叶子层
+   * 叶子层: 为每个 valueField 创建一个叶子节点
+   */
+  private buildColSubTree(
+    data: Record<string, any>[],
+    colGroups: string[],
+    level: number,
+    parentId: string,
+    remainLeaf: number,
+    parentAncestors: string[] = [],  // 祖先列分组值路径
+  ): IPivotColNode[] {
+    if (remainLeaf <= 0) return [] // 超出列上限, 则截断
+
+    const colKey = colGroups[level]
+    // 取当前层唯一值, 保持插入顺序, 不排序, 符合用户数据原始顺序
+    const uniqueVals = this.getUniqueValues(data, colKey)
+
+    const nodes: IPivotColNode[] = []
+
+    for (const val of uniqueVals) {
+      if (remainLeaf <= 0) break 
+
+      const nodeId = `${parentId}-c${level}-${val}`
+      // 筛选出改列值对应的数据行, 用于下一层递归
+      const filteredData = data.filter(r => String(r[colKey] ?? '') === String(val))
+
+      let children: IPivotColNode[] = []
+      let leafCount = 0
+
+      // 当前节点的祖先列分组值路径
+      const currentAncestors = [...(parentAncestors ?? []), String(val)]
+
+      if (level + 1 >= colGroups.length) {
+        // 到达列分组末层: valueFields 是叶子
+        children = this.config.valueFields.map((vf, i) => ({
+          id: `${nodeId}-vf-${i}`,
+          level: level + 1,
+          colValue: vf.label ?? vf.key,
+          colKey: '__value__',
+          children: [],
+          isLeaf: true,
+          leafCount: 1,
+          ancestorColValues: currentAncestors,  // 记录祖先路径
+        }))
+        leafCount = children.length
+
+      } else {
+        // 继续递归下一层分组
+        children = this.buildColSubTree(filteredData, colGroups, level + 1, nodeId, remainLeaf, currentAncestors)
+        leafCount = children.reduce((sum, c) => sum + c.leafCount, 0)
+      }
+
+      remainLeaf -= leafCount
+
+      nodes.push({
+        id: nodeId,
+        level,
+        colValue: val,
+        colKey,
+        children,
+        isLeaf: false,
+        leafCount,
+        ancestorColValues: currentAncestors,
+      })
+    }
+
+    return nodes 
+  }
+
+  /** 按深度优先顺序, 收集所有叶子节点 */
+  private collectColLeaves(node: IPivotColNode): IPivotColNode[] {
+    if (node.isLeaf) {
+      return [node]
+    }
+
+    const leaves: IPivotColNode[] = []
+    for (const child of node.children) {
+      leaves.push(...this.collectColLeaves(child))
+    }
+
+    return leaves
+  }
+
+  /** 获取某字段的有序唯一值 */
+  private getUniqueValues(data: Record<string, any>[], fieldKey: string): string[] {
+    const seen = new Set<string>()
+    const result: string[] = []
+
+    for (const row of data) {
+      const val = String(row[fieldKey] ?? '')
+      if (val === '' || val === 'undefined') continue 
+      if (!seen.has(val)) {
+        seen.add(val)
+        result.push(val)
+      }
+    }
+
+    return result
+  }
+
+  /** 暴露给外部 (PivotTable, Renderer 使用) */
+  public getColTree(): IPivotColNode | null {
+    return this.colTree
+  }
+
+  public getColLeaves(): IPivotColNode[] {
+    return this.colLeaves
   }
 
   /**
@@ -75,14 +240,11 @@ export class PivotDataProcessor {
     parentId: string,
 
   ): IPivotTreeNode[] {
-    // 递归终止条件: 达到叶子层, 创建数据节点
+    // 递归终止条件: 达到叶子层
     if (level >= rowGroups.length) {
-      // 有列展开时, 叶子层不渲染原始数据行, 只保留分组汇总层, 减少视觉噪音
-      if (this.config.expandValueBy) {
-        return []
-      }
-      
-      return data.map((row, i) => 
+      // 有列分组时不创建数据行, 分组汇总行已足够
+      if (this.config.colGroups?.length) return []
+      return data.map((row, i) =>
         PivotTreeNode.createDataNode(`${parentId}-data-${i}`, level, row)
       )
     }
@@ -153,12 +315,19 @@ export class PivotDataProcessor {
   }
 
   /**
-   * 计算聚合数据
+   * 计算一个行分组节点的聚合数据
    * 
-   * @param rows 当前分组的所有行
+   * 核心原理: (二维交叉聚合):
+   *   无列分组: cell = aggregate (该行分组的所有行, valueField)
+   *   有列分组: cell = aggregate (该分组行 交 该叶子列 过滤的行, valueField)
+   * 
+   * 数据 key 格式: 
+   *   无列分组: 'salary', 'profit'
+   *   有列分组: 'salary__华东__Product-0' (用 __ 双下划线分割, 避免字段含 _)
+   * 
+   * @param rows 当前行分组 包含 的所有原始数据行
    * @param groupKey 当前分组字段
    * @param groupValue 当前分组值
-   * @returns 聚合后的数据对象
    */
   private computeAggregatedData(
     rows: Record<string, any>[],
@@ -171,35 +340,102 @@ export class PivotDataProcessor {
       [groupKey]: groupValue  
     }
 
-    const expandBy = this.config.expandValueBy 
-    const maxValues = this.config.expandMaxValues ?? 10  // 最多展开 10列
-    
-    if (expandBy) {
-      // 方案2: 按展开字段, 分列聚合
-      // 使用全局统一的展开值列表, 避免每个分组值不同导致 key 对不上
-      const expandValues = this.globalExpandValues
+    const colLeaves = this.colLeaves
 
-      for (const valueField of this.config.valueFields) {
-        for (const expandVal of expandValues) {
-          // 筛选出 expandBy 字段 等于 当前展开值的行
-          const filteredRows = rows.filter(r => String(r[expandBy] ?? '') === expandVal)
-          const aggValue = this.aggregate(filteredRows, valueField.key, valueField.aggregation)
-          // key 格式: 薪资_滑动, 薪资_华北 
-          aggregatedData[`${valueField.key}_${expandVal}`] = aggValue
-        }
+    if (colLeaves.length === 0 || !this.config.colGroups?.length) {
+      // 无列分组: 原有的逻辑不变
+      for (const vf of this.config.valueFields) {
+        aggregatedData[vf.key] = this.aggregate(rows, vf.key, vf.aggregation)
       }
 
     } else {
-      // 无展开, 保留原来的逻辑不变
-      // 计算每个数值字段的聚合值
-      for (const valueField of this.config.valueFields) {
-        const aggValue = this.aggregate(rows, valueField.key, valueField.aggregation)
-        aggregatedData[valueField.key] = aggValue
+      // 有列分组: 按叶子逐一交叉聚合
+      // 直接用 leaf.ancestorColValues + colGroups 过滤行, 避免遍历树
+      const colGroups = this.config.colGroups!
+      for (const leaf of colLeaves) {
+        const vf = this.config.valueFields.find(
+          v => (v.label ?? v.key) === leaf.colValue
+        ) ?? this.config.valueFields.find(v => v.key === leaf.colValue)
+        if (!vf) continue
+
+        const ancestors = leaf.ancestorColValues ?? []
+        const filteredRows = rows.filter(row =>
+          ancestors.every((val, i) => String(row[colGroups[i]] ?? '') === val)
+        )
+
+        const cellKey = this.buildCellKey(leaf)
+        aggregatedData[cellKey] = this.aggregate(filteredRows, vf.key, vf.aggregation)
       }
     }
 
     return aggregatedData
   }
+
+  /**
+   * 从叶子节点 id 解析祖先的 (colKey, colValue) 链
+   * 
+   * 原理: 列树构建时 id 是 'col-root-c0-华东-c1-Product-0-vf-0'
+   * 但解析 id 字符串容易出错, 更可靠的方式是, 在叶子节点上直接存祖先信息
+   * 这里用简化方案: 遍历 colTree 找到叶子的完整路径
+   */
+  private resolveLeafAncestors(leaf: IPivotColNode): [string, string][] {
+    const path: IPivotColNode[] = []
+    this.findLeafPath(this.colTree!, leaf.id, path)
+    // 过滤掉 __value__ 层 (数值字段, 不参与行过滤)
+    return path 
+      .filter(n => n.colKey !== '__value__' && n.level >= 0)
+      .map(n => [n.colKey, String(n.colValue)])
+  }
+
+  /**
+   * 深度优先搜索, 找到目标叶子节点的完整路径
+   */
+  private findLeafPath(node: IPivotColNode, targetId: string, path: IPivotColNode[]): boolean {
+    path.push(node)
+    if (node.id === targetId) return true 
+
+    for (const child of node.children) {
+      if (this.findLeafPath(child, targetId, path)) return true 
+    }
+
+    path.pop()
+    return false 
+  }
+
+  /**
+   * 构建单元格数据 key 
+   * 格式: 'salary__华东__Product-0'
+   * 规则: valueField.key + '__' + 各列分组值 (从根到叶, 不含 __value__ 层)
+   */
+  public buildCellKey(leaf: IPivotColNode): string {
+    // 无列分组时: colLeaves 直接是 valueField 叶子, key 就是 vf.key
+    if (!this.config.colGroups?.length) {
+      const vf = this.config.valueFields.find(
+        v => (v.label ?? v.key) === leaf.colValue
+      ) ?? this.config.valueFields.find(v => v.key === leaf.colValue)
+      return vf?.key ?? String(leaf.colValue)
+    }
+
+    // 有列分组时: 用 ancestorColValues 拼接 (比遍历树快)
+    if (leaf.ancestorColValues && leaf.ancestorColValues.length > 0) {
+      const vf = this.config.valueFields.find(
+        v => (v.label ?? v.key) === leaf.colValue
+      ) ?? this.config.valueFields.find(v => v.key === leaf.colValue)
+      return `${vf?.key ?? leaf.colValue}__${leaf.ancestorColValues.join('__')}`
+    }
+
+    // fallback: 遍历树计算路径
+    const path: IPivotColNode[] = []
+    this.findLeafPath(this.colTree!, leaf.id, path)
+    const colParts = path
+      .filter(n => n.colKey !== '__value__' && n.level >= 0)
+      .map(n => String(n.colValue))
+    const vf2 = this.config.valueFields.find(
+      v => (v.label ?? v.key) === leaf.colValue
+    ) ?? this.config.valueFields.find(v => v.key === leaf.colValue)
+    return `${vf2?.key ?? leaf.colValue}__${colParts.join('__')}`
+  }
+
 
 
   /** 聚合计算,
@@ -262,61 +498,39 @@ export class PivotDataProcessor {
    */
   private computeRootAggregatedData(data: Record<string, any>[]): Record<string, any> {
     const aggregatedData: Record<string, any> = {}
-    const expandBy = this.config.expandValueBy 
-    const maxValues = this.config.expandMaxValues?? 10
+    const colLeaves = this.colLeaves
 
-    if (expandBy) {
-      const expandValues = this.globalExpandValues
-      for (const valueField of this.config.valueFields) {
-        for (const expandVal of expandValues) {
-          const filteredRows = data.filter(r => String(r[expandBy] ?? '') === expandVal)
-          aggregatedData[`${valueField.key}_${expandVal}`] = this.aggregate(filteredRows, valueField.key, valueField.aggregation)
-        }
+    if (colLeaves.length === 0 || !this.config.colGroups?.length) {
+      for (const vf of this.config.valueFields) {
+        aggregatedData[vf.key] = this.aggregate(data, vf.key, vf.aggregation)
       }
 
     } else {
-      // 计算每个数值字段的聚合值
-      for (const valueField of this.config.valueFields) {
-        const aggValue = this.aggregate(data, valueField.key, valueField.aggregation)
-        aggregatedData[valueField.key] = aggValue
+      const colGroups = this.config.colGroups!
+      for (const leaf of colLeaves) {
+        const vf = this.config.valueFields.find(
+          v => (v.label ?? v.key) === leaf.colValue
+        ) ?? this.config.valueFields.find(v => v.key === leaf.colValue)
+        if (!vf) continue
+
+        const ancestors = leaf.ancestorColValues ?? []
+        const filteredRows = data.filter(row =>
+          ancestors.every((val, i) => String(row[colGroups[i]] ?? '') === val)
+        )
+        aggregatedData[this.buildCellKey(leaf)] = this.aggregate(filteredRows, vf.key, vf.aggregation)
       }
     }
 
     return aggregatedData
   }
 
-  /**
-   * 从数据中提取某字段的 tooN 唯一值 (按出现频率降序)
-   * 用于 expandValueBy 时限制列数
-   */
-  private getTopNValues(
-    data: Record<string,any>[],
-    fieldKey: string,
-    maxN: number
-  ): string[] {
-
-    const countMap = new Map<string, number>()
-    for (const row of data) {
-      const val = String(row[fieldKey] ?? '')
-      if (val === '' || val === 'undefined' || val === null) continue 
-      countMap.set(val, (countMap.get(val) ?? 0) + 1)
-    }
-
-    // 按出现次数降序, 取前 maxN 个
-    return Array.from(countMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, maxN)
-      .map(([val]) => val)
-  }
-
-  /** 设置全局展开值列表, 从外部注入, 避免面哥分组单独计算, 导致 key 不一致 */
-  public setExpandValues(values: string[]): void {
-    this.globalExpandValues = values 
-  }
 
   /** 更新配置 */
   public updateConfig(config: IPivotConfig): void {
     this.config = config
+    // config 变了, 列树需要外部重新调用 buildColTree 重建
+    this.colTree = null 
+    this.colLeaves = []
   }
   
 }
