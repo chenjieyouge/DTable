@@ -158,7 +158,16 @@ export class MountHelper {
 
     // 渲染布局管理器
     const layoutContainer = layoutManager.render()
-    layoutContainer.style.height = `${config.tableHeight}px`
+    if (config.tableHeight === 'auto') {
+      const min = config.minTableHeight ?? 200
+      layoutContainer.style.height = 'auto'
+      layoutContainer.style.minHeight = `${min}px`
+      if (config.maxTableHeight) {
+        layoutContainer.style.maxHeight = `${config.maxTableHeight}px`
+      }
+    } else {
+      layoutContainer.style.height = `${config.tableHeight}px`
+    }
 
     // 设置布局容器宽度
     if (typeof config.tableWidth === 'string') {

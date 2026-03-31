@@ -3,7 +3,70 @@ export class TableResizeBinder {
   private portalContainer: HTMLDivElement | null = null 
   private layoutContainer: HTMLDivElement | null = null 
   private resizeBtn: HTMLButtonElement | null = null
+  private resizeCorner: HTMLDivElement | null = null
   private onMouseDown: ((e: MouseEvent) => void) | null = null 
+  private onCornerMouseDown: ((e: MouseEvent) => void) | null = null
+
+  /**
+   * 绑定右下角双向 resize（宽+高）
+   * 挂载到 portalContainer 或 layoutContainer 上
+   */
+  public bindCorner(params: {
+    portalContainer: HTMLDivElement
+    layoutContainer?: HTMLDivElement
+    onResizeEnd?: (w: number, h: number) => void
+  }) {
+    const { portalContainer, layoutContainer, onResizeEnd } = params
+
+    const corner = document.createElement('div')
+    corner.className = 'vt-table-resize-corner'
+    corner.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d="M2 10 L10 2 M6 10 L10 6 M10 10 L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`
+    corner.title = '拖拽调整表格大小'
+    portalContainer.appendChild(corner)
+    this.resizeCorner = corner
+
+    const startDrag = (e: MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const startX = e.clientX
+      const startY = e.clientY
+      const startW = portalContainer.getBoundingClientRect().width
+      const startH = portalContainer.getBoundingClientRect().height
+      document.body.style.cursor = 'se-resize'
+      document.body.style.userSelect = 'none'
+
+      const onMove = (me: MouseEvent) => {
+        const dx = me.clientX - startX
+        const dy = me.clientY - startY
+        const nextW = Math.max(300, startW + dx)
+        const nextH = Math.max(150, startH + dy)
+        portalContainer.style.width = `${nextW}px`
+        portalContainer.style.height = `${nextH}px`
+        if (layoutContainer) {
+          layoutContainer.style.width = `${nextW}px`
+          layoutContainer.style.height = `${nextH}px`
+        }
+      }
+
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        const finalW = portalContainer.getBoundingClientRect().width
+        const finalH = portalContainer.getBoundingClientRect().height
+        onResizeEnd?.(finalW, finalH)
+      }
+
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    }
+
+    this.onCornerMouseDown = startDrag
+    corner.addEventListener('mousedown', startDrag)
+  }
 
   public bind(params: {
     scrollContainer: HTMLDivElement,
@@ -113,10 +176,18 @@ export class TableResizeBinder {
       this.resizeBtn = null 
     }
 
-    // 手动解除引用, 防止内存泄露
+    if (this.resizeCorner) {
+      if (this.onCornerMouseDown) {
+        this.resizeCorner.removeEventListener('mousedown', this.onCornerMouseDown)
+      }
+      this.resizeCorner.remove()
+      this.resizeCorner = null
+    }
+
     this.portalContainer = null 
     this.layoutContainer = null 
     this.onMouseDown = null 
+    this.onCornerMouseDown = null
   }
 
 }

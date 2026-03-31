@@ -19,6 +19,9 @@ const smallData = Array.from({ length: 500000 }, (_, i) => ({
 
 const configSmall: IUserConfig = {
   container: '#table-small',
+  tableHeight: 'auto',
+  minTableHeight: 300,
+  maxTableHeight: 700,
   initialData: smallData,
   columns: [
     { key: 'name', title: '姓名', width: 180 },

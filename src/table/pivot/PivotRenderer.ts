@@ -148,6 +148,7 @@ export class PivotRenderer {
 
   private renderGroupRow(row: HTMLDivElement, flatRow: IPivotFlatRow): void {
     row.classList.add('vt-pivot-group-row')
+    row.classList.add(`vt-pivot-group-row--l${Math.min(flatRow.level, 2)}`)
     const indent = flatRow.level * 20
 
     const firstCell = document.createElement('div')

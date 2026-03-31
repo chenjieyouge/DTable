@@ -112,7 +112,9 @@ export interface IConfig extends ITableCallbacks {
   tableId: string // 表格的唯一标识, 用于 localstorage 存储等
   // 尺寸
   tableWidth: number | string  // 支持数值 或者 '100%'
-  tableHeight: number
+  tableHeight: number | 'auto'  // 支持 'auto' 模式: 高度随内容自适应
+  minTableHeight?: number       // auto 模式下最小高度, 默认 200
+  maxTableHeight?: number       // auto 模式下最大高度, 默认不限
   headerHeight: number
   summaryHeight: number
   rowHeight: number

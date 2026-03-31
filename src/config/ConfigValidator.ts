@@ -37,7 +37,7 @@ export class ConfigValidator {
         throw new Error('[ConfigValidator] tableWidth 字符串只支持 "100%"')
       }
     }
-    if (config.tableHeight !== undefined && config.tableHeight < 100) {
+    if (config.tableHeight !== undefined && config.tableHeight !== 'auto' && config.tableHeight < 100) {
       throw new Error('[ConfigValidator] tableHeight 不能小于 100px')
     }
     // 4. 分页参数验证

@@ -116,7 +116,16 @@ export function mountTableShell(params: {
   portalContainer.className = 'vt-portal-container'
   portalContainer.style.position = 'relative'
 
-  portalContainer.style.height = `${config.tableHeight}px`
+  if (config.tableHeight === 'auto') {
+    const min = config.minTableHeight ?? 200
+    portalContainer.style.height = 'auto'
+    portalContainer.style.minHeight = `${min}px`
+    if (config.maxTableHeight) {
+      portalContainer.style.maxHeight = `${config.maxTableHeight}px`
+    }
+  } else {
+    portalContainer.style.height = `${config.tableHeight}px`
+  }
   // 支持 100% 宽度或固定数值
   if (typeof config.tableWidth === 'string') {
     portalContainer.style.width = config.tableWidth // '100%'
@@ -219,10 +228,10 @@ export function mountTableShell(params: {
   PopupManager.register({ close: () => filterBinder.closePopup() })
   PopupManager.register({ close: () => menuBinder.closeMenu() })
 
-  // 绑定整表宽度拖拽
+  // 绑定整表宽度拖拽（右侧边）
   const tableResizeBinder = new TableResizeBinder()
+  const layoutContainer = scrollContainer.closest<HTMLDivElement>('.vt-layout-container') ?? undefined
   if (onTableResizeEnd) {
-    const layoutContainer = scrollContainer.closest<HTMLDivElement>('.vt-layout-container')!
     tableResizeBinder.bind({
       scrollContainer,
       portalContainer, 
@@ -230,6 +239,11 @@ export function mountTableShell(params: {
       onResizeEnd: onTableResizeEnd,
     })
   }
+  // 右下角双向 resize（宽+高），始终挂载
+  tableResizeBinder.bindCorner({
+    portalContainer,
+    layoutContainer,
+  })
 
   // toto: 更多列功能添加
   tableWrapper.appendChild(headerRow)
