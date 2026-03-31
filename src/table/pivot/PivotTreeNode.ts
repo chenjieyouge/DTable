@@ -33,7 +33,7 @@ export class PivotTreeNode {
       groupValue,
       aggregatedData,
       children: [],
-      isExpanded: level === 0, // 默认展开第一层，其他层折叠
+      isExpanded: false, // 默认全部折叠，用户手动展开
       rowCount
     }
   }

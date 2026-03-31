@@ -118,11 +118,10 @@ export function mountTableShell(params: {
 
   if (config.tableHeight === 'auto') {
     const min = config.minTableHeight ?? 200
-    portalContainer.style.height = 'auto'
+    const height = config.maxTableHeight ?? min
+    portalContainer.style.height = `${height}px`
     portalContainer.style.minHeight = `${min}px`
-    if (config.maxTableHeight) {
-      portalContainer.style.maxHeight = `${config.maxTableHeight}px`
-    }
+    if (config.maxTableHeight) portalContainer.style.maxHeight = `${config.maxTableHeight}px`
   } else {
     portalContainer.style.height = `${config.tableHeight}px`
   }

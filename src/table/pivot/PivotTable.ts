@@ -33,6 +33,7 @@ export class PivotTable {
 
   private container: HTMLDivElement | null = null 
   private tableArea: HTMLDivElement | null = null 
+  private emptyStateEl: HTMLDivElement | null = null  // 空状态提示元素
 
   // 虚拟滚动相关
   private scrollContainer: HTMLDivElement | null = null 
@@ -134,6 +135,58 @@ export class PivotTable {
     this.scrollContainer.addEventListener('scroll', this.scrollHandler)
   }
 
+  /** 渲染空状态引导 UI（无行分组或无值字段时显示） */
+  private renderEmptyState(): void {
+    if (!this.tableArea) return
+
+    // 隐藏 scroll 区域，但保留 DOM 引用不销毁
+    if (this.headerEl) this.headerEl.style.display = 'none'
+    if (this.breadcrumbEl) this.breadcrumbEl.style.display = 'none'
+    if (this.scrollContainer) this.scrollContainer.style.display = 'none'
+
+    // 已有则直接显示
+    if (this.emptyStateEl) {
+      this.emptyStateEl.style.display = 'flex'
+      return
+    }
+
+    const wrapper = this.tableArea.querySelector<HTMLDivElement>('.vt-pivot-table')
+    if (!wrapper) return
+
+    const empty = document.createElement('div')
+    empty.className = 'vt-pivot-empty-state'
+    empty.innerHTML = `
+      <div class="vt-pivot-empty-icon">
+        <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+          <rect x="4" y="12" width="48" height="34" rx="3" stroke="#c7d2fe" stroke-width="2" fill="#f5f7ff"/>
+          <rect x="4" y="12" width="14" height="34" rx="0" stroke="none" fill="#e0e7ff"/>
+          <line x1="4" y1="22" x2="52" y2="22" stroke="#c7d2fe" stroke-width="1.5"/>
+          <line x1="18" y1="12" x2="18" y2="46" stroke="#c7d2fe" stroke-width="1.5"/>
+          <circle cx="40" cy="34" r="10" fill="#6366f1" opacity="0.15"/>
+          <path d="M40 29v10M35 34h10" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="vt-pivot-empty-title">透视表尚未配置</div>
+      <div class="vt-pivot-empty-desc">在右侧面板将字段拖拽到对应区域</div>
+      <div class="vt-pivot-empty-steps">
+        <div class="vt-pivot-empty-step">
+          <span class="vt-pivot-empty-step-num">1</span>
+          <span>拖拽 <strong>文本字段</strong> 到「≡ 行」区域，设置分组维度</span>
+        </div>
+        <div class="vt-pivot-empty-step">
+          <span class="vt-pivot-empty-step-num">2</span>
+          <span>拖拽 <strong>数值字段</strong> 到「Σ 值」区域，设置聚合指标</span>
+        </div>
+        <div class="vt-pivot-empty-step">
+          <span class="vt-pivot-empty-step-num">3</span>
+          <span>可选：拖拽字段到「⫿ 列」区域，展开列维度</span>
+        </div>
+      </div>
+    `
+    wrapper.appendChild(empty)
+    this.emptyStateEl = empty
+  }
+
   /**
    * 刷新透视表
    * 
@@ -146,6 +199,20 @@ export class PivotTable {
    */
   private refresh(): void {
     if (!this.tableArea) return
+
+    // 无有效字段配置时显示引导空状态
+    const hasRows = this.pivotConfig.rowGroups?.length > 0
+    const hasValues = this.pivotConfig.valueFields?.length > 0
+    if (!hasRows || !hasValues) {
+      this.renderEmptyState()
+      return
+    }
+
+    // 有字段：隐藏空状态，恢复 scroll 区域
+    if (this.emptyStateEl) this.emptyStateEl.style.display = 'none'
+    if (this.headerEl) this.headerEl.style.display = ''
+    if (this.breadcrumbEl) this.breadcrumbEl.style.display = ''
+    if (this.scrollContainer) this.scrollContainer.style.display = ''
 
     // 1. 先构建列树 (有 colGroups 时生成多层列树, 无则生成 valueField 叶子)
     this.processor.buildColTree(this.data)
@@ -293,8 +360,10 @@ export class PivotTable {
     }
 
     this.visibleSet = newVisibleSet
+    // 实际可视起始行（不含 buffer），用于吸顶判断
+    const visualStartRow = Math.floor(scrollTop / this.ROW_HEIGHT)
     // 更新吸顶分组行
-    this.updateStickyGroup(startRow)
+    this.updateStickyGroup(visualStartRow, scrollTop)
     // 更新面包屑导航 
     this.updateBreadcrumb(startRow)
   }
@@ -307,16 +376,21 @@ export class PivotTable {
    * - 若该 group 行已经滚出视口, 则在顶部显示一个固定的副本
    * - 若该 group 行本身还在视口, 则隐藏吸顶行, 避免重复
    */
-  private updateStickyGroup(startRow: number): void {
+  private updateStickyGroup(visualStartRow: number, scrollTop: number): void {
     if (!this.stickyGroupEl) return 
 
-    // 从 startRow 往前找最近的 group 行, 注意: 要排除 "小计行" 和 "总计行"
+    // scrollTop 不足一行高度时不显示（内容没有真正滚动走）
+    if (scrollTop < this.ROW_HEIGHT) {
+      this.stickyGroupEl.style.display = 'none'
+      return
+    }
+
+    // 从可视顶行往前找最近的 group 行，排除小计/总计
     let groupRow: IPivotFlatRow | null = null 
     let groupRowIndex = -1
 
-    for (let i = startRow; i >= 0; i--) {
+    for (let i = visualStartRow; i >= 0; i--) {
       const row = this.flatRows[i]
-      // 只 sticky 普通分组行, 排除小计/总记行
       if (row?.type === 'group' && row.rowType !== 'subtotal' && row.rowType !== 'grandtotal') {
         groupRow = this.flatRows[i]
         groupRowIndex = i
@@ -324,8 +398,8 @@ export class PivotTable {
       }
     }
 
-    // 若没有找到分组行 或者 分组行就是当前第一行 (视口内, 则隐藏)
-    if (!groupRow || groupRowIndex >= startRow) {
+    // 没有找到分组行，或分组行就是当前可视第一行（还在屏幕里），隐藏
+    if (!groupRow || groupRowIndex >= visualStartRow) {
       this.stickyGroupEl.style.display = 'none'
       return 
     }
@@ -536,6 +610,7 @@ export class PivotTable {
     this.flatRows = []
     this.container = null 
     this.tableArea = null 
+    this.emptyStateEl = null
 
     this.scrollContainer = null 
     this.scrollSpacer = null 

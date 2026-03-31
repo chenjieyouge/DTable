@@ -160,11 +160,10 @@ export class MountHelper {
     const layoutContainer = layoutManager.render()
     if (config.tableHeight === 'auto') {
       const min = config.minTableHeight ?? 200
-      layoutContainer.style.height = 'auto'
+      const height = config.maxTableHeight ?? min
+      layoutContainer.style.height = `${height}px`
       layoutContainer.style.minHeight = `${min}px`
-      if (config.maxTableHeight) {
-        layoutContainer.style.maxHeight = `${config.maxTableHeight}px`
-      }
+      if (config.maxTableHeight) layoutContainer.style.maxHeight = `${config.maxTableHeight}px`
     } else {
       layoutContainer.style.height = `${config.tableHeight}px`
     }

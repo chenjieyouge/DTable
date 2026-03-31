@@ -251,10 +251,28 @@ export class PivotRenderer {
     return String(leaf.colValue)
   }
 
+  /**
+   * 数字格式化：千分位分隔符 + 最多 2 位小数（去掉末尾零）
+   * - 整数: 1,234,567
+   * - 小数: 1,234.56
+   * - 非数字: 原样返回
+   */
+  private formatValue(value: any): string {
+    if (value == null || value === '') return ''
+    const num = typeof value === 'number' ? value : Number(value)
+    if (isNaN(num)) return String(value)
+    if (Number.isInteger(num)) {
+      return num.toLocaleString('en-US')
+    }
+    // 小数：最多 2 位，去掉末尾零
+    const fixed = parseFloat(num.toFixed(2))
+    return fixed.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  }
+
   private createValueCell(value: any, extraClass?: string): HTMLDivElement {
     const cell = document.createElement('div')
     cell.className = `vt-table-cell${extraClass ? ' ' + extraClass : ''}`
-    cell.textContent = value != null ? String(value) : ''
+    cell.textContent = this.formatValue(value)
     cell.style.textAlign = 'right'
     cell.style.paddingRight = '12px'
     return cell
