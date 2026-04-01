@@ -9,10 +9,57 @@ export class DOMRenderer {
     this.config = config
   }
 
+  private get hasSelection(): boolean {
+    return !!this.config.rowSelection?.enabled
+  }
+
+  /** 创建 checkbox 表头单元格（全选） */
+  public createCheckboxHeaderCell(): HTMLDivElement {
+    const cell = document.createElement('div')
+    cell.className = 'vt-table-cell vt-checkbox-cell vt-header-cell'
+    const cb = document.createElement('input')
+    cb.type = 'checkbox'
+    cb.className = 'vt-checkbox'
+    cb.dataset.selectAll = 'true'
+    cell.appendChild(cb)
+    return cell
+  }
+
+  /** 创建 checkbox 数据单元格 */
+  public createCheckboxCell(rowIndex: number, isSelected: boolean): HTMLDivElement {
+    const cell = document.createElement('div')
+    cell.className = 'vt-table-cell vt-checkbox-cell'
+    const cb = document.createElement('input')
+    cb.type = 'checkbox'
+    cb.className = 'vt-checkbox'
+    cb.checked = isSelected
+    cb.dataset.rowIndex = String(rowIndex)
+    cell.appendChild(cb)
+    return cell
+  }
+
+  /** 更新行选中状态（class + checkbox） */
+  public setRowSelected(rowEl: HTMLDivElement, isSelected: boolean): void {
+    rowEl.classList.toggle('vt-row-selected', isSelected)
+    const cb = rowEl.querySelector<HTMLInputElement>('.vt-checkbox:not([data-select-all])')
+    if (cb) cb.checked = isSelected
+  }
+
+  /** 更新全选 checkbox 的三态（全选/半选/未选） */
+  public updateSelectAllCheckbox(headerRow: HTMLDivElement, state: 'all' | 'partial' | 'none'): void {
+    const cb = headerRow.querySelector<HTMLInputElement>('.vt-checkbox[data-select-all]')
+    if (!cb) return
+    cb.checked = state === 'all'
+    cb.indeterminate = state === 'partial'
+  }
+
   // 创建单个表头单元格, 公共给外部使用
   createHeaderRow(): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'vt-table-row vt-sticky-header'
+    if (this.hasSelection) {
+      row.appendChild(this.createCheckboxHeaderCell())
+    }
     this.renderCells(row, this.config.columns, 'header')
     return row
   }
@@ -35,18 +82,21 @@ export class DOMRenderer {
   }
 
   // 骨架屏行
-  createSkeletonRow(rowIndex: number): HTMLDivElement {
+  createSkeletonRow(rowIndex: number, isSelected = false): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'vt-table-row vt-virtual-row vt-skeleton'
     row.dataset.rowIndex = rowIndex.toString() // 给每行一个行id, 是后续滚动计算的关键
-
+    if (this.hasSelection) {
+      row.appendChild(this.createCheckboxCell(rowIndex, isSelected))
+      if (isSelected) row.classList.add('vt-row-selected')
+    }
     this.renderCells(row, this.config.columns, 'skeleton')
     return row
   }
 
   // 更新数据行, 给 cells 在骨架屏之后, 请求到数据, 则填充上
   updateDataRow(rowElement: HTMLDivElement, data: Record<string, any>, rowIndex?: number) {
-    const cells = rowElement.querySelectorAll<HTMLDivElement>('.vt-table-cell')
+    const cells = rowElement.querySelectorAll<HTMLDivElement>('.vt-table-cell:not(.vt-checkbox-cell)')
     cells.forEach((cell, idx) => {
       cell.classList.remove('vt-skeleton')
       const col = this.config.columns[idx]

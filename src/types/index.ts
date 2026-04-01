@@ -93,16 +93,22 @@ export interface SidePanelConfigInternal {
 }
 
 
+// ======= 行选中配置 ===========
+export interface IRowSelectionConfig {
+  enabled: boolean
+  // 选中状态变化时回调
+  onSelect?: (selectedRows: Record<string, any>[], selectedIndices: number[]) => void
+}
+
 // ======= 回调函数类型 ===========
 // 定义所有可选的回调接口
 export interface ITableCallbacks {
   // 可视区页面变化时触发
   onPageChange?: (info: IPageInfo) => void
   onModeChange?: (mode: 'client' | 'server') => void
-  // TODO: 添加更多回调
-  // onSortChange?: ...
-  // onFilterChange?: ...
-  // onRowClick?: ...
+  // 行点击回调
+  onRowClick?: (row: Record<string, any>, rowIndex: number, event: MouseEvent) => void
+  onCellClick?: (value: any, key: string, row: Record<string, any>, rowIndex: number, event: MouseEvent) => void
 }
 
 // =========== 内部配置 (运行时, 所有字段必填) ===========
@@ -131,6 +137,8 @@ export interface IConfig extends ITableCallbacks {
   maxCachedPages: number // 最大缓存页面数 (仅数据)
   // 可选功能-右侧管理面板
   sidePanel?: SidePanelConfig
+  // 行选中
+  rowSelection?: IRowSelectionConfig
   // 底部栏状态
   showStatusBar?: boolean  // 是否显示底部状态, 默认 true
   statusBarHeight?: number // 状态栏高度, 默认 32px

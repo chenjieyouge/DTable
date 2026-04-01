@@ -33,12 +33,20 @@ const configSmall: IUserConfig = {
     { key: 'cost', title: '成本', summaryType: 'avg'},
     { key: 'profit', title: '利润'},
   ],
+  rowSelection: {
+    enabled: true,
+    onSelect: (rows, indices) => {
+      console.log('[rowSelection] 已选:', indices.length, '行', rows)
+    }
+  },
+  onRowClick: (row, rowIndex) => {
+    console.log('[onRowClick]', rowIndex, row)
+  },
   sidePanel: {
     enabled: true,
     defaultOpen: false,
     defaultPanel: 'columns',
     panels: []
-
   }
 }
 

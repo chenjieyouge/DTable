@@ -4,6 +4,7 @@ import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { IConfig, IPageInfo } from "@/types";
 import { calculatePageRange } from "@/utils/pageUtils";
 import { RenderScenario, RenderMethod, RenderProtocalValidator } from "@/table/viewport/RenderProtocol";
+import type { RowSelectionManager } from "@/table/interaction/RowSelectionManager";
 
 
 export class VirtualViewport {
@@ -15,6 +16,10 @@ export class VirtualViewport {
   private scrollContainer: HTMLDivElement
   private virtualContent: HTMLDivElement
   private onPageChange?: (pageInfo: IPageInfo) => void
+  private selectionManager?: RowSelectionManager
+  private headerRow?: HTMLDivElement
+  private onCheckboxClick?: (rowIndex: number) => void
+  private onSelectAllClick?: () => void
 
   private visibleRows = new Set<number>() // 当前可见行下标集合
   private rowElementMap = new Map<number, HTMLDivElement>() // 行下标 -> 行 DOM 映射
@@ -27,6 +32,10 @@ export class VirtualViewport {
     scrollContainer: HTMLDivElement 
     virtualContent: HTMLDivElement
     onPageChange?: (pageInfo: IPageInfo) => void // 可选回调
+    selectionManager?: RowSelectionManager
+    headerRow?: HTMLDivElement
+    onCheckboxClick?: (rowIndex: number) => void
+    onSelectAllClick?: () => void
   }) {
     // 初始化时, 值由 VirtaulTable 传递过来
     this.config = params.config;
@@ -36,11 +45,93 @@ export class VirtualViewport {
     this.scrollContainer = params.scrollContainer
     this.virtualContent = params.virtualContent
     this.onPageChange = params.onPageChange
+    this.selectionManager = params.selectionManager
+    this.headerRow = params.headerRow
+    this.onCheckboxClick = params.onCheckboxClick
+    this.onSelectAllClick = params.onSelectAllClick
+    if (params.selectionManager) {
+      this.bindSelectionEvents()
+    }
+    if (this.config.onRowClick || this.config.onCellClick) {
+      this.bindRowClickEvents()
+    }
   }
 
   // 允许在外部 totalRows 变化后, 替换 scroller , 针对数据筛选场景
   public setScroller(scroller: VirtualScroller) {
     this.scroller = scroller
+  }
+
+  /** mount 完成后注入 selectionManager（避免改动 lifecycle 链） */
+  public setSelectionManager(
+    manager: RowSelectionManager,
+    headerRow: HTMLDivElement,
+    onCheckboxClick: (rowIndex: number) => void,
+    onSelectAllClick: () => void
+  ): void {
+    this.selectionManager = manager
+    this.headerRow = headerRow
+    this.onCheckboxClick = onCheckboxClick
+    this.onSelectAllClick = onSelectAllClick
+    this.bindSelectionEvents()
+  }
+
+  /** 绑定行点击 / 单元格点击事件委托 */
+  private bindRowClickEvents(): void {
+    this.scrollContainer.addEventListener('click', (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      // 忽略 checkbox 点击（由 bindSelectionEvents 处理）
+      if (target.closest('.vt-checkbox-cell')) return
+
+      const rowEl = target.closest<HTMLDivElement>('.vt-virtual-row')
+      if (!rowEl) return
+
+      const rowIndex = parseInt(rowEl.dataset.rowIndex ?? '-1', 10)
+      if (rowIndex < 0) return
+
+      const rowData = this.dataStrategy.getRow(rowIndex)
+      if (!rowData) return
+
+      // 单元格点击
+      if (this.config.onCellClick) {
+        const cellEl = target.closest<HTMLDivElement>('.vt-table-cell')
+        if (cellEl?.dataset.columnKey) {
+          const key = cellEl.dataset.columnKey
+          this.config.onCellClick(rowData[key], key, rowData, rowIndex, e)
+        }
+      }
+
+      // 行点击
+      this.config.onRowClick?.(rowData, rowIndex, e)
+    })
+  }
+
+  /** 绑定 checkbox 事件委托（只绑一次） */
+  private bindSelectionEvents(): void {
+    this.scrollContainer.addEventListener('click', (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      const cb = target.closest<HTMLInputElement>('input.vt-checkbox')
+      if (!cb) return
+      e.stopPropagation()
+      if (cb.dataset.selectAll) {
+        this.onSelectAllClick?.()
+      } else {
+        const idx = parseInt(cb.dataset.rowIndex ?? '-1', 10)
+        if (idx >= 0) this.onCheckboxClick?.(idx)
+      }
+    })
+  }
+
+  /** 刷新所有可见行的选中样式（selection 变化后调用） */
+  public refreshSelectionUI(): void {
+    if (!this.selectionManager) return
+    for (const [rowIndex, rowEl] of this.rowElementMap) {
+      this.renderer.setRowSelected(rowEl, this.selectionManager.has(rowIndex))
+    }
+    if (this.headerRow) {
+      const state = this.selectionManager.getSelectAllState(this.config.totalRows)
+      this.renderer.updateSelectAllCheckbox(this.headerRow, state)
+    }
   }
 
   // ========== 规则2: 普通滚动/补数据, 只能 updateVisibleRows() =========
@@ -103,7 +194,8 @@ export class VirtualViewport {
       newVisibleSet.add(rowIndex)
       // 若当前行不在可视区中, 则创建骨架行 + 异步加载行数据
       if (!this.visibleRows.has(rowIndex)) {
-        const rowEl = this.renderer.createSkeletonRow(rowIndex)
+        const isSelected = this.selectionManager?.has(rowIndex) ?? false
+        const rowEl = this.renderer.createSkeletonRow(rowIndex, isSelected)
         // 这里 top 依赖 startRow, 保证每次滚动时, 越往后的行 top 值越大, 逐行排
         rowEl.style.top = `${(rowIndex - startRow) * this.config.rowHeight}px`
         fragment.appendChild(rowEl)

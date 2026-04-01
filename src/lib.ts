@@ -24,6 +24,7 @@ export type {
   IPageInfo,
   ITableCallbacks,
   SidePanelConfig,
+  IRowSelectionConfig,
 } from '@/types'
 
 export type {

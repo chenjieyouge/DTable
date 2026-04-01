@@ -311,6 +311,39 @@
   background-color: #e6f7ff;
 }
 
+/* ========== 行选中 ========== */
+.vt-instance .vt-checkbox-cell {
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-right: 1px solid #d3d3d5;
+  box-sizing: border-box;
+}
+
+.vt-instance .vt-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #4f46e5;
+  margin: 0;
+}
+
+.vt-instance .vt-row-selected {
+  background-color: #eef2ff !important;
+}
+
+.vt-instance .vt-row-selected .vt-cell-frozen {
+  background-color: #eef2ff !important;
+}
+
+.vt-instance .vt-row-selected:hover {
+  background-color: #e0e7ff !important;
+}
+
 /* ========== 7. 列筛选弹层 ========== */
 
 .vt-instance .vt-col-filter-btn {

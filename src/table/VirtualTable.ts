@@ -29,6 +29,7 @@ import { MountHelper } from '@/table/factory/TableMountHelper'
 import type { IPivotConfig } from '@/types/pivot'
 import { PivotTable } from '@/table/pivot/PivotTable'
 import { inferColumnTypes } from '@/utils/inferColumnType'
+import { RowSelectionManager } from '@/table/interaction/RowSelectionManager'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -63,6 +64,8 @@ export class VirtualTable {
   private queryCoordinator!: TableQueryCoordinator
   private stateSync!: TableStateSync
 
+  private selectionManager: RowSelectionManager | null = null
+
   // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
   public readonly ready: Promise<void> 
   private resolveReady: (() => void) | null = null 
@@ -90,6 +93,11 @@ export class VirtualTable {
 
     // 启动异步初始化流程
     this.initializeAsync()
+
+    // 初始化行选中管理器
+    if (this.config.rowSelection?.enabled) {
+      this.selectionManager = new RowSelectionManager()
+    }
 
     // 开发模式下, 开启性能监控
     if (process.env.NODE_ENV === 'development') {
@@ -292,6 +300,48 @@ export class VirtualTable {
     if (this.config.showSummary && this.mode === 'client') {
       this.refreshSummary()
     }
+
+    // mount 完成后注入行选中管理器
+    if (this.selectionManager) {
+      this.wireSelectionManager()
+    }
+  }
+
+  /** 将 selectionManager 注入 viewport，并绑定回调 */
+  private wireSelectionManager(): void {
+    if (!this.selectionManager || !this.viewport || !this.shell) return
+    const manager = this.selectionManager
+
+    manager.setOnChange(() => {
+      this.viewport.refreshSelectionUI()
+      this.updateSelectionStatus()
+      const indices = manager.getSelectedIndices()
+      const rows = indices.map(i => this.dataStrategy.getRow(i)).filter(Boolean) as Record<string, any>[]
+      this.config.rowSelection?.onSelect?.(rows, indices)
+    })
+
+    this.viewport.setSelectionManager(
+      manager,
+      this.shell.headerRow,
+      (rowIndex) => {
+        manager.toggle(rowIndex)
+      },
+      () => {
+        const state = manager.getSelectAllState(this.config.totalRows)
+        if (state === 'none' || state === 'partial') {
+          manager.selectAll(this.config.totalRows)
+        } else {
+          manager.clear()
+        }
+      }
+    )
+  }
+
+  /** 更新状态栏已选行数 */
+  private updateSelectionStatus(): void {
+    const count = this.selectionManager?.getCount() ?? 0
+    const el = document.querySelector<HTMLElement>(`#table-selected-rows-${this.config.tableId}`)
+    if (el) el.textContent = String(count)
   }
 
   // 更新表格底部状态栏数据
@@ -563,6 +613,33 @@ export class VirtualTable {
     this.mount(containerSelector)
   }
 
+
+  // ======= 行选中 公开 API =======
+
+  /** 获取当前已选中的行数据 */
+  public getSelectedRows(): Record<string, any>[] {
+    if (!this.selectionManager) return []
+    return this.selectionManager.getSelectedIndices()
+      .map(i => this.dataStrategy.getRow(i))
+      .filter(Boolean) as Record<string, any>[]
+  }
+
+  /** 全选所有行 */
+  public selectAll(): void {
+    this.selectionManager?.selectAll(this.config.totalRows)
+  }
+
+  /** 清除所有选中 */
+  public clearSelection(): void {
+    this.selectionManager?.clear()
+  }
+
+  /** 获取已选中行数 */
+  public getSelectedCount(): number {
+    return this.selectionManager?.getCount() ?? 0
+  }
+
+  // ======= 其他 公开 API =======
 
   /** 对外暴露当前表格 state 状态, 后续做 vue 封装会很需要 */
   public getState() {
