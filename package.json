@@ -1,19 +1,44 @@
 {
-  "name": "div_table",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "dtable",
+  "version": "0.1.0",
+  "description": "轻量级虚拟滚动表格库，支持百万行数据、透视表、Client/Server 双模式，零依赖",
+  "type": "module",
+  "main": "./dist/dtable.umd.cjs",
+  "module": "./dist/dtable.js",
+  "types": "./dist/types/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/lib.d.ts",
+      "import": "./dist/dtable.js",
+      "require": "./dist/dtable.umd.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build"
+    "build": "tsc && vite build",
+    "build:lib": "vite build --config vite.lib.config.ts",
+    "build:types": "tsc -p tsconfig.lib.json",
+    "preview": "vite preview"
   },
-  "keywords": [],
+  "keywords": [
+    "table",
+    "virtual-scroll",
+    "pivot-table",
+    "grid",
+    "data-grid",
+    "typescript"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "packageManager": "pnpm@10.15.1",
   "devDependencies": {
     "@types/node": "^24.10.2",
     "typescript": "^5.9.3",
-    "vite": "^7.2.7"
+    "vite": "^7.2.7",
+    "vite-plugin-dts": "^4.5.4"
   }
 }

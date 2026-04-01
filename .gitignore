@@ -19,6 +19,9 @@ secrets.json
 # node_modules
 node_modules/
 
+# 构建产物（npm publish 由 package.json files 字段控制）
+dist/
+
 .windsurf/
 
 # 测试用例的报告不用上传, 用例需要
@@ -28,7 +31,7 @@ coverage/
 /docs
 
 # 后端服务 (本地开发用的 gin + mysql, 不用提交到前端仓库)
-/server/
+# /server/
 
 # Go 工作区文件（本地开发配置）
 go.work
