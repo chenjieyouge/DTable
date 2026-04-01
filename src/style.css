@@ -188,6 +188,44 @@
   margin-left: 4px;
 }
 
+.vt-instance .vt-status-bar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vt-instance .vt-export-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  line-height: 20px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.vt-instance .vt-export-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.vt-instance .vt-export-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vt-instance .vt-export-selected {
+  border-color: #6366f1;
+  color: #4f46e5;
+}
+
+.vt-instance .vt-export-selected:hover:not(:disabled) {
+  background: #eef2ff;
+}
+
 /* ========== 5. 表头与单元格 ========== */
 
 .vt-instance .vt-sticky-header {

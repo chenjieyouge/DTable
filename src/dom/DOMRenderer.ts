@@ -68,13 +68,18 @@ export class DOMRenderer {
   createSummaryRow(summaryData?: Record<string, any>): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'vt-table-row vt-sticky-summary'
+    if (this.hasSelection) {
+      const placeholder = document.createElement('div')
+      placeholder.className = 'vt-table-cell vt-checkbox-cell'
+      row.appendChild(placeholder)
+    }
     this.renderCells(row, this.config.columns, 'summary', summaryData)
     return row
   }
 
   // 更新总结行数据
   updateSummaryRow(rowElement: HTMLDivElement, data: Record<string, any>) {
-    const cells = rowElement.querySelectorAll('.vt-table-cell')
+    const cells = rowElement.querySelectorAll<HTMLDivElement>('.vt-table-cell:not(.vt-checkbox-cell)')
     cells.forEach((cell, idx) => {
       const col = this.config.columns[idx]
       cell.textContent = data[col.key] ?? (idx === 0 ? '合计' : '')

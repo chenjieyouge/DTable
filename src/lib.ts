@@ -34,3 +34,5 @@ export type {
   IPivotColNode,
   AggregationType,
 } from '@/types/pivot'
+
+export type { ExportCSVOptions } from '@/utils/exportCSV'

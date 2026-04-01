@@ -30,6 +30,8 @@ import type { IPivotConfig } from '@/types/pivot'
 import { PivotTable } from '@/table/pivot/PivotTable'
 import { inferColumnTypes } from '@/utils/inferColumnType'
 import { RowSelectionManager } from '@/table/interaction/RowSelectionManager'
+import { exportCSV } from '@/utils/exportCSV'
+import type { ExportCSVOptions } from '@/utils/exportCSV'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -323,9 +325,7 @@ export class VirtualTable {
     this.viewport.setSelectionManager(
       manager,
       this.shell.headerRow,
-      (rowIndex) => {
-        manager.toggle(rowIndex)
-      },
+      (rowIndex) => { manager.toggle(rowIndex) },
       () => {
         const state = manager.getSelectAllState(this.config.totalRows)
         if (state === 'none' || state === 'partial') {
@@ -335,13 +335,50 @@ export class VirtualTable {
         }
       }
     )
+
+    // 注入导出按钮到状态栏
+    this.injectExportButtons()
   }
 
-  /** 更新状态栏已选行数 */
+  /** 在状态栏注入「导出选中」和「导出全部」按钮 */
+  private injectExportButtons(): void {
+    const tableId = this.config.tableId
+    const statusBar = document.querySelector<HTMLElement>(
+      `[data-table-id="${tableId}"] > .vt-status-bar`
+    )
+    if (!statusBar) return
+
+    const actions = document.createElement('div')
+    actions.className = 'vt-status-bar-actions'
+    actions.id = `table-export-actions-${tableId}`
+    actions.innerHTML = `
+      <button class="vt-export-btn vt-export-selected" id="btn-export-selected-${tableId}" disabled>
+        导出选中 (0)
+      </button>
+      <button class="vt-export-btn vt-export-all" id="btn-export-all-${tableId}">
+        导出全部
+      </button>
+    `
+    statusBar.appendChild(actions)
+
+    // 绑定点击
+    actions.querySelector(`#btn-export-selected-${tableId}`)!
+      .addEventListener('click', () => this.exportCSV({ onlySelected: true, filename: 'selected-rows' }))
+    actions.querySelector(`#btn-export-all-${tableId}`)!
+      .addEventListener('click', () => this.exportCSV({ filename: 'export-all' }))
+  }
+
+  /** 更新状态栏已选行数 + 导出按钮 */
   private updateSelectionStatus(): void {
     const count = this.selectionManager?.getCount() ?? 0
-    const el = document.querySelector<HTMLElement>(`#table-selected-rows-${this.config.tableId}`)
-    if (el) el.textContent = String(count)
+    const tableId = this.config.tableId
+    const countEl = document.querySelector<HTMLElement>(`#table-selected-rows-${tableId}`)
+    if (countEl) countEl.textContent = String(count)
+    const btnSelected = document.querySelector<HTMLButtonElement>(`#btn-export-selected-${tableId}`)
+    if (btnSelected) {
+      btnSelected.textContent = `导出选中 (${count})`
+      btnSelected.disabled = count === 0
+    }
   }
 
   // 更新表格底部状态栏数据
@@ -637,6 +674,29 @@ export class VirtualTable {
   /** 获取已选中行数 */
   public getSelectedCount(): number {
     return this.selectionManager?.getCount() ?? 0
+  }
+
+  /**
+   * 导出 CSV
+   * @param options.onlySelected  true=仅导出选中行，false/不填=导出全量
+   * @param options.filename      文件名（不含 .csv），默认 'export'
+   */
+  public exportCSV(options: ExportCSVOptions = {}): void {
+    const visibleCols = this.config.columns.filter(
+      col => !this.store.getState().columns.hiddenKeys.includes(col.key)
+    )
+    let rows: Record<string, any>[]
+    if (options.onlySelected && this.selectionManager) {
+      rows = this.getSelectedRows()
+    } else {
+      const total = this.config.totalRows
+      rows = []
+      for (let i = 0; i < total; i++) {
+        const row = this.dataStrategy.getRow(i)
+        if (row) rows.push(row)
+      }
+    }
+    exportCSV(rows, visibleCols, options)
   }
 
   // ======= 其他 公开 API =======
