@@ -3,36 +3,58 @@ import type { IColumn } from '@/types'
 export interface ExportCSVOptions {
   filename?: string       // 文件名（不含 .csv 后缀）
   onlySelected?: boolean  // 仅导出选中行
+  maxRowsPerFile?: number // 每个文件最大行数，默认 1_000_000
 }
+
+/** Excel / WPS 单文件行数上限（含表头实际可用 1,048,576 行，保守取 100w） */
+const DEFAULT_MAX_ROWS = 1_000_000
 
 /**
  * 将数据导出为 CSV 文件
  * - 加 UTF-8 BOM，确保 Excel 打开中文不乱码
- * - 值中含逗号/引号/换行时自动加双引号转义
+ * - 超过 maxRowsPerFile 时弹确认框，选择分片下载多个文件
  */
 export function exportCSV(
   rows: Record<string, any>[],
   columns: IColumn[],
   options: ExportCSVOptions = {}
 ): void {
-  const { filename = 'export', onlySelected = false } = options
+  const { filename = 'export', maxRowsPerFile = DEFAULT_MAX_ROWS } = options
+  const visibleCols = columns.filter(col => col.width !== 0)
 
-  const visibleCols = columns.filter(col => col.width !== 0) // 隐藏列 width=0 时跳过，或全量
-  const headers = visibleCols.map(col => escapeCell(col.title))
+  if (rows.length > maxRowsPerFile) {
+    const parts = Math.ceil(rows.length / maxRowsPerFile)
+    const confirmed = window.confirm(
+      `数据共 ${rows.length.toLocaleString()} 行，超过 Excel/WPS 单文件限制（${maxRowsPerFile.toLocaleString()} 行）。\n\n` +
+      `是否自动分割为 ${parts} 个文件分别下载？\n（点"取消"放弃导出）`
+    )
+    if (!confirmed) return
+
+    for (let i = 0; i < parts; i++) {
+      const chunk = rows.slice(i * maxRowsPerFile, (i + 1) * maxRowsPerFile)
+      const blob = buildCSVBlob(chunk, visibleCols)
+      triggerDownload(blob, `${filename}-part${i + 1}.csv`)
+    }
+    return
+  }
+
+  const blob = buildCSVBlob(rows, visibleCols)
+  triggerDownload(blob, `${filename}.csv`)
+}
+
+/** 将行数据 + 列定义构建为含 UTF-8 BOM 的 CSV Blob */
+function buildCSVBlob(rows: Record<string, any>[], cols: IColumn[]): Blob {
+  const headers = cols.map(col => escapeCell(col.title))
   const lines: string[] = [headers.join(',')]
-
   for (const row of rows) {
-    const cells = visibleCols.map(col => {
+    const cells = cols.map(col => {
       const val = row[col.key]
       return escapeCell(val !== undefined && val !== null ? String(val) : '')
     })
     lines.push(cells.join(','))
   }
-
   const BOM = '\uFEFF'
-  const csvContent = BOM + lines.join('\r\n')
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  triggerDownload(blob, `${filename}.csv`)
+  return new Blob([BOM + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
 }
 
 /** 单元格转义：含特殊字符时用双引号包裹，内部双引号变两个 */
