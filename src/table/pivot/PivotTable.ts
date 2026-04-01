@@ -243,28 +243,198 @@ export class PivotTable {
 
     this.headerEl.innerHTML = ''
 
-    // 展开 / 折叠 按钮
+    // ── 工具栏 ──
     const buttonGroup = document.createElement('div')
     buttonGroup.className = 'vt-pivot-button-group'
 
     const expandAllBtn = document.createElement('button')
     expandAllBtn.className = 'vt-pivot-control-btn'
     expandAllBtn.textContent = '展开'
-    expandAllBtn.title = '展开所有分组'
     expandAllBtn.addEventListener('click', () => this.expandAll())
 
     const collapseAllBtn = document.createElement('button')
     collapseAllBtn.className = 'vt-pivot-control-btn'
     collapseAllBtn.textContent = '折叠'
-    collapseAllBtn.title = '折叠所有分组'
     collapseAllBtn.addEventListener('click', () => this.collapseAll())
+
+    // 行分组字段筛选按钮（每个 rowGroup 一个）
+    for (const groupKey of this.pivotConfig.rowGroups) {
+      const col = this.columns.find(c => c.key === groupKey)
+      const title = col?.title ?? groupKey
+      const activeFilters = this.pivotConfig.rowFilters?.[groupKey] ?? []
+      const filterBtn = document.createElement('button')
+      filterBtn.className = 'vt-pivot-control-btn vt-pivot-filter-btn'
+      filterBtn.title = `筛选「${title}」`
+      filterBtn.innerHTML = `${title} <span class="vt-pivot-filter-icon">${activeFilters.length ? '🔵' : '⬜'}</span>`
+      filterBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.showFilterDropdown(groupKey, filterBtn)
+      })
+      buttonGroup.appendChild(filterBtn)
+    }
+
+    // 导出按钮
+    const exportBtn = document.createElement('button')
+    exportBtn.className = 'vt-pivot-control-btn vt-pivot-export-btn'
+    exportBtn.textContent = '导出 CSV'
+    exportBtn.addEventListener('click', () => this.exportPivotCSV())
 
     buttonGroup.appendChild(expandAllBtn)
     buttonGroup.appendChild(collapseAllBtn)
+    buttonGroup.appendChild(exportBtn)
     this.headerEl.appendChild(buttonGroup)
 
-    const header = this.renderer.renderHeader(colTree)
+    // ── 列表头（含排序回调）──
+    const onSort = (cellKey: string, direction: 'asc' | 'desc' | null) => {
+      this.pivotConfig.sortBy = direction ? { cellKey, direction } : null
+      this.processor.updateConfig(this.pivotConfig)
+      this.renderer.updateConfig(this.pivotConfig, this.columns)
+      this.refresh()
+    }
+    const header = this.renderer.renderHeader(colTree, onSort)
     this.headerEl.appendChild(header)
+  }
+
+  /** 弹出行分组字段值筛选下拉框 */
+  private showFilterDropdown(groupKey: string, anchor: HTMLElement): void {
+    // 关闭已有下拉
+    document.querySelectorAll('.vt-pivot-filter-dropdown').forEach(el => el.remove())
+
+    const allValues = this.getUniqueValues(groupKey)
+    const activeSet = new Set(this.pivotConfig.rowFilters?.[groupKey] ?? [])
+
+    const dropdown = document.createElement('div')
+    dropdown.className = 'vt-pivot-filter-dropdown'
+
+    // 全选 / 清空 操作行
+    const actions = document.createElement('div')
+    actions.className = 'vt-pivot-filter-actions'
+    const selectAll = document.createElement('span')
+    selectAll.textContent = '全选'
+    selectAll.addEventListener('click', () => {
+      dropdown.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(cb => { cb.checked = true })
+    })
+    const clearAll = document.createElement('span')
+    clearAll.textContent = '清空'
+    clearAll.addEventListener('click', () => {
+      dropdown.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(cb => { cb.checked = false })
+    })
+    actions.appendChild(selectAll)
+    actions.appendChild(clearAll)
+    dropdown.appendChild(actions)
+
+    // 复选框列表
+    const list = document.createElement('div')
+    list.className = 'vt-pivot-filter-list'
+    for (const val of allValues) {
+      const item = document.createElement('label')
+      item.className = 'vt-pivot-filter-item'
+      const cb = document.createElement('input')
+      cb.type = 'checkbox'
+      cb.value = val
+      cb.checked = activeSet.size === 0 || activeSet.has(val)
+      item.appendChild(cb)
+      item.appendChild(document.createTextNode(val))
+      list.appendChild(item)
+    }
+    dropdown.appendChild(list)
+
+    // 确认按钮
+    const confirmBtn = document.createElement('button')
+    confirmBtn.className = 'vt-pivot-filter-confirm'
+    confirmBtn.textContent = '确认'
+    confirmBtn.addEventListener('click', () => {
+      const checked = Array.from(dropdown.querySelectorAll<HTMLInputElement>('input:checked')).map(cb => cb.value)
+      // 若全选则清空过滤（等于不过滤）
+      const newFilter = checked.length === allValues.length ? [] : checked
+      if (!this.pivotConfig.rowFilters) this.pivotConfig.rowFilters = {}
+      this.pivotConfig.rowFilters[groupKey] = newFilter
+      this.processor.updateConfig(this.pivotConfig)
+      this.renderer.updateConfig(this.pivotConfig, this.columns)
+      dropdown.remove()
+      this.refresh()
+    })
+    dropdown.appendChild(confirmBtn)
+
+    // 定位：挂到 tableArea 下，避免被 overflow:hidden 裁剪
+    const rect = anchor.getBoundingClientRect()
+    const containerRect = this.tableArea!.getBoundingClientRect()
+    dropdown.style.top = `${rect.bottom - containerRect.top}px`
+    dropdown.style.left = `${rect.left - containerRect.left}px`
+    this.tableArea!.style.position = 'relative'
+    this.tableArea!.appendChild(dropdown)
+
+    // 点击外部关闭
+    const closeOnOutside = (e: MouseEvent) => {
+      if (!dropdown.contains(e.target as Node)) {
+        dropdown.remove()
+        document.removeEventListener('click', closeOnOutside)
+      }
+    }
+    setTimeout(() => document.addEventListener('click', closeOnOutside), 0)
+  }
+
+  /** 获取某字段的所有唯一值（用于筛选下拉） */
+  private getUniqueValues(field: string): string[] {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const row of this.data) {
+      const v = String(row[field] ?? '')
+      if (v && !seen.has(v)) { seen.add(v); result.push(v) }
+    }
+    return result
+  }
+
+  /** 导出透视表当前视图为 CSV */
+  private exportPivotCSV(): void {
+    if (this.flatRows.length === 0) return
+
+    const colLeaves = this.processor.getColLeaves()
+    const rowGroupTitles = this.pivotConfig.rowGroups
+      .map(k => this.columns.find(c => c.key === k)?.title ?? k)
+
+    // 表头
+    const headers: string[] = [...rowGroupTitles]
+    for (const leaf of colLeaves) {
+      const vf = this.pivotConfig.valueFields.find(
+        v => (v.label ?? v.key) === leaf.colValue || v.key === leaf.colValue
+      )
+      const colTitle = vf
+        ? `${this.columns.find(c => c.key === vf.key)?.title ?? vf.key}(${vf.aggregation})`
+        : String(leaf.colValue)
+      headers.push(colTitle)
+    }
+
+    const lines: string[] = [headers.map(h => this.csvEscape(h)).join(',')]
+
+    for (const flat of this.flatRows) {
+      const firstCols = this.pivotConfig.rowGroups.map(k => {
+        if (flat.rowType === 'grandtotal') return k === this.pivotConfig.rowGroups[0] ? '总计' : ''
+        if (flat.rowType === 'subtotal') return k === this.pivotConfig.rowGroups[flat.level] ? '小计' : ''
+        return this.csvEscape(String(flat.data[k] ?? ''))
+      })
+      const valueCols = colLeaves.map(leaf => {
+        const cellKey = leaf.colKey === '__value__' && (!leaf.ancestorColValues?.length)
+          ? (this.pivotConfig.valueFields.find(v => (v.label ?? v.key) === leaf.colValue)?.key ?? String(leaf.colValue))
+          : [this.pivotConfig.valueFields.find(v => (v.label ?? v.key) === leaf.colValue)?.key, ...(leaf.ancestorColValues ?? [])].filter(Boolean).join('__')
+        const val = flat.data[cellKey]
+        return this.csvEscape(val !== undefined && val !== null ? String(val) : '')
+      })
+      lines.push([...firstCols, ...valueCols].join(','))
+    }
+
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'pivot-export.csv'; a.style.display = 'none'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  private csvEscape(value: string): string {
+    if (/[,"\r\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+    return value
   }
 
   /** 更新 spacer 高度 */

@@ -198,6 +198,18 @@ export class PivotDataProcessor {
   public buildPivotTree(data: Record<string, any>[]): IPivotTreeNode {
     const rowGroups = this.config.rowGroups
 
+    // 应用 rowFilters 预过滤：仅保留各分组字段允许的値
+    let filteredData = data
+    const rowFilters = this.config.rowFilters
+    if (rowFilters) {
+      for (const [field, allowed] of Object.entries(rowFilters)) {
+        if (allowed.length > 0) {
+          const allowedSet = new Set(allowed)
+          filteredData = filteredData.filter(row => allowedSet.has(String(row[field] ?? '')))
+        }
+      }
+    }
+
     // 创建根节点 (虚拟节点, level = -1, 不展示)
     const root: IPivotTreeNode = {
       id: 'root',
@@ -207,14 +219,14 @@ export class PivotDataProcessor {
       aggregatedData: {}, // 先初始化为空, 后面计算
       children: [],
       isExpanded: true,  // 根节点始终展开
-      rowCount: data.length
+      rowCount: filteredData.length
     }
 
     // 从第 0 层开始递归构建子树
-    root.children = this.buildSubTree(data, rowGroups, 0, 'root')
+    root.children = this.buildSubTree(filteredData, rowGroups, 0, 'root')
 
     // 计算根节点的聚合数据, 用于总结行
-    root.aggregatedData = this.computeRootAggregatedData(data)
+    root.aggregatedData = this.computeRootAggregatedData(filteredData)
 
     return root 
   }
@@ -276,6 +288,18 @@ export class PivotDataProcessor {
       nodes.push(groupNode)
       index++
     }
+
+    // 组内排序：若配置了 sortBy，对当层同级节点按聊合値排序
+    const sortBy = this.config.sortBy
+    if (sortBy) {
+      const { cellKey, direction } = sortBy
+      nodes.sort((a, b) => {
+        const va = Number(a.aggregatedData[cellKey] ?? 0)
+        const vb = Number(b.aggregatedData[cellKey] ?? 0)
+        return direction === 'asc' ? va - vb : vb - va
+      })
+    }
+
     return nodes
   }
  

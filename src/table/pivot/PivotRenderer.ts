@@ -42,7 +42,10 @@ export class PivotRenderer {
    *
    * 用 flex 比例代替 colspan: leafCount 越大, 该列占比越宽
    */
-  public renderHeader(colTree: IPivotColNode | null): HTMLDivElement {
+  public renderHeader(
+    colTree: IPivotColNode | null,
+    onSort?: (cellKey: string, direction: 'asc' | 'desc' | null) => void
+  ): HTMLDivElement {
     const wrapper = document.createElement('div')
     wrapper.className = 'vt-pivot-header-wrapper'
 
@@ -51,39 +54,76 @@ export class PivotRenderer {
       .join(' / ')
 
     const hasColGroups = !!(this.config.colGroups?.length) && colTree && colTree.children.length > 0
+    const currentSort = this.config.sortBy
 
     if (!hasColGroups) {
-      // ── 无列分组: 单行表头 ──
       const row = this.createHeaderRow()
       row.appendChild(this.createHeaderCell(rowGroupLabel, 1))
       for (const leaf of this.colLeaves) {
         const vfKey = String(leaf.colValue)
         const vf = this.config.valueFields.find(v => (v.label ?? v.key) === vfKey || v.key === vfKey)
         const title = vf ? `${vf.label ?? this.columns.find(c => c.key === vf.key)?.title ?? vf.key}(${vf.aggregation})` : vfKey
-        row.appendChild(this.createHeaderCell(title, 1))
+        const cellKey = vf?.key ?? vfKey
+        const isSorted = currentSort?.cellKey === cellKey
+        const cell = this.createSortableHeaderCell(title, 1, isSorted ? currentSort!.direction : null)
+        if (onSort) {
+          cell.style.cursor = 'pointer'
+          cell.addEventListener('click', () => {
+            const next = !isSorted ? 'desc' : currentSort!.direction === 'desc' ? 'asc' : null
+            onSort(cellKey, next)
+          })
+        }
+        row.appendChild(cell)
       }
       wrapper.appendChild(row)
       return wrapper
     }
 
-    // ── 有列分组: 多行表头 ──
-    const depth = this.getColTreeDepth(colTree)  // 不含根节点
-
+    const depth = this.getColTreeDepth(colTree)
     for (let d = 0; d < depth; d++) {
       const row = this.createHeaderRow()
-      // 第一列
       row.appendChild(this.createHeaderCell(d === 0 ? rowGroupLabel : '', 1))
-
       const nodesAtDepth = this.getNodesAtDepth(colTree, d)
       for (const node of nodesAtDepth) {
-        const cell = this.createHeaderCell(String(node.colValue), node.leafCount)
-        cell.style.textAlign = 'center'
-        row.appendChild(cell)
+        const isLeafRow = node.isLeaf
+        if (isLeafRow && onSort) {
+          const cellKey = node.colKey === '__value__'
+            ? (this.config.valueFields.find(v => (v.label ?? v.key) === node.colValue)?.key ?? String(node.colValue))
+            : String(node.colValue)
+          const isSorted = currentSort?.cellKey === cellKey
+          const cell = this.createSortableHeaderCell(String(node.colValue), node.leafCount, isSorted ? currentSort!.direction : null)
+          cell.style.textAlign = 'center'
+          cell.style.cursor = 'pointer'
+          cell.addEventListener('click', () => {
+            const next = !isSorted ? 'desc' : currentSort!.direction === 'desc' ? 'asc' : null
+            onSort(cellKey, next)
+          })
+          row.appendChild(cell)
+        } else {
+          const cell = this.createHeaderCell(String(node.colValue), node.leafCount)
+          cell.style.textAlign = 'center'
+          row.appendChild(cell)
+        }
       }
       wrapper.appendChild(row)
     }
 
     return wrapper
+  }
+
+  /** 带排序图标的表头单元格 */
+  private createSortableHeaderCell(text: string, flex: number, direction: 'asc' | 'desc' | null): HTMLDivElement {
+    const cell = this.createHeaderCell('', flex)
+    const label = document.createElement('span')
+    label.textContent = text
+    const icon = document.createElement('span')
+    icon.className = 'vt-pivot-sort-icon'
+    icon.textContent = direction === 'asc' ? ' ▲' : direction === 'desc' ? ' ▼' : ' ⇅'
+    icon.style.opacity = direction ? '1' : '0.3'
+    icon.style.fontSize = '10px'
+    cell.appendChild(label)
+    cell.appendChild(icon)
+    return cell
   }
 
   private createHeaderRow(): HTMLDivElement {

@@ -29,6 +29,12 @@ export interface IPivotConfig {
   showSubtotals?: boolean     // 是否显示行小计, 默认 true
   showColSubtotals?: boolean  // 是否显示列小计, 默认 false
   colMaxLeafCols?: number     // 限制最大叶子列数, 默认 50
+
+  // 行分组字段过滤: key=groupField, value=允许显示的值集合（空数组=不过滤）
+  rowFilters?: Record<string, string[]>
+
+  // 组内排序: 按某个聚合值字段升/降序
+  sortBy?: { cellKey: string; direction: 'asc' | 'desc' } | null
 }
 
 // 树节点类型: 分组行 or 数据行

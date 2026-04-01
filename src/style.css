@@ -1561,6 +1561,80 @@
   background-color: #e5e7eb;
 }
 
+.vt-instance .vt-pivot-filter-btn.vt-pivot-filter-active {
+  border-color: #6366f1;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+/* ── 透视筛选下拉框 ── */
+.vt-pivot-filter-dropdown {
+  position: absolute;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 160px;
+  padding: 8px 0 4px;
+  font-size: 13px;
+}
+
+.vt-pivot-filter-actions {
+  display: flex;
+  gap: 12px;
+  padding: 0 12px 6px;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 4px;
+}
+
+.vt-pivot-filter-actions span {
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.vt-pivot-filter-actions span:hover {
+  text-decoration: underline;
+}
+
+.vt-pivot-filter-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0 4px;
+}
+
+.vt-pivot-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.vt-pivot-filter-item:hover {
+  background: #f3f4f6;
+}
+
+.vt-pivot-filter-confirm {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 6px 8px 4px;
+  padding: 4px 0;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vt-pivot-filter-confirm:hover {
+  background: #4f46e5;
+}
+
 /* ========== 21. 面包屑导航 ========== */
 
 .vt-instance .vt-pivot-breadcrumb-wrapper {
