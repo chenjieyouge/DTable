@@ -2,24 +2,24 @@
 
 轻量级虚拟滚动表格库，零依赖，支持百万行数据、透视表分析、Client/Server 双模式。
 
-[![npm](https://img.shields.io/npm/v/dtable)](https://www.npmjs.com/package/dtable)
-[![license](https://img.shields.io/npm/l/dtable)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/@youge/dtable)](https://www.npmjs.com/package/@youge/dtable)
+[![license](https://img.shields.io/npm/l/@youge/dtable)](./LICENSE)
 
 ---
 
 ## 安装
 
 ```bash
-npm install dtable
+npm install @youge/dtable
 # or
-pnpm add dtable
+pnpm add @youge/dtable
 ```
 
 ```ts
 // 引入 JS
-import { VirtualTable } from 'dtable'
+import { VirtualTable } from '@youge/dtable'
 // 引入样式（必须）
-import 'dtable/style.css'
+import '@youge/dtable/style.css'
 ```
 
 ---
@@ -29,8 +29,8 @@ import 'dtable/style.css'
 ### Client 模式（本地数据，适合分析报表）
 
 ```ts
-import { VirtualTable } from 'dtable'
-import 'dtable/style.css'
+import { VirtualTable } from '@youge/dtable'
+import '@youge/dtable/style.css'
 
 const table = new VirtualTable({
   container: '#app',
@@ -79,8 +79,8 @@ const table = new VirtualTable({
 ```ts
 // 在右侧面板中开启 Pivot 开关后，可通过拖拽配置
 // 或直接通过代码控制
-import { VirtualTable } from 'dtable'
-import 'dtable/style.css'
+import { VirtualTable } from '@youge/dtable'
+import '@youge/dtable/style.css'
 
 const table = new VirtualTable({
   container: '#app',

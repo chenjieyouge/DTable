@@ -1,5 +1,5 @@
 {
-  "name": "dtable",
+  "name": "@youge/dtable",
   "version": "0.1.0",
   "description": "轻量级虚拟滚动表格库，支持百万行数据、透视表、Client/Server 双模式，零依赖",
   "type": "module",
@@ -21,6 +21,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
+    "prepublishOnly": "pnpm build:lib",
     "build:types": "tsc -p tsconfig.lib.json",
     "preview": "vite preview"
   },
