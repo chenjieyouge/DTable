@@ -344,7 +344,7 @@ export class VirtualTable {
   private injectExportButtons(): void {
     const tableId = this.config.tableId
     const statusBar = document.querySelector<HTMLElement>(
-      `[data-table-id="${tableId}"] > .vt-status-bar`
+      `[data-table-id="${tableId}"] .vt-status-bar`
     )
     if (!statusBar) return
 
