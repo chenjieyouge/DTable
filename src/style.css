@@ -1831,6 +1831,12 @@
   background: #eef2ff;
 }
 
+.vt-instance .vt-px-zone--rejected {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  cursor: not-allowed;
+}
+
 .vt-instance .vt-px-zone-header {
   display: flex;
   align-items: center;

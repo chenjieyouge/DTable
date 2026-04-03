@@ -509,21 +509,32 @@ export class ColumnPanel implements IPanel {
 
     this.renderZoneFields(body, zoneName)
 
+    // 判断拖入字段是否与区域兼容
+    const isDropAllowed = (key: string): boolean => {
+      const col = this.originalColumns.find(c => c.key === key)
+      if (!col) return false
+      if ((zoneName === 'rows' || zoneName === 'columns') && col.dataType === 'number') return false
+      if (zoneName === 'values' && col.dataType !== 'number') return false
+      return true
+    }
+
     // 区域拖拽接收事件
     body.addEventListener('dragover', (e) => {
       e.preventDefault()
       if (!this.dragState) return
-      e.dataTransfer!.dropEffect = 'move'
-      zone.classList.add('vt-px-zone--over')
+      const allowed = isDropAllowed(this.dragState.key)
+      e.dataTransfer!.dropEffect = allowed ? 'move' : 'none'
+      zone.classList.toggle('vt-px-zone--over', allowed)
+      zone.classList.toggle('vt-px-zone--rejected', !allowed)
     })
     body.addEventListener('dragleave', (e) => {
       if (!zone.contains(e.relatedTarget as Node)) {
-        zone.classList.remove('vt-px-zone--over')
+        zone.classList.remove('vt-px-zone--over', 'vt-px-zone--rejected')
       }
     })
     body.addEventListener('drop', (e) => {
       e.preventDefault()
-      zone.classList.remove('vt-px-zone--over')
+      zone.classList.remove('vt-px-zone--over', 'vt-px-zone--rejected')
       if (!this.dragState) return
       const { key, fromZone } = this.dragState
       this.dragState = null
@@ -649,6 +660,17 @@ export class ColumnPanel implements IPanel {
 
   /** 将字段移动到某个区域（来自字段池或其他区域） */
   private moveField(key: string, fromZone: ZoneName | 'pool', toZone: ZoneName): void {
+    const col = this.originalColumns.find(c => c.key === key)
+
+    // 行/列区域不允许数值字段
+    if ((toZone === 'rows' || toZone === 'columns') && col?.dataType === 'number') {
+      return
+    }
+    // 值区域不允许文本字段（仅允许数值）
+    if (toZone === 'values' && col && col.dataType !== 'number') {
+      return
+    }
+
     // 先从来源移除
     if (fromZone !== 'pool') {
       this.zones[fromZone] = this.zones[fromZone].filter(f => f.key !== key)
@@ -657,7 +679,6 @@ export class ColumnPanel implements IPanel {
     // 加入目标区域（避免重复）
     const alreadyIn = this.zones[toZone].some(f => f.key === key)
     if (!alreadyIn) {
-      const col = this.originalColumns.find(c => c.key === key)
       const defaultAgg: AggregationType =
         (col?.summaryType && col.summaryType !== 'none') ? col.summaryType as AggregationType : 'sum'
       this.zones[toZone].push({
@@ -698,7 +719,15 @@ export class ColumnPanel implements IPanel {
       ...this.zones.values.map(f => f.key),
     ])
 
-    const availCols = this.originalColumns.filter(c => !usedKeys.has(c.key))
+    // 按区域过滤可用字段类型：行/列只显示文本字段，值只显示数值字段，筛选器不限
+    const isNumericOnly = zoneName === 'values'
+    const isDimOnly = zoneName === 'rows' || zoneName === 'columns'
+    const availCols = this.originalColumns.filter(c => {
+      if (usedKeys.has(c.key)) return false
+      if (isNumericOnly && c.dataType !== 'number') return false
+      if (isDimOnly && c.dataType === 'number') return false
+      return true
+    })
     if (availCols.length === 0) return
 
     const picker = document.createElement('div')

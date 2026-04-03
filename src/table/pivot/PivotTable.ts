@@ -378,22 +378,21 @@ export class PivotTable {
     })
     dropdown.appendChild(confirmBtn)
 
-    // 定位：挂到 tableArea 下，避免被 overflow:hidden 裁剪
+    // 定位：fixed + 挂 body，避免被祖先 overflow:hidden 裁剪
     const rect = anchor.getBoundingClientRect()
-    const containerRect = this.tableArea!.getBoundingClientRect()
-    dropdown.style.top = `${rect.bottom - containerRect.top}px`
-    dropdown.style.left = `${rect.left - containerRect.left}px`
-    this.tableArea!.style.position = 'relative'
-    this.tableArea!.appendChild(dropdown)
+    dropdown.style.position = 'fixed'
+    dropdown.style.top = `${rect.bottom + 4}px`
+    dropdown.style.left = `${rect.left}px`
+    document.body.appendChild(dropdown)
 
     // 点击外部关闭
     const closeOnOutside = (e: MouseEvent) => {
       if (!dropdown.contains(e.target as Node)) {
         dropdown.remove()
-        document.removeEventListener('click', closeOnOutside)
+        document.removeEventListener('mousedown', closeOnOutside)
       }
     }
-    setTimeout(() => document.addEventListener('click', closeOnOutside), 0)
+    setTimeout(() => document.addEventListener('mousedown', closeOnOutside), 0)
   }
 
   /** 获取某字段的所有唯一值（用于筛选下拉） */
