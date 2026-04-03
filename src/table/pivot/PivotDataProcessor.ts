@@ -61,8 +61,20 @@ export class PivotDataProcessor {
       root.leafCount = root.children.length
 
     } else {
+      // 应用 colFilters 预过滤：仅保留各列分组字段允许的値
+      let colFilteredData = data
+      const colFilters = this.config.colFilters
+      if (colFilters) {
+        for (const [field, allowed] of Object.entries(colFilters)) {
+          if (allowed.length > 0) {
+            const allowedSet = new Set(allowed)
+            colFilteredData = colFilteredData.filter(row => allowedSet.has(String(row[field] ?? '')))
+          }
+        }
+      }
+
       // 有分组列: 递归构建列树
-      root.children = this.buildColSubTree(data, colGroups, 0, 'col-root', maxLeaf)
+      root.children = this.buildColSubTree(colFilteredData, colGroups, 0, 'col-root', maxLeaf)
       root.leafCount = root.children.reduce((sum, c) => sum + c.leafCount, 0)
     }
 

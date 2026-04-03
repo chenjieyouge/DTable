@@ -263,12 +263,28 @@ export class PivotTable {
       const title = col?.title ?? groupKey
       const activeFilters = this.pivotConfig.rowFilters?.[groupKey] ?? []
       const filterBtn = document.createElement('button')
-      filterBtn.className = 'vt-pivot-control-btn vt-pivot-filter-btn'
-      filterBtn.title = `筛选「${title}」`
-      filterBtn.innerHTML = `${title} <span class="vt-pivot-filter-icon">${activeFilters.length ? '🔵' : '⬜'}</span>`
+      filterBtn.className = `vt-pivot-control-btn vt-pivot-filter-btn${activeFilters.length ? ' vt-pivot-filter-active' : ''}`
+      filterBtn.title = `筛选行「${title}」`
+      filterBtn.innerHTML = `≡ ${title} <span class="vt-pivot-filter-icon">${activeFilters.length ? `(${activeFilters.length})` : ''}</span>`
       filterBtn.addEventListener('click', (e) => {
         e.stopPropagation()
-        this.showFilterDropdown(groupKey, filterBtn)
+        this.showFilterDropdown('row', groupKey, filterBtn)
+      })
+      buttonGroup.appendChild(filterBtn)
+    }
+
+    // 列分组字段筛选按钮（每个 colGroup 一个，仅有列分组时显示）
+    for (const groupKey of (this.pivotConfig.colGroups ?? [])) {
+      const col = this.columns.find(c => c.key === groupKey)
+      const title = col?.title ?? groupKey
+      const activeFilters = this.pivotConfig.colFilters?.[groupKey] ?? []
+      const filterBtn = document.createElement('button')
+      filterBtn.className = `vt-pivot-control-btn vt-pivot-filter-btn${activeFilters.length ? ' vt-pivot-filter-active' : ''}`
+      filterBtn.title = `筛选列「${title}」`
+      filterBtn.innerHTML = `⫿ ${title} <span class="vt-pivot-filter-icon">${activeFilters.length ? `(${activeFilters.length})` : ''}</span>`
+      filterBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.showFilterDropdown('col', groupKey, filterBtn)
       })
       buttonGroup.appendChild(filterBtn)
     }
@@ -295,13 +311,14 @@ export class PivotTable {
     this.headerEl.appendChild(header)
   }
 
-  /** 弹出行分组字段值筛选下拉框 */
-  private showFilterDropdown(groupKey: string, anchor: HTMLElement): void {
+  /** 弹出分组字段值筛选下拉框（type: 'row' | 'col'） */
+  private showFilterDropdown(type: 'row' | 'col', groupKey: string, anchor: HTMLElement): void {
     // 关闭已有下拉
     document.querySelectorAll('.vt-pivot-filter-dropdown').forEach(el => el.remove())
 
     const allValues = this.getUniqueValues(groupKey)
-    const activeSet = new Set(this.pivotConfig.rowFilters?.[groupKey] ?? [])
+    const filtersMap = type === 'row' ? this.pivotConfig.rowFilters : this.pivotConfig.colFilters
+    const activeSet = new Set(filtersMap?.[groupKey] ?? [])
 
     const dropdown = document.createElement('div')
     dropdown.className = 'vt-pivot-filter-dropdown'
@@ -347,8 +364,13 @@ export class PivotTable {
       const checked = Array.from(dropdown.querySelectorAll<HTMLInputElement>('input:checked')).map(cb => cb.value)
       // 若全选则清空过滤（等于不过滤）
       const newFilter = checked.length === allValues.length ? [] : checked
-      if (!this.pivotConfig.rowFilters) this.pivotConfig.rowFilters = {}
-      this.pivotConfig.rowFilters[groupKey] = newFilter
+      if (type === 'row') {
+        if (!this.pivotConfig.rowFilters) this.pivotConfig.rowFilters = {}
+        this.pivotConfig.rowFilters[groupKey] = newFilter
+      } else {
+        if (!this.pivotConfig.colFilters) this.pivotConfig.colFilters = {}
+        this.pivotConfig.colFilters[groupKey] = newFilter
+      }
       this.processor.updateConfig(this.pivotConfig)
       this.renderer.updateConfig(this.pivotConfig, this.columns)
       dropdown.remove()
