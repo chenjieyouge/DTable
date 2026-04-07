@@ -26,6 +26,12 @@ export class PivotTreeNode {
     rowCount: number
 
   ): IPivotTreeNode {
+    // 智能默认展开策略：
+    // - 前2层默认展开（便于快速查看数据）
+    // - 第3层及以后默认折叠（避免界面过于复杂）
+    // - 单层节点数超过20个时默认折叠（性能优化）
+    const shouldDefaultExpand = level <= 1 && rowCount <= 20
+    
     return {
       id,
       type: 'group',
@@ -33,7 +39,7 @@ export class PivotTreeNode {
       groupValue,
       aggregatedData,
       children: [],
-      isExpanded: false, // 默认全部折叠，用户手动展开
+      isExpanded: shouldDefaultExpand,
       rowCount
     }
   }

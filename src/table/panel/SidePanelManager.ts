@@ -25,6 +25,7 @@ export class SidePanelManager {
     private configs: IPanelConfig[], // 要启用的面板配置
     private tabsContainer: HTMLDivElement,
     private originalColumns: IColumn[],
+    private data: Record<string, any>[],  // 新增：原始数据引用
     private onPanelToggle?: (show: boolean) => void,
   
   ) {
@@ -78,7 +79,7 @@ export class SidePanelManager {
       // 点击 Tab 切换面板
       tab.onclick = () => {
         if (config.id === 'columns') {
-          this.togglePanel(config.id, this.originalColumns)
+          this.togglePanel(config.id, this.originalColumns, this.data)
         } else {
           this.togglePanel(config.id)
         }

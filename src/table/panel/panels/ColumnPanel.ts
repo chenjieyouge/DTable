@@ -38,15 +38,20 @@ export class ColumnPanel implements IPanel {
     values: [],
   }
 
-  // 正在拖拽的字段信息
+  // 筛选器区域的字段过滤值存储
+  private filters: Record<string, import('@/types').ColumnFilterValue> = {}
   private dragState: { key: string; fromZone: ZoneName | 'pool' } | null = null
 
   // 显示小计行开关
   private showSubtotals = true
 
+  // 防抖定时器
+  private emitConfigTimer: number | null = null
+
   constructor(
     private store: TableStore,
     private originalColumns: IColumn[],
+    private data: Record<string, any>[],  // 新增：原始数据引用，用于筛选器取唯一值
     private onPivotModeToggle?: (enabled: boolean) => void,
     private onPivotConfigChange?: (config: any) => void,
 
@@ -346,7 +351,19 @@ export class ColumnPanel implements IPanel {
 
     const poolHeader = document.createElement('div')
     poolHeader.className = 'vt-px-section-header'
-    poolHeader.textContent = '字段列表'
+    poolHeader.style.cssText = 'display: flex; justify-content: space-between; align-items: center;'
+    
+    const titleSpan = document.createElement('span')
+    titleSpan.textContent = '字段列表'
+    poolHeader.appendChild(titleSpan)
+
+    const quickBtn = document.createElement('button')
+    quickBtn.className = 'vt-pivot-quick-btn'
+    quickBtn.textContent = '🚀 快速透视'
+    quickBtn.title = '智能识别维度和度量，一键生成透视表'
+    quickBtn.addEventListener('click', () => this.quickPivot())
+    poolHeader.appendChild(quickBtn)
+    
     poolSection.appendChild(poolHeader)
 
     const poolSearch = document.createElement('input')
@@ -414,6 +431,8 @@ export class ColumnPanel implements IPanel {
   /** 渲染字段池列表 */
   private renderPool(container: HTMLDivElement, filter: string): void {
     container.innerHTML = ''
+    
+    // 收集已使用的字段（用于标记，不过滤）
     const usedKeys = new Set([
       ...this.zones.filters.map(f => f.key),
       ...this.zones.columns.map(f => f.key),
@@ -422,12 +441,19 @@ export class ColumnPanel implements IPanel {
     ])
 
     const keyword = filter.toLowerCase()
+    // 显示所有字段，不过滤已使用的
     for (const col of this.originalColumns) {
-      if (usedKeys.has(col.key)) continue
       if (keyword && !col.title.toLowerCase().includes(keyword)) continue
 
       const item = document.createElement('div')
       item.className = 'vt-px-pool-item'
+      
+      // 已使用的字段添加标记样式
+      if (usedKeys.has(col.key)) {
+        item.classList.add('vt-px-pool-item--used')
+        item.title = `已在使用中`
+      }
+      
       item.draggable = true
       item.dataset.fieldKey = col.key
 
@@ -613,6 +639,19 @@ export class ColumnPanel implements IPanel {
       })
       chip.appendChild(removeBtn)
 
+      // 筛选器区域: 点击 chip 弹出值筛选下拉框
+      if (zoneName === 'filters') {
+        chip.style.cursor = 'pointer'
+        const filterValue = this.filters[field.key]
+        const hasFilter = filterValue && filterValue.kind === 'set' && filterValue.values.length > 0
+        if (hasFilter) {
+          chip.classList.add('vt-px-chip--filtered')
+        }
+        chip.addEventListener('click', () => {
+          this.showFilterValuePicker(field.key, chip)
+        })
+      }
+
       // chip 内部拖拽排序
       chip.addEventListener('dragstart', (e) => {
         this.dragState = { key: field.key, fromZone: zoneName }
@@ -700,24 +739,374 @@ export class ColumnPanel implements IPanel {
 
   /** 将字段添加到指定区域（双击或 + 按钮） */
   private addToZone(key: string, zoneName: ZoneName): void {
-    // 从其他区域移除（一个字段只能在一个区域）
+    // 筛选器区域：不从其他区域移除，允许字段复用
+    if (zoneName === 'filters') {
+      this.moveField(key, 'pool', zoneName)
+      return
+    }
+    
+    // 其他区域：从非筛选器区域移除（行/列/值互斥，但筛选器可共存）
     for (const z of Object.keys(this.zones) as ZoneName[]) {
-      this.zones[z] = this.zones[z].filter(f => f.key !== key)
+      if (z !== 'filters') {
+        this.zones[z] = this.zones[z].filter(f => f.key !== key)
+      }
     }
     this.moveField(key, 'pool', zoneName)
   }
 
-  /** 弹出字段选择器（点击 + 按钮时） */
+  /** 弹出筛选器字段的值选择下拉框（多态：根据字段类型渲染不同UI） */
+  private showFilterValuePicker(fieldKey: string, anchor: HTMLElement): void {
+    // 关闭已有
+    document.querySelectorAll('.vt-px-filter-picker').forEach(el => el.remove())
+
+    const col = this.originalColumns.find(c => c.key === fieldKey)
+    const dataType = col?.dataType ?? 'string'
+
+    // 根据字段类型渲染不同筛选器
+    switch (dataType) {
+      case 'string':
+      case 'boolean':
+        this.showSetFilter(fieldKey, col, anchor)
+        break
+      case 'number':
+        this.showNumberRangeFilter(fieldKey, col, anchor)
+        break
+      case 'date':
+        this.showDateRangeFilter(fieldKey, col, anchor)
+        break
+      default:
+        this.showSetFilter(fieldKey, col, anchor)
+    }
+  }
+
+  /** 文本/布尔字段：复选框多选筛选器 */
+  private showSetFilter(fieldKey: string, col: import('@/types').IColumn | undefined, anchor: HTMLElement): void {
+    const title = col?.title ?? fieldKey
+
+    // 从原始数据收集该字段的唯一值
+    const seen = new Set<string>()
+    const allValues: string[] = []
+    for (const row of this.data) {
+      const v = String(row[fieldKey] ?? '')
+      if (v && !seen.has(v)) {
+        seen.add(v)
+        allValues.push(v)
+      }
+    }
+
+    const filterValue = this.filters[fieldKey]
+    const activeSet = new Set(filterValue && filterValue.kind === 'set' ? filterValue.values : [])
+
+    const dropdown = document.createElement('div')
+    dropdown.className = 'vt-px-filter-picker'
+
+    // 标题
+    const header = document.createElement('div')
+    header.className = 'vt-px-filter-header'
+    header.textContent = title
+    dropdown.appendChild(header)
+
+    // 全选/清空
+    const actions = document.createElement('div')
+    actions.className = 'vt-px-filter-actions'
+    const selectAll = document.createElement('span')
+    selectAll.textContent = '全选'
+    selectAll.addEventListener('click', () => {
+      dropdown.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(cb => cb.checked = true)
+    })
+    const clearAll = document.createElement('span')
+    clearAll.textContent = '清空'
+    clearAll.addEventListener('click', () => {
+      dropdown.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(cb => cb.checked = false)
+    })
+    actions.appendChild(selectAll)
+    actions.appendChild(clearAll)
+    dropdown.appendChild(actions)
+
+    // 值列表
+    const list = document.createElement('div')
+    list.className = 'vt-px-filter-list'
+    for (const val of allValues) {
+      const item = document.createElement('label')
+      item.className = 'vt-px-filter-item'
+      const cb = document.createElement('input')
+      cb.type = 'checkbox'
+      cb.value = val
+      cb.checked = activeSet.size === 0 || activeSet.has(val)
+      item.appendChild(cb)
+      item.appendChild(document.createTextNode(val))
+      list.appendChild(item)
+    }
+    dropdown.appendChild(list)
+
+    // 确认按钮
+    const confirmBtn = document.createElement('button')
+    confirmBtn.className = 'vt-px-filter-confirm'
+    confirmBtn.textContent = '确认'
+    confirmBtn.addEventListener('click', () => {
+      const checked = Array.from(dropdown.querySelectorAll<HTMLInputElement>('input:checked')).map(cb => cb.value)
+      // 全选=不过滤（删除该字段的筛选条件）
+      if (checked.length === allValues.length) {
+        delete this.filters[fieldKey]
+      } else {
+        this.filters[fieldKey] = { kind: 'set', values: checked }
+      }
+      dropdown.remove()
+      this.refreshAllZones()
+      this.emitConfig()
+    })
+    dropdown.appendChild(confirmBtn)
+
+    // 定位 fixed + body
+    const rect = anchor.getBoundingClientRect()
+    dropdown.style.position = 'fixed'
+    dropdown.style.top = `${rect.bottom + 4}px`
+    dropdown.style.left = `${rect.left}px`
+    document.body.appendChild(dropdown)
+
+    // 点击外部关闭
+    const close = (e: MouseEvent) => {
+      if (!dropdown.contains(e.target as Node)) {
+        dropdown.remove()
+        document.removeEventListener('mousedown', close)
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', close), 0)
+  }
+
+  /** 数值字段：范围筛选器（min/max） */
+  private showNumberRangeFilter(fieldKey: string, col: import('@/types').IColumn | undefined, anchor: HTMLElement): void {
+    const title = col?.title ?? fieldKey
+    const filterValue = this.filters[fieldKey]
+    const currentMin = filterValue && filterValue.kind === 'numberRange' ? filterValue.min : undefined
+    const currentMax = filterValue && filterValue.kind === 'numberRange' ? filterValue.max : undefined
+
+    const dropdown = document.createElement('div')
+    dropdown.className = 'vt-px-filter-picker vt-px-filter-picker--number'
+
+    // 标题
+    const header = document.createElement('div')
+    header.className = 'vt-px-filter-header'
+    header.textContent = title
+    dropdown.appendChild(header)
+
+    // 范围输入
+    const rangeContainer = document.createElement('div')
+    rangeContainer.className = 'vt-px-number-range'
+
+    const minLabel = document.createElement('label')
+    minLabel.textContent = '最小值:'
+    const minInput = document.createElement('input')
+    minInput.type = 'number'
+    minInput.className = 'vt-px-number-input'
+    minInput.placeholder = '不限'
+    minInput.value = currentMin != null ? String(currentMin) : ''
+
+    const maxLabel = document.createElement('label')
+    maxLabel.textContent = '最大值:'
+    const maxInput = document.createElement('input')
+    maxInput.type = 'number'
+    maxInput.className = 'vt-px-number-input'
+    maxInput.placeholder = '不限'
+    maxInput.value = currentMax != null ? String(currentMax) : ''
+
+    rangeContainer.appendChild(minLabel)
+    rangeContainer.appendChild(minInput)
+    rangeContainer.appendChild(maxLabel)
+    rangeContainer.appendChild(maxInput)
+    dropdown.appendChild(rangeContainer)
+
+    // 按钮组
+    const btnGroup = document.createElement('div')
+    btnGroup.className = 'vt-px-filter-buttons'
+
+    const clearBtn = document.createElement('button')
+    clearBtn.className = 'vt-px-filter-btn vt-px-filter-btn--secondary'
+    clearBtn.textContent = '清空'
+    clearBtn.addEventListener('click', () => {
+      delete this.filters[fieldKey]
+      dropdown.remove()
+      this.refreshAllZones()
+      this.emitConfig()
+    })
+
+    const confirmBtn = document.createElement('button')
+    confirmBtn.className = 'vt-px-filter-btn vt-px-filter-btn--primary'
+    confirmBtn.textContent = '确认'
+    confirmBtn.addEventListener('click', () => {
+      const min = minInput.value ? Number(minInput.value) : undefined
+      const max = maxInput.value ? Number(maxInput.value) : undefined
+      
+      if (min == null && max == null) {
+        delete this.filters[fieldKey]
+      } else {
+        this.filters[fieldKey] = { kind: 'numberRange', min, max }
+      }
+      dropdown.remove()
+      this.refreshAllZones()
+      this.emitConfig()
+    })
+
+    btnGroup.appendChild(clearBtn)
+    btnGroup.appendChild(confirmBtn)
+    dropdown.appendChild(btnGroup)
+
+    // 定位 fixed + body
+    const rect = anchor.getBoundingClientRect()
+    dropdown.style.position = 'fixed'
+    dropdown.style.top = `${rect.bottom + 4}px`
+    dropdown.style.left = `${rect.left}px`
+    document.body.appendChild(dropdown)
+
+    // 点击外部关闭
+    const close = (e: MouseEvent) => {
+      if (!dropdown.contains(e.target as Node)) {
+        dropdown.remove()
+        document.removeEventListener('mousedown', close)
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', close), 0)
+  }
+
+  /** 日期字段：日期范围筛选器（支持日/月/年粒度） */
+  private showDateRangeFilter(fieldKey: string, col: import('@/types').IColumn | undefined, anchor: HTMLElement): void {
+    const title = col?.title ?? fieldKey
+    const filterValue = this.filters[fieldKey]
+    const currentStart = filterValue && filterValue.kind === 'dateRange' ? filterValue.start : undefined
+    const currentEnd = filterValue && filterValue.kind === 'dateRange' ? filterValue.end : undefined
+
+    const dropdown = document.createElement('div')
+    dropdown.className = 'vt-px-filter-picker vt-px-filter-picker--date'
+
+    // 标题
+    const header = document.createElement('div')
+    header.className = 'vt-px-filter-header'
+    header.textContent = title
+    dropdown.appendChild(header)
+
+    // 粒度选择（日/月/年）
+    const granularityRow = document.createElement('div')
+    granularityRow.className = 'vt-px-date-granularity'
+    granularityRow.innerHTML = `
+      <label>粒度:</label>
+      <label><input type="radio" name="granularity" value="day" checked> 日</label>
+      <label><input type="radio" name="granularity" value="month"> 月</label>
+      <label><input type="radio" name="granularity" value="year"> 年</label>
+    `
+    dropdown.appendChild(granularityRow)
+
+    // 日期范围输入
+    const rangeContainer = document.createElement('div')
+    rangeContainer.className = 'vt-px-date-range'
+
+    const startLabel = document.createElement('label')
+    startLabel.textContent = '开始:'
+    const startInput = document.createElement('input')
+    startInput.type = 'date'
+    startInput.className = 'vt-px-date-input'
+    startInput.value = currentStart || ''
+
+    const endLabel = document.createElement('label')
+    endLabel.textContent = '结束:'
+    const endInput = document.createElement('input')
+    endInput.type = 'date'
+    endInput.className = 'vt-px-date-input'
+    endInput.value = currentEnd || ''
+
+    rangeContainer.appendChild(startLabel)
+    rangeContainer.appendChild(startInput)
+    rangeContainer.appendChild(endLabel)
+    rangeContainer.appendChild(endInput)
+    dropdown.appendChild(rangeContainer)
+
+    // 粒度切换逻辑
+    const radios = dropdown.querySelectorAll<HTMLInputElement>('input[name="granularity"]')
+    radios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        const granularity = radio.value
+        if (granularity === 'month') {
+          startInput.type = 'month'
+          endInput.type = 'month'
+        } else if (granularity === 'year') {
+          startInput.type = 'number'
+          endInput.type = 'number'
+          startInput.placeholder = 'YYYY'
+          endInput.placeholder = 'YYYY'
+        } else {
+          startInput.type = 'date'
+          endInput.type = 'date'
+        }
+      })
+    })
+
+    // 按钮组
+    const btnGroup = document.createElement('div')
+    btnGroup.className = 'vt-px-filter-buttons'
+
+    const clearBtn = document.createElement('button')
+    clearBtn.className = 'vt-px-filter-btn vt-px-filter-btn--secondary'
+    clearBtn.textContent = '清空'
+    clearBtn.addEventListener('click', () => {
+      delete this.filters[fieldKey]
+      dropdown.remove()
+      this.refreshAllZones()
+      this.emitConfig()
+    })
+
+    const confirmBtn = document.createElement('button')
+    confirmBtn.className = 'vt-px-filter-btn vt-px-filter-btn--primary'
+    confirmBtn.textContent = '确认'
+    confirmBtn.addEventListener('click', () => {
+      const start = startInput.value || undefined
+      const end = endInput.value || undefined
+      
+      if (!start && !end) {
+        delete this.filters[fieldKey]
+      } else {
+        this.filters[fieldKey] = { kind: 'dateRange', start, end }
+      }
+      dropdown.remove()
+      this.refreshAllZones()
+      this.emitConfig()
+    })
+
+    btnGroup.appendChild(clearBtn)
+    btnGroup.appendChild(confirmBtn)
+    dropdown.appendChild(btnGroup)
+
+    // 定位 fixed + body
+    const rect = anchor.getBoundingClientRect()
+    dropdown.style.position = 'fixed'
+    dropdown.style.top = `${rect.bottom + 4}px`
+    dropdown.style.left = `${rect.left}px`
+    document.body.appendChild(dropdown)
+
+    // 点击外部关闭
+    const close = (e: MouseEvent) => {
+      if (!dropdown.contains(e.target as Node)) {
+        dropdown.remove()
+        document.removeEventListener('mousedown', close)
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', close), 0)
+  }
+
   private showFieldPicker(zoneName: ZoneName, anchor: HTMLElement): void {
     // 移除已存在的 picker
     document.querySelectorAll('.vt-px-picker').forEach(el => el.remove())
 
-    const usedKeys = new Set([
-      ...this.zones.filters.map(f => f.key),
-      ...this.zones.columns.map(f => f.key),
-      ...this.zones.rows.map(f => f.key),
-      ...this.zones.values.map(f => f.key),
-    ])
+    // 筛选器区域：只排除已在筛选器区域的字段，允许选择其他区域的字段
+    // 其他区域：排除所有已使用的字段
+    let usedKeys: Set<string>
+    if (zoneName === 'filters') {
+      usedKeys = new Set(this.zones.filters.map(f => f.key))
+    } else {
+      usedKeys = new Set([
+        ...this.zones.columns.map(f => f.key),
+        ...this.zones.rows.map(f => f.key),
+        ...this.zones.values.map(f => f.key),
+      ])
+    }
 
     // 按区域过滤可用字段类型：行/列只显示文本字段，值只显示数值字段，筛选器不限
     const isNumericOnly = zoneName === 'values'
@@ -804,8 +1193,22 @@ export class ColumnPanel implements IPanel {
     container.querySelectorAll('.vt-drop-indicator').forEach(el => el.remove())
   }
 
-  /** 收集配置并触发回调 */
+  /** 收集配置并触发回调（带防抖） */
   private emitConfig(): void {
+    // 清除之前的定时器
+    if (this.emitConfigTimer !== null) {
+      clearTimeout(this.emitConfigTimer)
+    }
+
+    // 延迟 300ms 执行，避免频繁触发
+    this.emitConfigTimer = setTimeout(() => {
+      this.emitConfigTimer = null
+      this.doEmitConfig()
+    }, 300) as any
+  }
+
+  /** 实际执行配置触发 */
+  private doEmitConfig(): void {
     const rowGroups = this.zones.rows.map(f => f.key)
     if (rowGroups.length === 0) return
 
@@ -827,12 +1230,49 @@ export class ColumnPanel implements IPanel {
       colGroups: colGroups.length > 0 ? colGroups : undefined,
       valueFields,
       showSubtotals: this.showSubtotals,
+      filters: { ...this.filters },
     } as IPivotConfig)
   }
 
   public onHide(): void {
     this.unsubscribe?.()
     this.unsubscribe = null
+  }
+
+  /** 快速透视：智能识别维度和度量 */
+  private quickPivot(): void {
+    // 1. 智能识别维度字段（非数值，适合分组）
+    const dimensionFields = this.originalColumns.filter(col => 
+      col.dataType !== 'number' && 
+      !col.key.includes('id') && 
+      !col.key.includes('time')
+    ).slice(0, 2) // 最多选2个维度
+
+    // 2. 智能识别度量字段（数值，适合聚合）
+    const measureFields = this.originalColumns.filter(col => 
+      col.dataType === 'number' &&
+      (col.key.includes('sales') || col.key.includes('profit') || col.key.includes('cost') || col.key.includes('amount'))
+    ).slice(0, 2) // 最多选2个度量
+
+    // 如果没有明显的度量字段，选前两个数值字段
+    const fallbackMeasures = measureFields.length === 0 
+      ? this.originalColumns.filter(col => col.dataType === 'number').slice(0, 2)
+      : measureFields
+
+    // 3. 清空现有配置
+    this.zones = {
+      filters: [],
+      columns: [],
+      rows: dimensionFields.map(col => ({ key: col.key })),
+      values: fallbackMeasures.map(col => ({ 
+        key: col.key, 
+        aggregation: col.key.includes('count') ? 'count' : 'sum' 
+      }))
+    }
+
+    // 4. 刷新界面并触发配置更新
+    this.refreshAllZones()
+    this.emitConfig()
   }
 
   public destroy(): void {
@@ -851,9 +1291,10 @@ export class ColumnPanel implements IPanel {
 export const createColumnPanel = (
   store: TableStore, 
   originalColumns: IColumn[],
+  data: Record<string, any>[],  // 新增：原始数据引用
   onPivotModeToggle?: (enbled: boolean) => void ,
   onPivotConfigChange?: (config: any) => void
 
 ): IPanel => {
-  return new ColumnPanel(store, originalColumns, onPivotModeToggle, onPivotConfigChange)
+  return new ColumnPanel(store, originalColumns, data, onPivotModeToggle, onPivotConfigChange)
 }

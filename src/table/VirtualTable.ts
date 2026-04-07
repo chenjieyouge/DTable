@@ -225,12 +225,16 @@ export class VirtualTable {
       // this.destroy()
     }
 
+    // 获取原始数据用于透视表筛选器
+    const allData = this.dataStrategy.getAllData?.() || []
+
     // 使用 MountHelper 挂载表格
     const result = MountHelper.mount({
       config: this.config,
       store: this.store,
       mode: this.mode,
       originalColumns: this.originalColumns,
+      data: allData,  // 传递原始数据
       widthStorage: this.widthStorage,
       renderer: this.renderer,
       headerSortBinder: this.headerSortBinder,
@@ -240,8 +244,8 @@ export class VirtualTable {
       togglePanel: (panelId: string) => {
         if (this.sidePanelManager) {
           if (panelId === 'columns') {
-            // 列管理面板, 需要将 原始列配置传过去
-            this.sidePanelManager.togglePanel(panelId, this.originalColumns)
+            // 列管理面板, 需要将 原始列配置和数据传过去
+            this.sidePanelManager.togglePanel(panelId, this.originalColumns, allData)
           } else {
             this.sidePanelManager.togglePanel(panelId)
           }

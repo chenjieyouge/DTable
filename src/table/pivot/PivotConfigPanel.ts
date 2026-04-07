@@ -33,11 +33,23 @@ export class PivotConfigPanel {
     panel.className = 'vt-pivot-config-panel'
     this.container = panel
 
-    // 标题
+    // 标题 + 快速透视按钮
+    const header = document.createElement('div')
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;'
+    
     const title = document.createElement('div')
     title.className = 'vt-pivot-config-title'
     title.textContent = '透视表配置'
-    panel.appendChild(title)
+    header.appendChild(title)
+
+    const quickBtn = document.createElement('button')
+    quickBtn.className = 'vt-pivot-quick-btn'
+    quickBtn.textContent = '🚀 快速透视'
+    quickBtn.title = '智能识别维度和度量，一键生成透视表'
+    quickBtn.addEventListener('click', () => this.quickPivot())
+    header.appendChild(quickBtn)
+
+    panel.appendChild(header)
 
     // 行分组选择区域
     panel.appendChild(this.createRowGroupSection())
@@ -236,5 +248,42 @@ export class PivotConfigPanel {
 
     this.config.valueFields = newValueFields
     this.onChange({...this.config})
+  }
+
+  /** 快速透视：智能识别维度和度量 */
+  private quickPivot(): void {
+    // 1. 智能识别维度字段（非数值，适合分组）
+    const dimensionFields = this.columns.filter(col => 
+      col.dataType !== 'number' && 
+      !col.key.includes('id') && 
+      !col.key.includes('time')
+    ).slice(0, 2) // 最多选2个维度
+
+    // 2. 智能识别度量字段（数值，适合聚合）
+    const measureFields = this.columns.filter(col => 
+      col.dataType === 'number' &&
+      (col.key.includes('sales') || col.key.includes('profit') || col.key.includes('cost') || col.key.includes('amount'))
+    ).slice(0, 2) // 最多选2个度量
+
+    // 如果没有明显的度量字段，选前两个数值字段
+    const fallbackMeasures = measureFields.length === 0 
+      ? this.columns.filter(col => col.dataType === 'number').slice(0, 2)
+      : measureFields
+
+    // 3. 生成配置
+    const newConfig: IPivotConfig = {
+      enabled: true,
+      rowGroups: dimensionFields.map(col => col.key),
+      colGroups: [], // 暂不使用列分组，保持简单
+      valueFields: fallbackMeasures.map(col => ({
+        key: col.key,
+        aggregation: col.key.includes('count') ? 'count' : 'sum'
+      })),
+      rowFilters: {},
+      colFilters: {},
+      sortBy: null
+    }
+
+    this.onChange(newConfig)
   }
 }

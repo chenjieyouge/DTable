@@ -35,13 +35,26 @@ export class PivotTable {
   private tableArea: HTMLDivElement | null = null 
   private emptyStateEl: HTMLDivElement | null = null  // 空状态提示元素
 
-  // 虚拟滚动相关
+  // 工具栏 + 面包屑
+  private headerEl: HTMLDivElement | null = null 
+  private breadcrumbEl: HTMLDivElement | null = null
+
+  // 冻结区（行分组列，左侧固定）
+  private bodyContainer: HTMLDivElement | null = null
+  private frozenCol: HTMLDivElement | null = null
+  private frozenHeaderEl: HTMLDivElement | null = null
+  private frozenScrollContainer: HTMLDivElement | null = null
+  private frozenScrollSpacer: HTMLDivElement | null = null
+  private frozenVirtualContent: HTMLDivElement | null = null
+  private frozenStickyGroupEl: HTMLDivElement | null = null
+  private frozenVisibleRowMap = new Map<number, HTMLDivElement>()
+
+  // 滚动区（值列，右侧可滚动）
+  private scrollHeaderEl: HTMLDivElement | null = null
   private scrollContainer: HTMLDivElement | null = null 
   private scrollSpacer: HTMLDivElement | null = null 
   private virtualContent: HTMLDivElement | null = null 
-  private headerEl: HTMLDivElement | null = null 
   private stickyGroupEl: HTMLDivElement | null = null 
-  private breadcrumbEl: HTMLDivElement | null = null  // 面包屑导航
 
   private visibleRowMap = new Map<number, HTMLDivElement>()
   private visibleSet = new Set<number>()
@@ -87,7 +100,27 @@ export class PivotTable {
     this.refresh() // 初始化渲染
   }
 
-  /** 构建虚拟滚动 DOM 骨架 */
+  /** 
+   * 构建虚拟滚动 DOM 骨架（冻结列 + 滚动区双容器）
+   * 
+   * DOM 结构:
+   * wrapper (vt-pivot-table, flex column)
+   *  ├── headerEl (工具栏按钮)
+   *  ├── breadcrumbEl (面包屑导航)
+   *  └── bodyContainer (flex row, flex: 1)
+   *      ├── frozenCol (左侧固定 220px, flex column)
+   *      │   ├── frozenHeaderEl (行分组列表头)
+   *      │   └── frozenScrollContainer (overflow hidden, 垂直同步)
+   *      │       ├── frozenStickyGroupEl
+   *      │       ├── frozenScrollSpacer
+   *      │       └── frozenVirtualContent
+   *      └── scrollArea (flex: 1, flex column)
+   *          ├── scrollHeaderEl (值列表头, 水平同步)
+   *          └── scrollContainer (overflow auto, 主滚动驱动)
+   *              ├── stickyGroupEl
+   *              ├── scrollSpacer
+   *              └── virtualContent
+   */
   private buildScrollStructure(): void {
     if (!this.tableArea) return 
 
@@ -97,42 +130,101 @@ export class PivotTable {
     wrapper.style.display = 'flex'
     wrapper.style.flexDirection = 'column'
 
-    // 表头容器 (固定, 不随滚动)
+    // ── 工具栏 ──
     this.headerEl = document.createElement('div')
     this.headerEl.className = 'vt-pivot-header-area'
     wrapper.appendChild(this.headerEl)
 
-    // 面包屑导航 (固定, 不随滚动)
+    // ── 面包屑导航 ──
     this.breadcrumbEl = document.createElement('div')
     this.breadcrumbEl.className = 'vt-pivot-breadcrumb-wrapper'
     wrapper.appendChild(this.breadcrumbEl)
 
-    // 滚动容器
+    // ── 主体容器（flex row: 冻结区 + 滚动区）──
+    this.bodyContainer = document.createElement('div')
+    this.bodyContainer.className = 'vt-pivot-body-container'
+
+    // ═══ 冻结区（左侧固定，显示行分组列）═══
+    this.frozenCol = document.createElement('div')
+    this.frozenCol.className = 'vt-pivot-frozen-col'
+
+    this.frozenHeaderEl = document.createElement('div')
+    this.frozenHeaderEl.className = 'vt-pivot-frozen-header'
+    this.frozenCol.appendChild(this.frozenHeaderEl)
+
+    this.frozenScrollContainer = document.createElement('div')
+    this.frozenScrollContainer.className = 'vt-pivot-frozen-scroll-container'
+
+    this.frozenStickyGroupEl = document.createElement('div')
+    this.frozenStickyGroupEl.className = 'vt-pivot-frozen-sticky-group'
+    this.frozenStickyGroupEl.style.display = 'none'
+
+    this.frozenScrollSpacer = document.createElement('div')
+    this.frozenScrollSpacer.className = 'vt-pivot-scroll-spacer'
+
+    this.frozenVirtualContent = document.createElement('div')
+    this.frozenVirtualContent.className = 'vt-pivot-virtual-content'
+
+    this.frozenScrollContainer.appendChild(this.frozenStickyGroupEl)
+    this.frozenScrollContainer.appendChild(this.frozenScrollSpacer)
+    this.frozenScrollContainer.appendChild(this.frozenVirtualContent)
+    this.frozenCol.appendChild(this.frozenScrollContainer)
+
+    // ═══ 滚动区（右侧可滚动，显示值列）═══
+    const scrollArea = document.createElement('div')
+    scrollArea.className = 'vt-pivot-scroll-area'
+
+    this.scrollHeaderEl = document.createElement('div')
+    this.scrollHeaderEl.className = 'vt-pivot-scroll-header-area'
+    scrollArea.appendChild(this.scrollHeaderEl)
+
     this.scrollContainer = document.createElement('div')
     this.scrollContainer.className = 'vt-pivot-scroll-container'
 
-    // 吸顶分组行, 介于 scrollContiner 和 scrollSpacer 之间, 不有 transform 影响
     this.stickyGroupEl = document.createElement('div')
     this.stickyGroupEl.className = 'vt-pivot-sticky-group'
     this.stickyGroupEl.style.display = 'none'
 
-    // 撑高度的而 spacer
     this.scrollSpacer = document.createElement('div')
     this.scrollSpacer.className = 'vt-pivot-scroll-spacer'
 
-    // 虚拟内容区
     this.virtualContent = document.createElement('div')
     this.virtualContent.className = 'vt-pivot-virtual-content'
 
-    // 挂载
     this.scrollContainer.appendChild(this.stickyGroupEl)
     this.scrollContainer.appendChild(this.scrollSpacer)
     this.scrollContainer.appendChild(this.virtualContent)
-    wrapper.appendChild(this.scrollContainer)
+    scrollArea.appendChild(this.scrollContainer)
+
+    // ═══ 组装 ═══
+    this.bodyContainer.appendChild(this.frozenCol)
+    this.bodyContainer.appendChild(scrollArea)
+    wrapper.appendChild(this.bodyContainer)
     this.tableArea.appendChild(wrapper)
     
     // 绑定滚动事件
     this.scrollContainer.addEventListener('scroll', this.scrollHandler)
+    // 绑定冻结区 ↔ 滚动区同步
+    this.setupScrollSync()
+  }
+
+  /** 设置冻结区和滚动区的滚动同步 */
+  private setupScrollSync(): void {
+    if (!this.scrollContainer) return
+
+    this.scrollContainer.addEventListener('scroll', () => {
+      // 同步冻结区垂直滚动
+      if (this.frozenScrollContainer) {
+        this.frozenScrollContainer.scrollTop = this.scrollContainer!.scrollTop
+      }
+      // 同步滚动区表头水平滚动
+      if (this.scrollHeaderEl) {
+        const headerWrapper = this.scrollHeaderEl.querySelector('.vt-pivot-header-wrapper') as HTMLElement
+        if (headerWrapper) {
+          headerWrapper.scrollLeft = this.scrollContainer!.scrollLeft
+        }
+      }
+    })
   }
 
   /** 渲染空状态引导 UI（无行分组或无值字段时显示） */
@@ -142,7 +234,7 @@ export class PivotTable {
     // 隐藏 scroll 区域，但保留 DOM 引用不销毁
     if (this.headerEl) this.headerEl.style.display = 'none'
     if (this.breadcrumbEl) this.breadcrumbEl.style.display = 'none'
-    if (this.scrollContainer) this.scrollContainer.style.display = 'none'
+    if (this.bodyContainer) this.bodyContainer.style.display = 'none'
 
     // 已有则直接显示
     if (this.emptyStateEl) {
@@ -212,7 +304,7 @@ export class PivotTable {
     if (this.emptyStateEl) this.emptyStateEl.style.display = 'none'
     if (this.headerEl) this.headerEl.style.display = ''
     if (this.breadcrumbEl) this.breadcrumbEl.style.display = ''
-    if (this.scrollContainer) this.scrollContainer.style.display = ''
+    if (this.bodyContainer) this.bodyContainer.style.display = ''
 
     // 1. 先构建列树 (有 colGroups 时生成多层列树, 无则生成 valueField 叶子)
     this.processor.buildColTree(this.data)
@@ -237,11 +329,13 @@ export class PivotTable {
     this.updateVisibleRows()
   }
 
-  /** 渲染表头 */
+  /** 渲染表头（拆分为冻结区表头 + 滚动区表头） */
   private renderHeader(colTree: IPivotColNode | null): void {
-    if (!this.headerEl) return
+    if (!this.headerEl || !this.frozenHeaderEl || !this.scrollHeaderEl) return
 
     this.headerEl.innerHTML = ''
+    this.frozenHeaderEl.innerHTML = ''
+    this.scrollHeaderEl.innerHTML = ''
 
     // ── 工具栏 ──
     const buttonGroup = document.createElement('div')
@@ -300,15 +394,21 @@ export class PivotTable {
     buttonGroup.appendChild(exportBtn)
     this.headerEl.appendChild(buttonGroup)
 
-    // ── 列表头（含排序回调）──
+    // ── 排序回调 ──
     const onSort = (cellKey: string, direction: 'asc' | 'desc' | null) => {
       this.pivotConfig.sortBy = direction ? { cellKey, direction } : null
       this.processor.updateConfig(this.pivotConfig)
       this.renderer.updateConfig(this.pivotConfig, this.columns)
       this.refresh()
     }
-    const header = this.renderer.renderHeader(colTree, onSort)
-    this.headerEl.appendChild(header)
+
+    // ── 冻结区表头（行分组列名）──
+    const frozenHeader = this.renderer.renderFrozenHeader(colTree)
+    this.frozenHeaderEl.appendChild(frozenHeader)
+
+    // ── 滚动区表头（值列）──
+    const scrollHeader = this.renderer.renderScrollHeader(colTree, onSort)
+    this.scrollHeaderEl.appendChild(scrollHeader)
   }
 
   /** 弹出分组字段值筛选下拉框（type: 'row' | 'col'） */
@@ -458,39 +558,49 @@ export class PivotTable {
     return value
   }
 
-  /** 更新 spacer 高度 */
+  /** 更新 spacer 高度（冻结区 + 滚动区同步） */
   private updateScrollHeight(): void {
     if (!this.scrollSpacer) return 
 
     const totalHeight = this.flatRows.length * this.ROW_HEIGHT // 行数 * 每行高度
     this.scrollSpacer.style.height = `${totalHeight}px`
+    if (this.frozenScrollSpacer) {
+      this.frozenScrollSpacer.style.height = `${totalHeight}px`
+    }
   }
 
-  /** 清空可视区缓存 */
+  /** 清空可视区缓存（冻结区 + 滚动区） */
   private clearVisibleRows(): void {
     if (this.virtualContent) {
       this.virtualContent.innerHTML = ''
     }
+    if (this.frozenVirtualContent) {
+      this.frozenVirtualContent.innerHTML = ''
+    }
 
     this.visibleRowMap.clear()
+    this.frozenVisibleRowMap.clear()
     this.visibleSet.clear()
 
     if (this.stickyGroupEl) {
       this.stickyGroupEl.style.display = 'none'
     }
+    if (this.frozenStickyGroupEl) {
+      this.frozenStickyGroupEl.style.display = 'none'
+    }
   }
 
   /** 
-   * 增量更新可视区行 (虚拟滚动)
+   * 增量更新可视区行 (虚拟滚动, 冻结区 + 滚动区双容器)
    * 
    * 原理与项目中 VirtualViewport.updateVisibleRowInternal 一致:
    * 1. 根据 scrollTop 计算 [startRow, endRow]
-   * 2. 新进 可视区的行 -> 创建 DOM 并加入 fragment
+   * 2. 新进 可视区的行 -> 创建冻结区单元格 + 滚动区行, 加入 fragment
    * 3. 离开 可视区的行 -> 移除 DOM
-   * 4. translateY 定位 virturalContent
+   * 4. translateY 定位 virtualContent (冻结区和滚动区同步)
   */
   private updateVisibleRows(): void {
-    if (!this.scrollContainer || !this.virtualContent) return 
+    if (!this.scrollContainer || !this.virtualContent || !this.frozenVirtualContent) return 
 
     const scrollTop = this.scrollContainer.scrollTop 
     const viewportHeight = this.scrollContainer.clientHeight
@@ -505,11 +615,14 @@ export class PivotTable {
       Math.ceil((scrollTop + viewportHeight) / this.ROW_HEIGHT + this.BUFFER_ROWS)
     )
     
-    // 定位虚拟内容区
-    this.virtualContent.style.transform = `translateY(${startRow * this.ROW_HEIGHT}px)`
+    // 定位虚拟内容区（冻结区和滚动区同步 translateY）
+    const translateY = `translateY(${startRow * this.ROW_HEIGHT}px)`
+    this.virtualContent.style.transform = translateY
+    this.frozenVirtualContent.style.transform = translateY
 
     const newVisibleSet = new Set<number>()
-    const fragement = document.createDocumentFragment()
+    const scrollFragment = document.createDocumentFragment()
+    const frozenFragment = document.createDocumentFragment()
 
     for (let i = startRow; i <= endRow; i++) {
       newVisibleSet.add(i)
@@ -518,35 +631,47 @@ export class PivotTable {
         const flatRow = this.flatRows[i]
         if (!flatRow) continue 
 
-        const rowEl = this.renderer.renderRow(flatRow, i) // i 传得对吗?
-        rowEl.style.height = `${this.ROW_HEIGHT}px`
-        rowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
+        // 滚动区行（值列）
+        const scrollRowEl = this.renderer.renderRowScrollPart(flatRow)
+        scrollRowEl.style.height = `${this.ROW_HEIGHT}px`
+        scrollRowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
 
-        // 分组行绑定 展开 / 折叠
+        // 冻结区单元格（行分组标签）
+        const frozenCellEl = this.renderer.renderRowFrozenPart(flatRow)
+        frozenCellEl.style.height = `${this.ROW_HEIGHT}px`
+        frozenCellEl.style.lineHeight = `${this.ROW_HEIGHT}px`
+
+        // 分组行绑定 展开 / 折叠（两侧都绑定）
         if (flatRow.type === 'group') {
-          rowEl.style.cursor = 'pointer'
           const nodeId = flatRow.nodeId
-          rowEl.addEventListener('click', () => {
-            this.toggleNode(nodeId)
-          })
+          frozenCellEl.style.cursor = 'pointer'
+          frozenCellEl.addEventListener('click', () => this.toggleNode(nodeId))
+          scrollRowEl.style.cursor = 'pointer'
+          scrollRowEl.addEventListener('click', () => this.toggleNode(nodeId))
         }
 
-        fragement.appendChild(rowEl)
-        this.visibleRowMap.set(i, rowEl)
+        scrollFragment.appendChild(scrollRowEl)
+        frozenFragment.appendChild(frozenCellEl)
+        this.visibleRowMap.set(i, scrollRowEl)
+        this.frozenVisibleRowMap.set(i, frozenCellEl)
       }
     }
 
     // 批量插入
-    if (fragement.children.length > 0) {
-      this.virtualContent.appendChild(fragement)
+    if (scrollFragment.children.length > 0) {
+      this.virtualContent.appendChild(scrollFragment)
+    }
+    if (frozenFragment.children.length > 0) {
+      this.frozenVirtualContent.appendChild(frozenFragment)
     }
 
     // 清理离开可视区的行
     for (const idx of this.visibleSet) {
       if (!newVisibleSet.has(idx)) {
-        const el = this.visibleRowMap.get(idx)
-        el?.remove()
+        this.visibleRowMap.get(idx)?.remove()
         this.visibleRowMap.delete(idx)
+        this.frozenVisibleRowMap.get(idx)?.remove()
+        this.frozenVisibleRowMap.delete(idx)
       }
     }
 
@@ -560,7 +685,7 @@ export class PivotTable {
   }
 
   /**
-   * 更新吸顶分组行
+   * 更新吸顶分组行（冻结区 + 滚动区）
    * 
    * 原理: 
    * 从当前可视区, 第一行往前找最近的 group 行
@@ -568,11 +693,12 @@ export class PivotTable {
    * - 若该 group 行本身还在视口, 则隐藏吸顶行, 避免重复
    */
   private updateStickyGroup(visualStartRow: number, scrollTop: number): void {
-    if (!this.stickyGroupEl) return 
+    if (!this.stickyGroupEl || !this.frozenStickyGroupEl) return 
 
     // scrollTop 不足一行高度时不显示（内容没有真正滚动走）
     if (scrollTop < this.ROW_HEIGHT) {
       this.stickyGroupEl.style.display = 'none'
+      this.frozenStickyGroupEl.style.display = 'none'
       return
     }
 
@@ -592,24 +718,31 @@ export class PivotTable {
     // 没有找到分组行，或分组行就是当前可视第一行（还在屏幕里），隐藏
     if (!groupRow || groupRowIndex >= visualStartRow) {
       this.stickyGroupEl.style.display = 'none'
+      this.frozenStickyGroupEl.style.display = 'none'
       return 
     }
 
-    // 分组行已滚出视口, 显示吸顶副本
-    this.stickyGroupEl.innerHTML = ''
-    const rowEl = this.renderer.renderRow(groupRow, groupRowIndex)
-    rowEl.style.height = `${this.ROW_HEIGHT}px`
-    rowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
-
-    // 吸顶行也支持点击 展开 / 折叠, 复用 toggleNode 逻辑
-    rowEl.style.cursor = 'pointer'
     const nodeId = groupRow.nodeId
-    rowEl.addEventListener('click', () => {
-      this.toggleNode(nodeId)
-    })
 
-    this.stickyGroupEl.appendChild(rowEl)
+    // 滚动区吸顶（值列）
+    this.stickyGroupEl.innerHTML = ''
+    const scrollRowEl = this.renderer.renderRowScrollPart(groupRow)
+    scrollRowEl.style.height = `${this.ROW_HEIGHT}px`
+    scrollRowEl.style.lineHeight = `${this.ROW_HEIGHT}px`
+    scrollRowEl.style.cursor = 'pointer'
+    scrollRowEl.addEventListener('click', () => this.toggleNode(nodeId))
+    this.stickyGroupEl.appendChild(scrollRowEl)
     this.stickyGroupEl.style.display = 'block'
+
+    // 冻结区吸顶（行分组标签）
+    this.frozenStickyGroupEl.innerHTML = ''
+    const frozenCellEl = this.renderer.renderRowFrozenPart(groupRow)
+    frozenCellEl.style.height = `${this.ROW_HEIGHT}px`
+    frozenCellEl.style.lineHeight = `${this.ROW_HEIGHT}px`
+    frozenCellEl.style.cursor = 'pointer'
+    frozenCellEl.addEventListener('click', () => this.toggleNode(nodeId))
+    this.frozenStickyGroupEl.appendChild(frozenCellEl)
+    this.frozenStickyGroupEl.style.display = 'block'
   }
  
 
@@ -640,6 +773,17 @@ export class PivotTable {
   /** 展开-所有分组节点 */
   private expandAll(): void {
     if (!this.treeRoot) return 
+    
+    // 性能检查：统计总节点数
+    const totalNodes = this.countAllGroupNodes(this.treeRoot)
+    const MAX_RECOMMENDED_NODES = 200
+    
+    if (totalNodes > MAX_RECOMMENDED_NODES) {
+      if (!confirm(`检测到 ${totalNodes} 个分组节点，展开所有可能影响性能。\n\n是否继续展开所有节点？\n\n建议：只展开需要的层级以获得更好体验。`)) {
+        return
+      }
+    }
+    
     // 递归设置, 所有分组节点为 "展开" 状态
     this.setAllNodesExpanded(this.treeRoot, true)
     // 重新展平树
@@ -661,6 +805,27 @@ export class PivotTable {
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
+  }
+
+  /**
+   * 统计所有分组节点数量（用于性能检查）
+   */
+  private countAllGroupNodes(node: IPivotTreeNode): number {
+    if (node.level === -1) {
+      // 根节点：统计所有子节点
+      return node.children.reduce((total, child) => 
+        total + this.countAllGroupNodes(child), 0
+      )
+    }
+    
+    let count = 1 // 当前节点
+    
+    // 递归统计子节点
+    for (const child of node.children) {
+      count += this.countAllGroupNodes(child)
+    }
+    
+    return count
   }
 
   /**
@@ -803,10 +968,24 @@ export class PivotTable {
     this.tableArea = null 
     this.emptyStateEl = null
 
+    // 工具栏 + 面包屑
+    this.headerEl = null
+    this.breadcrumbEl = null
+
+    // 冻结区
+    this.bodyContainer = null
+    this.frozenCol = null
+    this.frozenHeaderEl = null
+    this.frozenScrollContainer = null
+    this.frozenScrollSpacer = null
+    this.frozenVirtualContent = null
+    this.frozenStickyGroupEl = null
+
+    // 滚动区
+    this.scrollHeaderEl = null
     this.scrollContainer = null 
     this.scrollSpacer = null 
     this.virtualContent = null 
-    this.headerEl = null
     this.stickyGroupEl = null  
   }
 }

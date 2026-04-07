@@ -87,9 +87,7 @@ export class PivotRenderer {
       for (const node of nodesAtDepth) {
         const isLeafRow = node.isLeaf
         if (isLeafRow && onSort) {
-          const cellKey = node.colKey === '__value__'
-            ? (this.config.valueFields.find(v => (v.label ?? v.key) === node.colValue)?.key ?? String(node.colValue))
-            : String(node.colValue)
+          const cellKey = this.getCellKey(node)
           const isSorted = currentSort?.cellKey === cellKey
           const cell = this.createSortableHeaderCell(String(node.colValue), node.leafCount, isSorted ? currentSort!.direction : null)
           cell.style.textAlign = 'center'
@@ -275,7 +273,7 @@ export class PivotRenderer {
    * 根据叶子节点计算 cellKey (与 PivotDataProcessor.buildCellKey 逻辑完全一致)
    * Renderer 独立计算, 不依赖 DataProcessor 实例
    */
-  private getCellKey(leaf: IPivotColNode): string {
+  public getCellKey(leaf: IPivotColNode): string {
     // 无列分组: colKey === '__value__' 且无 ancestorColValues
     if (leaf.colKey === '__value__') {
       const ancestors = leaf.ancestorColValues
@@ -289,6 +287,11 @@ export class PivotRenderer {
       return `${vf?.key ?? leaf.colValue}__${ancestors.join('__')}`
     }
     return String(leaf.colValue)
+  }
+
+  /** 获取列叶子节点列表（供列宽管理使用） */
+  public getColLeaves(): IPivotColNode[] {
+    return this.colLeaves
   }
 
   /**
@@ -316,6 +319,179 @@ export class PivotRenderer {
     cell.style.textAlign = 'right'
     cell.style.paddingRight = '12px'
     return cell
+  }
+
+  // ─────────────────────────────────────────────
+  //  冻结列渲染（行分组列 / 值列 分离渲染）
+  // ─────────────────────────────────────────────
+
+  /** 渲染冻结区表头（仅行分组列名） */
+  public renderFrozenHeader(colTree: IPivotColNode | null): HTMLDivElement {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'vt-pivot-frozen-header-wrapper'
+
+    const rowGroupLabel = this.config.rowGroups
+      .map(key => this.columns.find(c => c.key === key)?.title ?? key)
+      .join(' / ')
+
+    const hasColGroups = !!(this.config.colGroups?.length) && colTree && colTree.children.length > 0
+
+    if (!hasColGroups) {
+      const row = this.createHeaderRow()
+      row.appendChild(this.createHeaderCell(rowGroupLabel, 1))
+      wrapper.appendChild(row)
+    } else {
+      const depth = this.getColTreeDepth(colTree)
+      for (let d = 0; d < depth; d++) {
+        const row = this.createHeaderRow()
+        row.appendChild(this.createHeaderCell(d === 0 ? rowGroupLabel : '', 1))
+        wrapper.appendChild(row)
+      }
+    }
+    return wrapper
+  }
+
+  /** 渲染滚动区表头（仅值列，不含行分组列） */
+  public renderScrollHeader(
+    colTree: IPivotColNode | null,
+    onSort?: (cellKey: string, direction: 'asc' | 'desc' | null) => void
+  ): HTMLDivElement {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'vt-pivot-header-wrapper'
+
+    const hasColGroups = !!(this.config.colGroups?.length) && colTree && colTree.children.length > 0
+    const currentSort = this.config.sortBy
+
+    if (!hasColGroups) {
+      const row = this.createHeaderRow()
+      for (const leaf of this.colLeaves) {
+        const vfKey = String(leaf.colValue)
+        const vf = this.config.valueFields.find(v => (v.label ?? v.key) === vfKey || v.key === vfKey)
+        const title = vf ? `${vf.label ?? this.columns.find(c => c.key === vf.key)?.title ?? vf.key}(${vf.aggregation})` : vfKey
+        const cellKey = vf?.key ?? vfKey
+        const isSorted = currentSort?.cellKey === cellKey
+        const cell = this.createSortableHeaderCell(title, 1, isSorted ? currentSort!.direction : null)
+        if (onSort) {
+          cell.style.cursor = 'pointer'
+          cell.addEventListener('click', () => {
+            const next = !isSorted ? 'desc' : currentSort!.direction === 'desc' ? 'asc' : null
+            onSort(cellKey, next)
+          })
+        }
+        row.appendChild(cell)
+      }
+      wrapper.appendChild(row)
+      return wrapper
+    }
+
+    const depth = this.getColTreeDepth(colTree)
+    for (let d = 0; d < depth; d++) {
+      const row = this.createHeaderRow()
+      const nodesAtDepth = this.getNodesAtDepth(colTree, d)
+      for (const node of nodesAtDepth) {
+        const isLeafRow = node.isLeaf
+        if (isLeafRow && onSort) {
+          const cellKey = this.getCellKey(node)
+          const isSorted = currentSort?.cellKey === cellKey
+          const cell = this.createSortableHeaderCell(String(node.colValue), node.leafCount, isSorted ? currentSort!.direction : null)
+          cell.style.textAlign = 'center'
+          cell.style.cursor = 'pointer'
+          cell.addEventListener('click', () => {
+            const next = !isSorted ? 'desc' : currentSort!.direction === 'desc' ? 'asc' : null
+            onSort(cellKey, next)
+          })
+          row.appendChild(cell)
+        } else {
+          const cell = this.createHeaderCell(String(node.colValue), node.leafCount)
+          cell.style.textAlign = 'center'
+          row.appendChild(cell)
+        }
+      }
+      wrapper.appendChild(row)
+    }
+    return wrapper
+  }
+
+  /** 渲染冻结区行单元格（行分组标签） */
+  public renderRowFrozenPart(flatRow: IPivotFlatRow): HTMLDivElement {
+    const cell = document.createElement('div')
+    cell.className = 'vt-table-cell vt-pivot-frozen-cell'
+
+    // 添加行类型样式（与滚动区行背景色保持一致）
+    if (flatRow.rowType === 'subtotal') cell.classList.add('vt-pivot-row-subtotal')
+    else if (flatRow.rowType === 'grandtotal') cell.classList.add('vt-pivot-row-grandtotal')
+    if (flatRow.type === 'group') {
+      cell.classList.add('vt-pivot-group-row')
+      cell.classList.add(`vt-pivot-group-row--l${Math.min(flatRow.level, 2)}`)
+    }
+
+    if (flatRow.rowType === 'subtotal') {
+      const indent = (flatRow.level + 1) * 20
+      cell.style.paddingLeft = `${indent + 8}px`
+      cell.textContent = '小计'
+      cell.style.color = '#374151'
+      cell.style.fontWeight = '600'
+    } else if (flatRow.rowType === 'grandtotal') {
+      cell.style.paddingLeft = '12px'
+      cell.textContent = '总计'
+      cell.style.fontWeight = '700'
+      cell.style.color = '#1f2937'
+    } else if (flatRow.type === 'group') {
+      const indent = flatRow.level * 20
+      cell.style.paddingLeft = `${indent + 8}px`
+      cell.classList.add('vt-pivot-group-cell')
+
+      const expandIcon = document.createElement('span')
+      expandIcon.className = 'vt-pivot-expand-icon'
+      expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
+      cell.appendChild(expandIcon)
+
+      const groupLabel = document.createElement('span')
+      groupLabel.className = 'vt-pivot-group-label'
+      const currentGroupKey = this.config.rowGroups[flatRow.level] ?? this.config.rowGroups[0]
+      groupLabel.textContent = String(flatRow.data[currentGroupKey] ?? '(空)')
+      cell.appendChild(groupLabel)
+
+      if (flatRow.rowCount) {
+        const badge = document.createElement('span')
+        badge.className = 'vt-pivot-count-badge'
+        badge.textContent = `(${flatRow.rowCount})`
+        cell.appendChild(badge)
+      }
+    } else {
+      const indent = flatRow.level * 20
+      cell.style.paddingLeft = `${indent + 28}px`
+      const firstKey = Object.keys(flatRow.data)[0]
+      cell.textContent = String(flatRow.data[firstKey] ?? '')
+    }
+
+    return cell
+  }
+
+  /** 渲染滚动区行（仅值列） */
+  public renderRowScrollPart(flatRow: IPivotFlatRow): HTMLDivElement {
+    const row = document.createElement('div')
+    row.className = 'vt-table-row vt-pivot-scroll-row'
+
+    if (flatRow.rowType === 'subtotal') row.classList.add('vt-pivot-row-subtotal')
+    else if (flatRow.rowType === 'grandtotal') row.classList.add('vt-pivot-row-grandtotal')
+    if (flatRow.type === 'group') {
+      row.classList.add('vt-pivot-group-row')
+      row.classList.add(`vt-pivot-group-row--l${Math.min(flatRow.level, 2)}`)
+    }
+
+    for (const leaf of this.colLeaves) {
+      const cellKey = this.getCellKey(leaf)
+      const extraClass = (flatRow.rowType === 'subtotal' || flatRow.rowType === 'grandtotal')
+        ? 'vt-pivot-total-value-cell'
+        : (flatRow.type === 'group' ? 'vt-pivot-agg-cell' : undefined)
+      const cell = this.createValueCell(flatRow.data[cellKey], extraClass)
+      if (flatRow.rowType === 'grandtotal') cell.style.fontWeight = '700'
+      else if (flatRow.rowType === 'subtotal') cell.style.fontWeight = '600'
+      row.appendChild(cell)
+    }
+
+    return row
   }
 
   public updateConfig(config: IPivotConfig, columns: IColumn[]): void {

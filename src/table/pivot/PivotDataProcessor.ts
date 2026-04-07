@@ -210,8 +210,47 @@ export class PivotDataProcessor {
   public buildPivotTree(data: Record<string, any>[]): IPivotTreeNode {
     const rowGroups = this.config.rowGroups
 
-    // 应用 rowFilters 预过滤：仅保留各分组字段允许的値
+    // 先应用全局 filters 预过滤（筛选器区域）
     let filteredData = data
+    const globalFilters = this.config.filters
+    if (globalFilters) {
+      for (const [field, filterValue] of Object.entries(globalFilters)) {
+        switch (filterValue.kind) {
+          case 'set':
+            // 文本/布尔多选筛选
+            if (filterValue.values.length > 0) {
+              const allowedSet = new Set(filterValue.values)
+              filteredData = filteredData.filter(row => 
+                allowedSet.has(String(row[field] ?? ''))
+              )
+            }
+            break
+          
+          case 'numberRange':
+            // 数值范围筛选
+            filteredData = filteredData.filter(row => {
+              const val = Number(row[field])
+              if (isNaN(val)) return false
+              if (filterValue.min != null && val < filterValue.min) return false
+              if (filterValue.max != null && val > filterValue.max) return false
+              return true
+            })
+            break
+          
+          case 'dateRange':
+            // 日期范围筛选（字符串比较 yyyy-MM-dd）
+            filteredData = filteredData.filter(row => {
+              const dateStr = String(row[field] ?? '')
+              if (filterValue.start && dateStr < filterValue.start) return false
+              if (filterValue.end && dateStr > filterValue.end) return false
+              return true
+            })
+            break
+        }
+      }
+    }
+
+    // 再应用 rowFilters 预过滤
     const rowFilters = this.config.rowFilters
     if (rowFilters) {
       for (const [field, allowed] of Object.entries(rowFilters)) {
@@ -264,11 +303,15 @@ export class PivotDataProcessor {
     parentId: string,
 
   ): IPivotTreeNode[] {
-    // 递归终止条件: 达到叶子层
-    if (level >= rowGroups.length) {
+    // 性能优化：限制最大层级深度（最多4层）
+    const MAX_LEVEL = 4
+    if (level >= rowGroups.length || level >= MAX_LEVEL) {
       // 有列分组时不创建数据行, 分组汇总行已足够
       if (this.config.colGroups?.length) return []
-      return data.map((row, i) =>
+      // 数据行也限制数量，避免过多叶子节点
+      const MAX_DATA_ROWS = 100
+      const limitedData = data.slice(0, MAX_DATA_ROWS)
+      return limitedData.map((row, i) =>
         PivotTreeNode.createDataNode(`${parentId}-data-${i}`, level, row)
       )
     }
@@ -278,11 +321,22 @@ export class PivotDataProcessor {
     // 按当前字段分组
     const groups = this.groupByField(data, groupKey)
 
+    // 性能优化：单层节点数量限制
+    const MAX_NODES_PER_LEVEL = 50
+    const groupEntries = Array.from(groups.entries())
+    
+    // 如果节点过多，按行数降序排序，只保留最重要的节点
+    if (groupEntries.length > MAX_NODES_PER_LEVEL) {
+      groupEntries.sort((a, b) => b[1].length - a[1].length)
+    }
+    
+    const limitedGroups = groupEntries.slice(0, MAX_NODES_PER_LEVEL)
+
     // 为每个分组值创建分组节点
     const nodes: IPivotTreeNode[] = []
     let index = 0
 
-    for (const [groupValue, rows] of groups.entries()) {
+    for (const [groupValue, rows] of limitedGroups) {
       // 计算当前分组的聚合数据
       const aggregatedData = this.computeAggregatedData(rows, groupKey, groupValue)
       // 创建分组节点

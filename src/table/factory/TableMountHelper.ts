@@ -18,6 +18,7 @@ export interface MountParams {
   store: TableStore
   mode: 'client' | 'server'
   originalColumns: IColumn[]
+  data: Record<string, any>[]  // 新增：原始数据，用于透视表筛选器
   widthStorage: ColumnWidthStorage | null 
   renderer: DOMRenderer
   headerSortBinder: HeaderSortBinder
@@ -47,6 +48,7 @@ export class MountHelper {
       store,
       mode,
       originalColumns,
+      data,  // 新增：原始数据
       widthStorage,
       renderer,
       headerSortBinder,
@@ -107,6 +109,7 @@ export class MountHelper {
         config,
         commonShellParams,
         originalColumns,
+        data,  // 传递原始数据
         widthStorage,
         store,
         lifecycle,
@@ -136,6 +139,7 @@ export class MountHelper {
     config: IConfig,
     commonShellParams: any,
     originalColumns: IColumn[],
+    data: Record<string, any>[],  // 新增：原始数据
     widthStorage: ColumnWidthStorage | null,
     store: TableStore,
     lifecycle: TableLifecycle,
@@ -233,10 +237,10 @@ export class MountHelper {
           id: 'columns',
           title: '列管理',
           icon: '⚙️',
-          component: ((store: TableStore, columns: IColumn[]) => {
+          component: ((store: TableStore, columns: IColumn[], data: Record<string, any>[]) => {
             // 这里 onPivotModeToggle 是外层 mountWithSidePanel 函数变量, 但已执行完
             // 但这里点击 "列管理", 需要去引用外层 onPivotModeToggle 变量 这样就形成了闭包捕获
-            return createColumnPanel(store, columns, onPivotModeToggle, onPivotConfigChange)
+            return createColumnPanel(store, columns, data, onPivotModeToggle, onPivotConfigChange)
           }) as any 
         }
       ]
@@ -251,6 +255,7 @@ export class MountHelper {
         panelConfigs,
         tabsContainer,
         originalColumns,
+        data,  // 传递原始数据
         (show: boolean) => { layoutManager.toggleSidePanel(show) },
       )
       // 挂载面板内容日期
@@ -258,8 +263,8 @@ export class MountHelper {
       // 只有在 defaultOpen 为 true 的释藏, 才显示默认面板
       if (sp.defaultOpen && sp.defaultPanel) {
         if (sp.defaultPanel === 'columns') {
-          // 列管理 tab 则需要将 原始列信息传入进去
-          sidePanelManager.togglePanel(sp.defaultPanel, originalColumns)
+          // 列管理 tab 则需要将 原始列信息和数据传入进去
+          sidePanelManager.togglePanel(sp.defaultPanel, originalColumns, data)
         } else {
           sidePanelManager.togglePanel(sp.defaultPanel)
         }

@@ -36,6 +36,9 @@ export interface IPivotConfig {
   // 列分组字段过滤: key=colGroupField, value=允许显示的列值集合（空数组=不过滤）
   colFilters?: Record<string, string[]>
 
+  // 筛选器区域字段过滤: key=filterField, value=筛选条件（支持文本多选/数值范围/日期范围）
+  filters?: Record<string, import('@/types').ColumnFilterValue>
+
   // 组内排序: 按某个聚合值字段升/降序
   sortBy?: { cellKey: string; direction: 'asc' | 'desc' } | null
 }
