@@ -171,8 +171,41 @@ export class PivotRenderer {
   }
 
   // ─────────────────────────────────────────────
-  //  行渲染
+  //  行渲染（单行双区架构）
   // ─────────────────────────────────────────────
+
+  /**
+   * 渲染完整行（包含冻结区和滚动区）
+   * 新架构：一行包含两部分，确保完美对齐
+   */
+  public renderUnifiedRow(flatRow: IPivotFlatRow, _rowIndex: number): HTMLDivElement {
+    const rowContainer = document.createElement('div')
+    rowContainer.className = 'vt-pivot-unified-row'
+    rowContainer.dataset.nodeId = flatRow.nodeId
+    rowContainer.dataset.type = flatRow.type
+    rowContainer.dataset.level = String(flatRow.level)
+    
+    // 添加行类型样式
+    if (flatRow.rowType === 'subtotal') rowContainer.classList.add('vt-pivot-row-subtotal')
+    else if (flatRow.rowType === 'grandtotal') rowContainer.classList.add('vt-pivot-row-grandtotal')
+    if (flatRow.type === 'group') {
+      rowContainer.classList.add('vt-pivot-group-row')
+      rowContainer.classList.add(`vt-pivot-group-row--l${Math.min(flatRow.level, 2)}`)
+    }
+    
+    // 冻结区部分
+    const frozenPart = this.renderRowFrozenPart(flatRow)
+    frozenPart.classList.add('vt-pivot-row-frozen-part')
+    
+    // 滚动区部分
+    const scrollPart = this.renderRowScrollPart(flatRow)
+    scrollPart.classList.add('vt-pivot-row-scroll-part')
+    
+    rowContainer.appendChild(frozenPart)
+    rowContainer.appendChild(scrollPart)
+    
+    return rowContainer
+  }
 
   public renderRow(flatRow: IPivotFlatRow, _rowIndex: number): HTMLDivElement {
     const row = document.createElement('div')

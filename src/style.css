@@ -973,7 +973,10 @@
 
 .vt-instance .vt-pivot-table .vt-table-row {
   display: flex;
-  height: auto;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  overflow: hidden;
 }
 
 .vt-instance .vt-pivot-table .vt-table-cell {
@@ -1601,6 +1604,38 @@
   min-height: 0;
 }
 
+/* ========== 单行双区架构（新）========== */
+
+/* 统一行容器：包含冻结部分和滚动部分 */
+.vt-instance .vt-pivot-unified-row {
+  display: flex;
+  flex-direction: row;
+  min-height: 32px;
+  height: 32px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* 行的冻结部分：固定220px */
+.vt-instance .vt-pivot-row-frozen-part {
+  flex: 0 0 220px;
+  min-width: 220px;
+  width: 220px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  border-right: 1px solid #d1d5db;
+  background-color: #ffffff;
+}
+
+/* 行的滚动部分：可滚动 */
+.vt-instance .vt-pivot-row-scroll-part {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-width: fit-content;
+  overflow: visible;
+}
+
 /* ── 冻结区（左侧固定，显示行分组列）── */
 .vt-instance .vt-pivot-frozen-col {
   flex: 0 0 220px;
@@ -1662,6 +1697,8 @@
 .vt-instance .vt-pivot-frozen-cell {
   width: 100%;
   height: 32px;
+  min-height: 32px;
+  max-height: 32px;
   line-height: 32px;
   box-sizing: border-box;
   white-space: nowrap;
@@ -1703,13 +1740,24 @@
   flex-direction: row;
   min-width: fit-content;
   width: fit-content;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  overflow: hidden;
 }
 
 .vt-instance .vt-pivot-scroll-row > .vt-table-cell {
   flex: none;
   min-width: 120px;
   width: 120px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  line-height: 32px;
   box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ========== 20. 展开/折叠按钮 ========== */
