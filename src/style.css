@@ -961,8 +961,10 @@
 
 .vt-instance .vt-pivot-header-cell {
   font-weight: 600;
-  color: #374151;
+  color: #1f2937;
   font-size: 14px;
+  background-color: #f9fafb;
+  border-right: 1px solid #e5e7eb;
 }
 
 .vt-instance .vt-pivot-header-cell:not(:first-child) {
@@ -991,44 +993,38 @@
 }
 
 .vt-instance .vt-pivot-group-row {
-  background-color: #f9fafb;
+  background-color: transparent;
   font-weight: 500;
 }
 
 .vt-instance .vt-pivot-group-row:hover {
-  background-color: #eff6ff;
+  background-color: #f9fafb;
 }
 
-/* 分组行分层视觉：L0 最深，L1 中，L2 最浅 */
+/* 分组行：简洁样式，无背景色 */
 .vt-instance .vt-pivot-group-row--l0 {
-  background-color: #e8edf5;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 13.5px;
-  border-left: 3px solid #6366f1;
 }
 
 .vt-instance .vt-pivot-group-row--l0:hover {
-  background-color: #dde5f5;
+  background-color: #f9fafb;
 }
 
 .vt-instance .vt-pivot-group-row--l1 {
-  background-color: #f0f4fb;
-  font-weight: 600;
-  border-left: 3px solid #a5b4fc;
+  font-weight: 500;
 }
 
 .vt-instance .vt-pivot-group-row--l1:hover {
-  background-color: #e8eef8;
+  background-color: #f9fafb;
 }
 
 .vt-instance .vt-pivot-group-row--l2 {
-  background-color: #f8fafc;
-  font-weight: 500;
-  border-left: 3px solid #e0e7ff;
+  font-weight: 400;
 }
 
 .vt-instance .vt-pivot-group-row--l2:hover {
-  background-color: #f0f4fb;
+  background-color: #f9fafb;
 }
 
 .vt-instance .vt-pivot-group-cell {
@@ -1084,13 +1080,12 @@
 /* ========== 14. 透视表小计与总计 ========== */
 
 .vt-instance .vt-pivot-row-subtotal {
-  background-color: #f3f3f6;
-  border-top: 1px solid #d1d5db;
-  border-bottom: 1px solid #d1d5db;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .vt-instance .vt-pivot-row-subtotal:hover {
-  background-color: #e5e7eb;
+  background-color: #f9fafb;
 }
 
 .vt-instance .vt-pivot-row-subtotal .vt-table-cell {
@@ -1101,14 +1096,14 @@
 .vt-instance .vt-pivot-row-grandtotal {
   position: sticky;
   bottom: 0;
-  background-color: #e5e7eb;
-  border-top: 1px solid #9ca3af;
-  border-bottom: 1px solid #9ca3af;
+  background-color: #ffffff;
+  border-top: 1px solid #d1d5db;
+  border-bottom: 1px solid #d1d5db;
   z-index: 2;
 }
 
 .vt-instance .vt-pivot-row-grandtotal:hover {
-  background-color: #d1d5db;
+  background-color: #f9fafb;
 }
 
 .vt-instance .vt-pivot-row-grandtotal .vt-table-cell {
@@ -1564,6 +1559,8 @@
   flex-direction: column;
   background-color: #f9fafb;
   border-bottom: 2px solid #e5e7eb;
+  min-width: fit-content;
+  width: fit-content;
   overflow-x: auto;
   overflow-y: hidden;
   /* 隐藏滚动条但保留滚动能力 */
@@ -1580,11 +1577,17 @@
   display: flex;
   flex-direction: row;
   min-width: fit-content;
+  width: fit-content;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .vt-instance .vt-pivot-header-wrapper > .vt-table-row:last-child {
   border-bottom: none;
+}
+
+.vt-instance .vt-pivot-header-wrapper .vt-table-cell {
+  /* 宽度由JS动态设置，不在CSS中覆盖 */
+  box-sizing: border-box;
 }
 
 /* ========== 冻结列布局 ========== */
@@ -1684,7 +1687,14 @@
 /* 滚动区表头容器（bg/border 由内部 header-wrapper 控制） */
 .vt-instance .vt-pivot-scroll-header-area {
   flex: 0 0 auto;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.vt-instance .vt-pivot-scroll-header-area::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 /* 滚动区数据行 */
@@ -1692,11 +1702,13 @@
   display: flex;
   flex-direction: row;
   min-width: fit-content;
+  width: fit-content;
 }
 
 .vt-instance .vt-pivot-scroll-row > .vt-table-cell {
-  flex: 1;
-  min-width: 100px;
+  flex: none;
+  min-width: 120px;
+  width: 120px;
   box-sizing: border-box;
 }
 

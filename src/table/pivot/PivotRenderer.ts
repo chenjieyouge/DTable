@@ -110,8 +110,8 @@ export class PivotRenderer {
   }
 
   /** 带排序图标的表头单元格 */
-  private createSortableHeaderCell(text: string, flex: number, direction: 'asc' | 'desc' | null): HTMLDivElement {
-    const cell = this.createHeaderCell('', flex)
+  private createSortableHeaderCell(text: string, leafCount: number, direction: 'asc' | 'desc' | null): HTMLDivElement {
+    const cell = this.createHeaderCell('', leafCount)
     const label = document.createElement('span')
     label.textContent = text
     const icon = document.createElement('span')
@@ -130,12 +130,16 @@ export class PivotRenderer {
     return row
   }
 
-  private createHeaderCell(text: string, flex: number): HTMLDivElement {
+  private createHeaderCell(text: string, leafCount: number): HTMLDivElement {
     const cell = document.createElement('div')
     cell.className = 'vt-table-cell vt-pivot-header-cell'
     cell.textContent = text
     cell.style.fontWeight = 'bold'
-    cell.style.flex = String(flex)
+    // 使用固定宽度而不是flex，确保多级列分组对齐
+    const cellWidth = leafCount * 120 // 每个叶子列120px
+    cell.style.minWidth = `${cellWidth}px`
+    cell.style.width = `${cellWidth}px`
+    cell.style.flex = 'none'
     return cell
   }
 
@@ -148,14 +152,21 @@ export class PivotRenderer {
   /** 广度优先获取某深度层的所有节点 */
   private getNodesAtDepth(root: IPivotColNode, targetDepth: number): IPivotColNode[] {
     const result: IPivotColNode[] = []
-    const queue: IPivotColNode[] = [...root.children]
-    for (const node of queue) {
+    const queue: { node: IPivotColNode }[] = root.children.map(node => ({ node }))
+    
+    while (queue.length > 0) {
+      const { node } = queue.shift()!
+      
       if (node.level === targetDepth) {
         result.push(node)
-      } else if (node.level < targetDepth) {
-        queue.push(...node.children)
+      }
+      
+      // 继续遍历子节点
+      if (node.level < targetDepth && node.children.length > 0) {
+        queue.push(...node.children.map(child => ({ node: child })))
       }
     }
+    
     return result
   }
 
@@ -318,6 +329,10 @@ export class PivotRenderer {
     cell.textContent = this.formatValue(value)
     cell.style.textAlign = 'right'
     cell.style.paddingRight = '12px'
+    // 固定宽度120px，确保和表头对齐
+    cell.style.minWidth = '120px'
+    cell.style.width = '120px'
+    cell.style.flex = 'none'
     return cell
   }
 
@@ -338,17 +353,31 @@ export class PivotRenderer {
 
     if (!hasColGroups) {
       const row = this.createHeaderRow()
-      row.appendChild(this.createHeaderCell(rowGroupLabel, 1))
+      const cell = this.createFrozenHeaderCell(rowGroupLabel)
+      row.appendChild(cell)
       wrapper.appendChild(row)
     } else {
       const depth = this.getColTreeDepth(colTree)
       for (let d = 0; d < depth; d++) {
         const row = this.createHeaderRow()
-        row.appendChild(this.createHeaderCell(d === 0 ? rowGroupLabel : '', 1))
+        const cell = this.createFrozenHeaderCell(d === 0 ? rowGroupLabel : '')
+        row.appendChild(cell)
         wrapper.appendChild(row)
       }
     }
     return wrapper
+  }
+  
+  /** 创建冻结区表头单元格（固定220px宽度） */
+  private createFrozenHeaderCell(text: string): HTMLDivElement {
+    const cell = document.createElement('div')
+    cell.className = 'vt-table-cell vt-pivot-header-cell'
+    cell.textContent = text
+    cell.style.fontWeight = 'bold'
+    cell.style.minWidth = '220px'
+    cell.style.width = '220px'
+    cell.style.flex = 'none'
+    return cell
   }
 
   /** 渲染滚动区表头（仅值列，不含行分组列） */

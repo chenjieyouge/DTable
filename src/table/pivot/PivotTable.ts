@@ -4,6 +4,7 @@ import { PivotDataProcessor } from "@/table/pivot/PivotDataProcessor";
 import { PivotRenderer } from "@/table/pivot/PivotRenderer";
 import { PivotConfigPanel } from "@/table/pivot/PivotConfigPanel";
 import { PivotTreeNode } from "@/table/pivot/PivotTreeNode";
+import { ColumnVirtualizer } from "@/table/pivot/ColumnVirtualizer";
 
 /**
  * 透视表主类 (虚拟滚动)
@@ -62,8 +63,17 @@ export class PivotTable {
   private readonly ROW_HEIGHT = 32 //  暂时写死行高就 32px
   private readonly BUFFER_ROWS =10 //  暂时写死缓存行 10行
 
+  // 列虚拟滚动
+  private columnVirtualizer: ColumnVirtualizer | null = null
+  private colLeaves: IPivotColNode[] = []
+  private visibleColStartIndex = 0
+  private visibleColEndIndex = 0
+
   // 绑定 scroll handler 引用, 方便 destroy 时移除
-  private scrollHandler = () => this.updateVisibleRows()
+  private scrollHandler = () => {
+    this.updateVisibleRows()
+    this.updateVisibleColumns()
+  }
 
   constructor(pivotConfig: IPivotConfig, columns: IColumn[], data: Record<string, any>[]) {
     this.pivotConfig = pivotConfig
@@ -213,16 +223,22 @@ export class PivotTable {
     if (!this.scrollContainer) return
 
     this.scrollContainer.addEventListener('scroll', () => {
+      const scrollTop = this.scrollContainer!.scrollTop
+      const scrollLeft = this.scrollContainer!.scrollLeft
+      
       // 同步冻结区垂直滚动
       if (this.frozenScrollContainer) {
-        this.frozenScrollContainer.scrollTop = this.scrollContainer!.scrollTop
+        this.frozenScrollContainer.scrollTop = scrollTop
       }
+      
       // 同步滚动区表头水平滚动
       if (this.scrollHeaderEl) {
-        const headerWrapper = this.scrollHeaderEl.querySelector('.vt-pivot-header-wrapper') as HTMLElement
-        if (headerWrapper) {
-          headerWrapper.scrollLeft = this.scrollContainer!.scrollLeft
-        }
+        this.scrollHeaderEl.scrollLeft = scrollLeft
+      }
+      
+      // 同步冻结区表头（如果有水平滚动）
+      if (this.frozenHeaderEl) {
+        this.frozenHeaderEl.scrollLeft = 0 // 冻结区表头不需要水平滚动
       }
     })
   }
@@ -311,7 +327,11 @@ export class PivotTable {
     const colLeaves = this.processor.getColLeaves()
     const colTree = this.processor.getColTree()
 
-    // 2. 注入列叶子给渲染器
+    // 2. 初始化列虚拟滚动器
+    this.colLeaves = colLeaves
+    this.columnVirtualizer = new ColumnVirtualizer(colLeaves)
+
+    // 3. 注入列叶子给渲染器
     this.renderer.setColLeaves(colLeaves)
 
     // 3. 构建行树
@@ -788,6 +808,48 @@ export class PivotTable {
       if (found) return found
     }
     return null
+  }
+  
+  /**
+   * 更新可见列（列虚拟滚动）
+   * 
+   * 流程：
+   * 1. 计算可见列范围
+   * 2. 更新表头和数据行的列
+   * 3. 优化大列数场景性能
+   */
+  private updateVisibleColumns(): void {
+    if (!this.scrollContainer || !this.columnVirtualizer) return
+    
+    const scrollLeft = this.scrollContainer.scrollLeft
+    const viewportWidth = this.scrollContainer.clientWidth
+    
+    const range = this.columnVirtualizer.getVisibleRange(scrollLeft, viewportWidth)
+    
+    // 如果可见范围没有变化，跳过更新
+    if (range.startIndex === this.visibleColStartIndex && 
+        range.endIndex === this.visibleColEndIndex) {
+      return
+    }
+    
+    this.visibleColStartIndex = range.startIndex
+    this.visibleColEndIndex = range.endIndex
+    
+    // 重新渲染表头和数据行
+    this.renderHeaderWithVirtualColumns()
+    this.updateVisibleRows()
+  }
+  
+  /**
+   * 渲染表头（支持列虚拟滚动）
+   */
+  private renderHeaderWithVirtualColumns(): void {
+    if (!this.scrollHeaderEl || !this.columnVirtualizer) return
+    
+    // 暂时简化：直接重新渲染整个表头
+    // TODO: 优化为增量更新
+    const colTree = this.processor.getColTree()
+    this.renderHeader(colTree)
   }
 
   /** 展开-所有分组节点 */
