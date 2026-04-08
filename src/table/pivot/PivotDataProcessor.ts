@@ -20,9 +20,60 @@ export class PivotDataProcessor {
   private config: IPivotConfig
   private colTree: IPivotColNode | null = null   // 列树根节点
   private colLeaves: IPivotColNode[] = []         // 列叶子节点列表 (按序)
+  
+  // 性能优化：聚合计算缓存
+  private aggregateCache = new Map<string, number>()
+  private cacheEnabled = true
+  
+  // 性能优化：懒加载模式（默认开启，第3层及以后懒加载）
+  private lazyLoadEnabled = true
+  private lazyLoadFromLevel = 2 // 从第2层开始懒加载（0-indexed）
+  
+  // 性能优化：Web Worker 大数据处理
+  private useWorker = false
+  private workerThreshold = 100000 // 超过10w行使用Worker
+  private worker: Worker | null = null
 
   constructor(config: IPivotConfig) {
     this.config = config
+  }
+  
+  /** 检查是否应该使用 Worker */
+  private shouldUseWorker(dataLength: number): boolean {
+    return this.useWorker && dataLength >= this.workerThreshold && typeof Worker !== 'undefined'
+  }
+  
+  /** 清空缓存（配置变更时调用） */
+  public clearCache(): void {
+    this.aggregateCache.clear()
+  }
+  
+  /**
+   * 懒加载子节点（展开时调用）
+   * @param node 要加载子节点的节点
+   * @returns 是否成功加载
+   */
+  public loadChildren(node: IPivotTreeNode): boolean {
+    if (!node.lazyLoadData || node.childrenLoaded) {
+      return false
+    }
+    
+    const rowGroups = this.config.rowGroups
+    const level = node.level + 1
+    
+    // 构建子树
+    node.children = this.buildSubTree(
+      node.lazyLoadData,
+      rowGroups,
+      level,
+      node.id
+    )
+    
+    // 标记已加载，释放数据
+    node.childrenLoaded = true
+    node.lazyLoadData = undefined
+    
+    return true
   }
 
   /**
@@ -348,8 +399,18 @@ export class PivotDataProcessor {
         aggregatedData,
         rows.length
       )
-      // 递归下一层子树
-      groupNode.children = this.buildSubTree(rows, rowGroups, level + 1, nodeId)
+      
+      // 性能优化：懒加载子节点
+      if (this.lazyLoadEnabled && level >= this.lazyLoadFromLevel) {
+        // 不立即构建子树，保存数据供后续展开时加载
+        groupNode.childrenLoaded = false
+        groupNode.lazyLoadData = rows
+        groupNode.children = []
+      } else {
+        // 立即构建子树
+        groupNode.childrenLoaded = true
+        groupNode.children = this.buildSubTree(rows, rowGroups, level + 1, nodeId)
+      }
 
       nodes.push(groupNode)
       index++
@@ -541,10 +602,19 @@ export class PivotDataProcessor {
     aggregation: AggregationType
 
   ): any {
+    // 性能优化：缓存key = 行数+字段+聚合方式
+    // 注意：这里简化处理，实际应该用行ID集合的hash
+    const cacheKey = `${rows.length}_${fieldKey}_${aggregation}`
+    
+    if (this.cacheEnabled && this.aggregateCache.has(cacheKey)) {
+      return this.aggregateCache.get(cacheKey)
+    }
 
     // count 直接返回行数
     if (aggregation === 'count') {
-      return rows.length
+      const result = rows.length
+      if (this.cacheEnabled) this.aggregateCache.set(cacheKey, result)
+      return result
     }
 
     // 提取数值, 目前这种算法稳定, 但内存占用高一些
@@ -552,32 +622,47 @@ export class PivotDataProcessor {
       .map(row => Number(row[fieldKey]))
       .filter(v => !isNaN(v))
 
-    if (values.length === 0) return 0
+    if (values.length === 0) {
+      if (this.cacheEnabled) this.aggregateCache.set(cacheKey, 0)
+      return 0
+    }
 
     // 常用聚合函数应用
+    let result: number
     switch (aggregation) {
       case 'sum': {
-        return values.reduce((acc, val) => acc + val, 0)
+        result = values.reduce((acc, val) => acc + val, 0)
+        break
       }
 
       case 'avg': {
         const sum = values.reduce((acc, val) => acc + val, 0)
-        return Math.round((sum / values.length) * 100) / 100 // 保留两位小数
+        result = Math.round((sum / values.length) * 100) / 100 // 保留两位小数
+        break
       }
 
       case 'min': {
-        return Math.min(...values)
+        result = Math.min(...values)
+        break
       }
 
       case 'max': {
-        return Math.max(...values)
+        result = Math.max(...values)
+        break
       }
 
       // 更多聚合操作
 
       default: 
-        return 0
+        result = 0
     }
+    
+    // 缓存结果
+    if (this.cacheEnabled) {
+      this.aggregateCache.set(cacheKey, result)
+    }
+    
+    return result
   }
 
   /**

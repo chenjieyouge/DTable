@@ -57,6 +57,8 @@ export interface IPivotTreeNode {
   isExpanded: boolean
   rowCount: number
   rawRows?: Record<string, any>[]
+  childrenLoaded?: boolean             // 懒加载标记：子节点是否已加载
+  lazyLoadData?: Record<string, any>[] // 懒加载数据：用于延迟构建子树
 }
 
 // 展平后的行 (用于虚拟滚动)

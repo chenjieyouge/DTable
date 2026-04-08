@@ -757,8 +757,18 @@ export class PivotTable {
   private toggleNode(nodeId: string): void {
     if (!this.treeRoot) return 
 
-    // 切换状态
-    PivotTreeNode.toggleNode(this.treeRoot, nodeId)
+    // 查找目标节点
+    const targetNode = this.findNodeById(this.treeRoot, nodeId)
+    if (!targetNode) return
+    
+    // 切换展开状态
+    targetNode.isExpanded = !targetNode.isExpanded
+    
+    // 性能优化：懒加载子节点
+    if (targetNode.isExpanded && !targetNode.childrenLoaded) {
+      this.processor.loadChildren(targetNode)
+    }
+    
     // 重新展平 (无需重新构建树, 只需重新展平即可)
     this.flatRows = PivotTreeNode.flattenTree(
       this.treeRoot,
@@ -768,6 +778,16 @@ export class PivotTable {
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
+  }
+  
+  /** 查找节点（用于懒加载） */
+  private findNodeById(node: IPivotTreeNode, nodeId: string): IPivotTreeNode | null {
+    if (node.id === nodeId) return node
+    for (const child of node.children) {
+      const found = this.findNodeById(child, nodeId)
+      if (found) return found
+    }
+    return null
   }
 
   /** 展开-所有分组节点 */
@@ -926,6 +946,7 @@ export class PivotTable {
    */
   private onConfigChange(newConfig: IPivotConfig): void {
     this.pivotConfig = newConfig
+    this.processor.clearCache() // 清空聚合缓存
     this.processor.updateConfig(newConfig)
     this.renderer.updateConfig(newConfig, this.columns)
     this.refresh()

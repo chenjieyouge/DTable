@@ -783,16 +783,22 @@ export class ColumnPanel implements IPanel {
   private showSetFilter(fieldKey: string, col: import('@/types').IColumn | undefined, anchor: HTMLElement): void {
     const title = col?.title ?? fieldKey
 
-    // 从原始数据收集该字段的唯一值
+    // 性能优化：限制最多200个唯一值，避免大数据量卡顿
+    const MAX_UNIQUE_VALUES = 200
     const seen = new Set<string>()
     const allValues: string[] = []
+    
     for (const row of this.data) {
+      if (allValues.length >= MAX_UNIQUE_VALUES) break // 达到上限停止
       const v = String(row[fieldKey] ?? '')
       if (v && !seen.has(v)) {
         seen.add(v)
         allValues.push(v)
       }
     }
+    
+    // 按字母/数字排序，提升用户体验
+    allValues.sort((a, b) => a.localeCompare(b, 'zh-CN'))
 
     const filterValue = this.filters[fieldKey]
     const activeSet = new Set(filterValue && filterValue.kind === 'set' ? filterValue.values : [])
@@ -800,11 +806,21 @@ export class ColumnPanel implements IPanel {
     const dropdown = document.createElement('div')
     dropdown.className = 'vt-px-filter-picker'
 
-    // 标题
+    // 标题 + 数量提示
     const header = document.createElement('div')
     header.className = 'vt-px-filter-header'
-    header.textContent = title
+    const headerText = allValues.length >= MAX_UNIQUE_VALUES 
+      ? `${title} (显示前${MAX_UNIQUE_VALUES}个)`
+      : `${title} (${allValues.length}个)`
+    header.textContent = headerText
     dropdown.appendChild(header)
+
+    // 搜索框
+    const searchBox = document.createElement('input')
+    searchBox.type = 'text'
+    searchBox.className = 'vt-px-filter-search'
+    searchBox.placeholder = '搜索...'
+    dropdown.appendChild(searchBox)
 
     // 全选/清空
     const actions = document.createElement('div')
@@ -826,18 +842,41 @@ export class ColumnPanel implements IPanel {
     // 值列表
     const list = document.createElement('div')
     list.className = 'vt-px-filter-list'
-    for (const val of allValues) {
-      const item = document.createElement('label')
-      item.className = 'vt-px-filter-item'
-      const cb = document.createElement('input')
-      cb.type = 'checkbox'
-      cb.value = val
-      cb.checked = activeSet.size === 0 || activeSet.has(val)
-      item.appendChild(cb)
-      item.appendChild(document.createTextNode(val))
-      list.appendChild(item)
+    
+    const renderList = (searchTerm: string = '') => {
+      list.innerHTML = ''
+      const filtered = searchTerm 
+        ? allValues.filter(v => v.toLowerCase().includes(searchTerm.toLowerCase()))
+        : allValues
+      
+      if (filtered.length === 0) {
+        const empty = document.createElement('div')
+        empty.className = 'vt-px-filter-empty'
+        empty.textContent = '无匹配项'
+        list.appendChild(empty)
+        return
+      }
+      
+      for (const val of filtered) {
+        const item = document.createElement('label')
+        item.className = 'vt-px-filter-item'
+        const cb = document.createElement('input')
+        cb.type = 'checkbox'
+        cb.value = val
+        cb.checked = activeSet.size === 0 || activeSet.has(val)
+        item.appendChild(cb)
+        item.appendChild(document.createTextNode(val))
+        list.appendChild(item)
+      }
     }
+    
+    renderList()
     dropdown.appendChild(list)
+    
+    // 搜索框事件
+    searchBox.addEventListener('input', () => {
+      renderList(searchBox.value.trim())
+    })
 
     // 确认按钮
     const confirmBtn = document.createElement('button')
