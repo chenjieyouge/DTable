@@ -108,7 +108,9 @@ func GetSummary(c *gin.Context) {
 func GetFilterOptions(c *gin.Context) {
 	var body models.FilterOptionsBody
 
-	if err := c.ShouldBindJSON(&body); err != nil {
+	// 该路由注册为 GET, 参数只能从 query string 绑定,
+	// 用 ShouldBindJSON 读请求体会因 GET 无 body 而恒失败
+	if err := c.ShouldBindQuery(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "columnKey 参数缺失"})
 		return
 	}
@@ -118,6 +120,7 @@ func GetFilterOptions(c *gin.Context) {
 
 	if err := config.DB.Raw(query).Scan(&options).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询筛选选项失败"})
+		return // 缺少 return 会继续往下走, 造成二次写响应
 	}
 
 	c.JSON(http.StatusOK, options)

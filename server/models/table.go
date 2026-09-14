@@ -44,7 +44,8 @@ type PageQueryBody struct {
 	Filters   map[string]interface{} `json:"filters"`
 }
 
+// 筛选选项接口的参数 (路由为 GET, 故用 form 标签从 query string 绑定)
 type FilterOptionsBody struct {
-	Columnkey string                 `json:"columnKey" binding:"required"`
-	Filters   map[string]interface{} `json:"filters"`
+	Columnkey string                 `form:"columnKey" binding:"required"`
+	Filters   map[string]interface{} `form:"filters"`
 }

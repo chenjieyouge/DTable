@@ -1008,7 +1008,6 @@ export class PivotTable {
    */
   private onConfigChange(newConfig: IPivotConfig): void {
     this.pivotConfig = newConfig
-    this.processor.clearCache() // 清空聚合缓存
     this.processor.updateConfig(newConfig)
     this.renderer.updateConfig(newConfig, this.columns)
     this.refresh()

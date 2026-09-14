@@ -21,10 +21,6 @@ export class PivotDataProcessor {
   private colTree: IPivotColNode | null = null   // 列树根节点
   private colLeaves: IPivotColNode[] = []         // 列叶子节点列表 (按序)
   
-  // 性能优化：聚合计算缓存
-  private aggregateCache = new Map<string, number>()
-  private cacheEnabled = true
-  
   // 性能优化：懒加载模式（默认开启，第3层及以后懒加载）
   private lazyLoadEnabled = true
   private lazyLoadFromLevel = 2 // 从第2层开始懒加载（0-indexed）
@@ -41,11 +37,6 @@ export class PivotDataProcessor {
   /** 检查是否应该使用 Worker */
   private shouldUseWorker(dataLength: number): boolean {
     return this.useWorker && dataLength >= this.workerThreshold && typeof Worker !== 'undefined'
-  }
-  
-  /** 清空缓存（配置变更时调用） */
-  public clearCache(): void {
-    this.aggregateCache.clear()
   }
   
   /**
@@ -602,19 +593,13 @@ export class PivotDataProcessor {
     aggregation: AggregationType
 
   ): any {
-    // 性能优化：缓存key = 行数+字段+聚合方式
-    // 注意：这里简化处理，实际应该用行ID集合的hash
-    const cacheKey = `${rows.length}_${fieldKey}_${aggregation}`
-    
-    if (this.cacheEnabled && this.aggregateCache.has(cacheKey)) {
-      return this.aggregateCache.get(cacheKey)
-    }
+    // 注意: 这里不能以 `行数_字段_聚合方式` 做缓存 —— 行数无法唯一标识一组行,
+    // 行数相同的两个分组会互相命中缓存, 拿到别人的聚合值。
+    // 且单次构建中每个 (分组, 数值字段) 组合只会算一次, 这层缓存本就没有收益。
 
     // count 直接返回行数
     if (aggregation === 'count') {
-      const result = rows.length
-      if (this.cacheEnabled) this.aggregateCache.set(cacheKey, result)
-      return result
+      return rows.length
     }
 
     // 提取数值, 目前这种算法稳定, 但内存占用高一些
@@ -623,7 +608,6 @@ export class PivotDataProcessor {
       .filter(v => !isNaN(v))
 
     if (values.length === 0) {
-      if (this.cacheEnabled) this.aggregateCache.set(cacheKey, 0)
       return 0
     }
 
@@ -655,11 +639,6 @@ export class PivotDataProcessor {
 
       default: 
         result = 0
-    }
-    
-    // 缓存结果
-    if (this.cacheEnabled) {
-      this.aggregateCache.set(cacheKey, result)
     }
     
     return result
