@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"div_table_server/config"
 	"div_table_server/models"
@@ -11,11 +12,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// 筛选选项最多返回多少个不同值
+//
+// 加上限的原因: 门店 这类高基数字段去重后可能有几万个值, 全量返回会让下拉框
+// 既不可用又拖慢网络。这里与前端 ClientDataStrategy 的 1000 上限保持一致。
+const maxFilterOptions = 1000
+
 // 获取分页数据
 func GetTablePage(c *gin.Context) {
 	var params models.PageQueryBody
 
-	// 先绑定请求体参数, 不是之前的 查询参数哦, 现在都改为 post 请求了, 在 body 里面
+	// 先绑定请求体参数, 分页/筛选/排序都在 body 里
 	if err := c.ShouldBindJSON(&params); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -26,7 +33,7 @@ func GetTablePage(c *gin.Context) {
 		params.PageSize = 50
 	}
 
-	db := config.DB.Model(&models.TableData{})
+	db := config.DB.Model(&models.RetailSales{})
 
 	// 应用筛选
 	if len(params.Filters) > 0 {
@@ -46,10 +53,11 @@ func GetTablePage(c *gin.Context) {
 	}
 
 	// 查询分页
-	var list []models.TableData
+	var list []models.RetailSales
 	offset := params.PageIndex * params.PageSize
 	if err := db.Offset(offset).Limit(params.PageSize).Find(&list).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询数据失败"})
+		return // 缺少 return 会继续往下走, 返回一份空列表却带着 200
 	}
 
 	// 计算汇总数据 (可选)
@@ -63,35 +71,26 @@ func GetTablePage(c *gin.Context) {
 }
 
 // 计算汇总数据
+//
+// 只聚合 积分额:
+//   - 销量 在原始数据里恒为 1, 聚合它毫无意义 (sum 恒等于 count), 放进汇总行只会误导人
+//   - 返回的 key 必须与列 key 一致, 前端的 updateSummaryRow 是拿 data[col.key] 去取的,
+//     返回英文 key(如 sumPoints) 会导致汇总行整列显示为空
 func calculateSummary(db *gorm.DB) map[string]interface{} {
 	var result struct {
-		TotalCount int64
-		AvgSalary  float64
-		MaxSalary  float64
-		MinSalary  float64
-		SumSalary  float64
+		SumPoints float64
 	}
 
-	db.Select(`
-	  count(*)      as total_count
-		, avg(salary) as avg_salary 
-		, max(salary) as max_salary
-		, min(salary) as min_salary
-		, sum(salary) as sum_salary
-	`).Scan(&result)
+	db.Select("sum(`积分额`) as sum_points").Scan(&result)
 
 	return map[string]interface{}{
-		"totalCount": result.TotalCount,
-		"avgSalary":  result.AvgSalary,
-		"maxSalary":  result.MaxSalary,
-		"minSalary":  result.MinSalary,
-		"sumSalary":  result.SumSalary,
+		"积分额": result.SumPoints,
 	}
 }
 
 // 获取汇总数据
 func GetSummary(c *gin.Context) {
-	db := config.DB.Model(&models.TableData{})
+	db := config.DB.Model(&models.RetailSales{})
 
 	// 应用筛选, 如果有
 	var filters map[string]interface{}
@@ -99,9 +98,7 @@ func GetSummary(c *gin.Context) {
 		db = utils.ApplyFilters(db, filters)
 	}
 
-	summary := calculateSummary(db)
-
-	c.JSON(http.StatusOK, summary)
+	c.JSON(http.StatusOK, calculateSummary(db))
 }
 
 // 获取筛选选项
@@ -123,68 +120,62 @@ func GetFilterOptions(c *gin.Context) {
 	}
 
 	var options []string
-	// column 来自白名单常量, 不是请求原文, 因此拼接安全
-	query := "select distinct " + column + " from table_data where " + column + " is not null"
+	// column 来自白名单常量, 不是请求原文, 因此拼接安全。
+	// 中文标识符统一加反引号, 避免个别字符被 SQL 解析器误读。
+	query := "select distinct `" + column + "` from `" + models.TableNameRetailSales +
+		"` where `" + column + "` is not null limit " + strconv.Itoa(maxFilterOptions)
 
 	if err := config.DB.Raw(query).Scan(&options).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询筛选选项失败"})
-		return // 缺少 return 会继续往下走, 造成二次写响应
+		return
 	}
 
 	c.JSON(http.StatusOK, options)
 }
 
-// 获取全量数据 (用于 client 模式 一次性全加载)
+// 获取全量数据 (用于 client 模式一次性全加载)
 func GetAllData(c *gin.Context) {
 	var params struct {
-		Sort   string                 `form:"sort"`   // 格式: "name:asc" 或 "age:desc"
-		Filter map[string]interface{} `form:"filter"` // 筛选条件
-		Limit  int                    `form:"limit"`  // 最大返回量, 防止数据过大
+		Sort   string                 `form:"sort"`
+		Filter map[string]interface{} `form:"filter"`
+		Limit  int                    `form:"limit"`
 	}
 
-	// 绑定查询参数
 	if err := c.ShouldBindQuery(&params); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 设置默认限制值, 防止一次性加载太多搞爆服务器
+	// 默认最多 100w 条, 防止一次性加载太多搞爆服务器
 	if params.Limit == 0 {
-		params.Limit = 1000000 // 默认最多 100w 条
+		params.Limit = 1000000
 	}
 
-	db := config.DB.Model(&models.TableData{})
+	db := config.DB.Model(&models.RetailSales{})
 
-	// 应用筛选
 	if len(params.Filter) > 0 {
 		db = utils.ApplyFilters(db, params.Filter)
 	}
 
-	// 应用排序
 	if params.Sort != "" {
 		db = utils.ApplySort(db, params.Sort)
 	}
 
-	// 查询总数
 	var totalRows int64
 	if err := db.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询总行数失败"})
 		return
 	}
 
-	// 查询全量数据 (带限制条件)
-	var list []models.TableData
+	var list []models.RetailSales
 	if err := db.Limit(params.Limit).Find(&list).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询数据失败"})
 		return
 	}
 
-	// 计算汇总数据
-	summary := calculateSummary(db)
-
 	c.JSON(http.StatusOK, models.PageResponse{
 		List:      list,
 		TotalRows: totalRows,
-		Summary:   summary,
+		Summary:   calculateSummary(db),
 	})
 }

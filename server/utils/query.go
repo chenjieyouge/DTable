@@ -51,23 +51,27 @@ func ApplyFilters(db *gorm.DB, filters map[string]interface{}) *gorm.DB {
 			continue
 		}
 
+		// 中文列名统一加反引号, 避免个别字符被 SQL 解析器误读。
+		// column 来自白名单常量, 不是请求原文, 拼接安全; 值一律走 ? 占位符。
+		col := "`" + column + "`"
+
 		switch v := value.(type) {
 		case string:
 			// 文本筛选, 精准匹配
-			db = db.Where(column+" = ?", v)
+			db = db.Where(col+" = ?", v)
 
 		case []interface{}:
 			// 数组筛选: in 查询
-			db = db.Where(column+" in ?", v)
+			db = db.Where(col+" in ?", v)
 
 		case map[string]interface{}:
 			// 范围筛选: 支持 min/max
 			if min, ok := v["min"]; ok {
-				db = db.Where(column+" >= ?", min)
+				db = db.Where(col+" >= ?", min)
 			}
 
 			if max, ok := v["max"]; ok {
-				db = db.Where(column+" <= ?", max)
+				db = db.Where(col+" <= ?", max)
 			}
 		}
 	}

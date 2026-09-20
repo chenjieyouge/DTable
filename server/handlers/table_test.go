@@ -29,7 +29,9 @@ func newFilterOptionsRouter() *gin.Engine {
 
 func TestFilterOptionsAcceptsColumnKeyFromQuery(t *testing.T) {
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/table/filter-options?columnKey=region", nil)
+	// 注意用 url.Values 编码中文, 否则不是合法的 query string
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/table/filter-options?columnKey="+url.QueryEscape("省"), nil)
 
 	newFilterOptionsRouter().ServeHTTP(w, req)
 
@@ -54,10 +56,11 @@ func TestFilterOptionsRejectsMissingColumnKey(t *testing.T) {
 // 非法字段名会被拼进 SQL 语句, 必须在进入查询前就拒绝
 func TestFilterOptionsRejectsIllegalColumn(t *testing.T) {
 	payloads := []string{
-		"region;DROP TABLE table_data--",
-		"region) UNION SELECT password FROM users--",
+		"省;DROP TABLE retail_sales--",
+		"省) UNION SELECT password FROM users--",
 		"1=1",
 		"password",
+		"id", // 代理主键不在白名单
 	}
 
 	for _, p := range payloads {

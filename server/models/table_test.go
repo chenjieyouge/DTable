@@ -9,41 +9,35 @@ import (
 // 字段名白名单是这类 SQL 注入的唯一防线:
 // 请求里的字段名会被拼进 SQL 语句文本, 参数绑定(?)只能保护"值", 保护不了"字段名"。
 func TestResolveColumnAcceptsSchemaFields(t *testing.T) {
-	cases := map[string]string{
-		"id":         "id",
-		"name":       "name",
-		"age":        "age",
-		"region":     "region",
-		"department": "department",
-		"salary":     "salary",
-		"status":     "status",
-		"joinDate":   "join_date", // API 名与数据库列名不一致, 必须正确映射
-		"createdAt":  "created_at",
-		"updatedAt":  "updated_at",
+	cols := []string{
+		"激活日期", "品牌", "二级", "省", "城市", "区县", "门店",
+		"品类", "渠道类型", "市场层级", "条码", "销量", "积分额",
 	}
 
-	for apiName, wantCol := range cases {
-		gotCol, ok := models.ResolveColumn(apiName)
+	for _, c := range cols {
+		got, ok := models.ResolveColumn(c)
 		if !ok {
-			t.Errorf("ResolveColumn(%q) 应被接受, 实际被拒绝", apiName)
+			t.Errorf("ResolveColumn(%q) 应被接受, 实际被拒绝", c)
 			continue
 		}
-		if gotCol != wantCol {
-			t.Errorf("ResolveColumn(%q) = %q, 期望 %q", apiName, gotCol, wantCol)
+		if got != c {
+			t.Errorf("ResolveColumn(%q) = %q, 期望 %q", c, got, c)
 		}
 	}
 }
 
 func TestResolveColumnRejectsIllegalNames(t *testing.T) {
 	payloads := []string{
-		"region;DROP TABLE table_data--",
-		"region) UNION SELECT password FROM users--",
-		"region,password",
+		"省;DROP TABLE retail_sales--",
+		"省) UNION SELECT password FROM users--",
+		"省,password",
 		"1=1",
-		"region WHERE 1=1",
-		"`region`",
+		"省 WHERE 1=1",
+		"`省`",
 		"users.password",
+		"id",         // 代理主键不在白名单里, 不该允许前端拿它排序/筛选
 		"password",
+		"region",     // 旧 schema 的字段, 换成新表后必须失效
 		"",
 		" ",
 	}
