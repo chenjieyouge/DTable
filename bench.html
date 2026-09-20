@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DTable 性能基准</title>
+    <style>
+      /* 仅基准页使用, 不污染库的 style.css */
+      body {
+        margin: 0;
+        font: 13px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+        background: #f5f6f8;
+        color: #1f2329;
+      }
+      .bench-panel {
+        max-width: 1100px;
+        margin: 24px auto 16px;
+        padding: 20px 24px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .bench-panel h1 { margin: 0 0 12px; font-size: 18px; }
+      .bench-env {
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        background: #f7f8fa;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #4e5969;
+      }
+      .bench-ua { color: #86909c; word-break: break-all; margin-top: 4px; }
+      .bench-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+      .bench-actions button {
+        padding: 7px 16px;
+        border: 1px solid #c9cdd4;
+        border-radius: 5px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .bench-actions button:hover:not(:disabled) { border-color: #165dff; color: #165dff; }
+      .bench-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+      #bench-run { background: #165dff; border-color: #165dff; color: #fff; }
+      #bench-run:hover:not(:disabled) { background: #0e42d2; color: #fff; }
+      .bench-hint { font-size: 12px; color: #86909c; }
+      .bench-hint code { background: #f2f3f5; padding: 1px 5px; border-radius: 3px; }
+      table.bench-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      table.bench-table th, table.bench-table td {
+        padding: 7px 10px;
+        border-bottom: 1px solid #e5e6eb;
+        text-align: left;
+      }
+      table.bench-table th { background: #f7f8fa; color: #4e5969; font-weight: 500; }
+      .bench-num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+      .bench-unit { color: #86909c; width: 48px; }
+      .bench-note { color: #86909c; font-size: 12px; }
+      .bench-empty { text-align: center; color: #86909c; padding: 20px; }
+      #bench-table { max-width: 1100px; margin: 0 auto 40px; }
+    </style>
+  </head>
+  <body>
+    <div id="bench-root"></div>
+    <script type="module" src="/src/bench.ts"></script>
+  </body>
+</html>
