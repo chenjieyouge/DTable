@@ -23,7 +23,8 @@ export class TableResizeBinder {
     corner.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
       <path d="M2 10 L10 2 M6 10 L10 6 M10 10 L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`
-    corner.title = '拖拽调整表格大小'
+    corner.setAttribute('data-vt-tip', '拖拽调整表格大小')
+    corner.setAttribute('aria-label', '拖拽调整表格大小')
     portalContainer.appendChild(corner)
     this.resizeCorner = corner
 
@@ -154,7 +155,8 @@ export class TableResizeBinder {
         <path d="M10 2v12M6 2v12" stroke="currentColor" stroke-width="2"/>
       </svg>
     `
-    this.resizeBtn.title = '拖拽调整表格宽度'
+    this.resizeBtn.setAttribute('data-vt-tip', '拖拽调整表格宽度')
+    this.resizeBtn.setAttribute('aria-label', '拖拽调整表格宽度')
     
     // 绑定拖拽事件
     this.onMouseDown = (e: MouseEvent) => {

@@ -45,7 +45,8 @@ export class PivotConfigPanel {
     const quickBtn = document.createElement('button')
     quickBtn.className = 'vt-pivot-quick-btn'
     quickBtn.textContent = '🚀 快速透视'
-    quickBtn.title = '智能识别维度和度量，一键生成透视表'
+    quickBtn.setAttribute('data-vt-tip', '智能识别维度和度量，一键生成透视表')
+    quickBtn.setAttribute('aria-label', '智能识别维度和度量，一键生成透视表')
     quickBtn.addEventListener('click', () => this.quickPivot())
     header.appendChild(quickBtn)
 

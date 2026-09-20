@@ -223,7 +223,8 @@ export class DOMRenderer {
               <path d="M1 2h12l-5 6v4l-2 1V8L1 2z"/>
             </svg>
           `
-          filterBtn.title = '筛选'
+          filterBtn.setAttribute('data-vt-tip', '筛选')
+          filterBtn.setAttribute('aria-label', '筛选')
           cell.appendChild(filterBtn)
         }
 
@@ -238,7 +239,8 @@ export class DOMRenderer {
             <circle cx="8" cy="13" r="1.5"/>
           </svg>
         `
-        menuBtn.title = '列菜单'
+        menuBtn.setAttribute('data-vt-tip', '列菜单')
+        menuBtn.setAttribute('aria-label', '列菜单')
         cell.appendChild(menuBtn)
 
       } else if (type === 'summary') {
@@ -291,7 +293,8 @@ export class DOMRenderer {
           <path d="M1 2h12l-5 6v4l-2 1V8L1 2z"/>
         </svg>
       `
-      filterBtn.title = '筛选'
+      filterBtn.setAttribute('data-vt-tip', '筛选')
+      filterBtn.setAttribute('aria-label', '筛选')
       cell.appendChild(filterBtn)
     }
 
@@ -306,7 +309,8 @@ export class DOMRenderer {
         <circle cx="8" cy="13" r="1.5"/>
       </svg>
     `
-    menuBtn.title = '列菜单'
+    menuBtn.setAttribute('data-vt-tip', '列菜单')
+    menuBtn.setAttribute('aria-label', '列菜单')
     cell.appendChild(menuBtn)
 
     // 添加-冻结列处理

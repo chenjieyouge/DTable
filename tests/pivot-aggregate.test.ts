@@ -3,6 +3,92 @@ import { PivotDataProcessor } from '@/table/pivot/PivotDataProcessor'
 import type { IPivotConfig } from '@/types/pivot'
 
 /**
+ * 截断策略回归测试
+ *
+ * 行方向和列方向的处理是刻意不同的:
+ *   行 —— 不截断。代价是线性的(每层把行分一遍组), 渲染有虚拟滚动兜着,
+ *        静默丢分组只会产出一张"看着正常但少了数据"的表。
+ *   列 —— 必须限制。列数是各列分组唯一值数量的乘积, 会指数爆炸;
+ *        但超限时应当拒绝渲染, 而不是只显示前 N 列。
+ */
+describe('PivotDataProcessor 截断策略', () => {
+  it('行分组不再静默截断: 超过 50 个分组也全部保留', () => {
+    // 旧实现有 MAX_NODES_PER_LEVEL = 50, 超出部分直接丢弃
+    const data = Array.from({ length: 120 }, (_, i) => ({
+      region: `区域${i}`,
+      salary: i + 1,
+    }))
+
+    const processor = new PivotDataProcessor({
+      enabled: true,
+      rowGroups: ['region'],
+      valueFields: [{ key: 'salary', aggregation: 'sum' }],
+    })
+    processor.buildColTree(data)
+    const root = processor.buildPivotTree(data)
+
+    expect(root.children).toHaveLength(120)
+  })
+
+  it('行分组保持数据原始出现顺序, 不按行数重排', () => {
+    // 旧实现在超过阈值时会先按行数降序排序再截断, 导致行顺序随数据量漂移
+    const data = [
+      { region: '乙', salary: 1 },
+      { region: '乙', salary: 1 },
+      { region: '乙', salary: 1 },
+      { region: '甲', salary: 1 },
+    ]
+
+    const processor = new PivotDataProcessor({
+      enabled: true,
+      rowGroups: ['region'],
+      valueFields: [{ key: 'salary', aggregation: 'sum' }],
+    })
+    processor.buildColTree(data)
+    const root = processor.buildPivotTree(data)
+
+    expect(root.children.map((c) => c.groupValue)).toEqual(['乙', '甲'])
+  })
+
+  it('列数超过 colMaxLeafCols 时置截断标记', () => {
+    const data = Array.from({ length: 30 }, (_, i) => ({
+      region: `R${i}`,
+      product: `P${i}`,
+      salary: 1,
+    }))
+
+    const processor = new PivotDataProcessor({
+      enabled: true,
+      rowGroups: ['region'],
+      colGroups: ['product'],
+      valueFields: [{ key: 'salary', aggregation: 'sum' }],
+      colMaxLeafCols: 5,
+    })
+    processor.buildColTree(data)
+
+    expect(processor.isColTruncated()).toBe(true)
+  })
+
+  it('列数在上限内时不置截断标记', () => {
+    const data = [
+      { region: 'A', product: 'P1', salary: 1 },
+      { region: 'B', product: 'P2', salary: 2 },
+    ]
+
+    const processor = new PivotDataProcessor({
+      enabled: true,
+      rowGroups: ['region'],
+      colGroups: ['product'],
+      valueFields: [{ key: 'salary', aggregation: 'sum' }],
+      colMaxLeafCols: 50,
+    })
+    processor.buildColTree(data)
+
+    expect(processor.isColTruncated()).toBe(false)
+  })
+})
+
+/**
  * PivotDataProcessor 聚合正确性回归测试
  *
  * 背景: aggregate() 曾以 `${rows.length}_${fieldKey}_${aggregation}` 作为缓存 key,

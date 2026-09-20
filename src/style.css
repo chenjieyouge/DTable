@@ -45,6 +45,9 @@
   --vt-danger: #dc2626;
   --vt-danger-bg: #fef2f2;
 
+  /* 覆盖层 */
+  --vt-tooltip-bg: rgba(29, 33, 41, 0.92);
+
   --vt-shadow-popup: 0 2px 8px rgba(0, 0, 0, 0.15);
   --vt-shadow-panel: -2px 0 8px rgba(0, 0, 0, 0.15);
 }
@@ -278,12 +281,55 @@
   width: 2px;
 }
 
+/* ===== 自绘 Tooltip =====
+   挂在 document.body 上(不在 .vt-instance 内), 靠 :root 上的令牌取色 */
+.vt-tooltip {
+  position: fixed;
+  display: none;
+  z-index: 10000;
+  max-width: 260px;
+  padding: 5px 9px;
+  border-radius: 4px;
+  background: var(--vt-tooltip-bg);
+  color: var(--vt-text-inverse);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  word-break: break-word;
+}
+
+/* 列序拖拽落点指示: 竖条 + 顶部小方块。
+   小方块的作用是让人一眼看出"会插到哪一列的左边", 光一条线在密集表头里不好辨认 */
+.vt-instance .vt-col-drag-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background-color: var(--vt-primary);
+  pointer-events: none;
+  z-index: 998;
+}
+.vt-instance .vt-col-drag-indicator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 0 0 2px 2px;
+  background-color: var(--vt-primary);
+}
+
+/* 列宽拖拽参考线: 覆盖整个可见区域(top/bottom 0), 挂在不滚动的父层上 */
 .vt-instance .vt-col-resize-guide {
   position: absolute;
   top: 0;
-  width: 1px;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
   background-color: var(--vt-primary);
-  height: 100%;
+  opacity: 0.7;
   pointer-events: none;
   z-index: 999;
 }

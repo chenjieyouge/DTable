@@ -20,6 +20,8 @@ export class PivotDataProcessor {
   private config: IPivotConfig
   private colTree: IPivotColNode | null = null   // 列树根节点
   private colLeaves: IPivotColNode[] = []         // 列叶子节点列表 (按序)
+  // 列方向是否因超过 colMaxLeafCols 被截断
+  private colTruncated = false
   
   // 性能优化：懒加载模式（默认开启，第3层及以后懒加载）
   private lazyLoadEnabled = true
@@ -77,6 +79,8 @@ export class PivotDataProcessor {
   public buildColTree(data: Record<string, any>[]): IPivotColNode {
     const colGroups = this.config.colGroups ?? []
     const maxLeaf = this.config.colMaxLeafCols ?? 50
+
+    this.colTruncated = false
 
     // 构建虚拟根节点
     const root: IPivotColNode = {
@@ -145,7 +149,10 @@ export class PivotDataProcessor {
     remainLeaf: number,
     parentAncestors: string[] = [],  // 祖先列分组值路径
   ): IPivotColNode[] {
-    if (remainLeaf <= 0) return [] // 超出列上限, 则截断
+    if (remainLeaf <= 0) {
+      this.colTruncated = true
+      return []
+    }
 
     const colKey = colGroups[level]
     // 取当前层唯一值, 保持插入顺序, 不排序, 符合用户数据原始顺序
@@ -154,7 +161,12 @@ export class PivotDataProcessor {
     const nodes: IPivotColNode[] = []
 
     for (const val of uniqueVals) {
-      if (remainLeaf <= 0) break 
+      if (remainLeaf <= 0) {
+        // 列方向必须限制: 列数 = ∏(各列分组唯一值数), 会指数爆炸,
+        // 几千列足以拖垮浏览器。但只记标记、由上层拒绝渲染, 不在这里静默丢一半。
+        this.colTruncated = true
+        break
+      }
 
       const nodeId = `${parentId}-c${level}-${val}`
       // 筛选出改列值对应的数据行, 用于下一层递归
@@ -241,6 +253,11 @@ export class PivotDataProcessor {
 
   public getColLeaves(): IPivotColNode[] {
     return this.colLeaves
+  }
+
+  /** 列方向是否因超过 colMaxLeafCols 而被截断 */
+  public isColTruncated(): boolean {
+    return this.colTruncated
   }
 
   /**
@@ -345,15 +362,18 @@ export class PivotDataProcessor {
     parentId: string,
 
   ): IPivotTreeNode[] {
-    // 性能优化：限制最大层级深度（最多4层）
-    const MAX_LEVEL = 4
-    if (level >= rowGroups.length || level >= MAX_LEVEL) {
+    // 行方向不做任何截断。
+    //
+    // 之前这里有三个硬编码阈值(层级≤4、单层≤50组、每组数据行≤100), 全是静默截断:
+    // 超出的分组被直接丢掉, 用户看到的是一张"看着正常但少了数据"的透视表 ——
+    // 对分析场景来说这比慢严重得多。
+    //
+    // 行方向的代价是线性的: 每层把所有行分一遍组, 总工作量 O(行数 × 层数 × 数值字段),
+    // 与分组数量无关; 渲染侧有虚拟滚动兜着。真正会爆炸的是列方向(见 colMaxLeafCols)。
+    if (level >= rowGroups.length) {
       // 有列分组时不创建数据行, 分组汇总行已足够
       if (this.config.colGroups?.length) return []
-      // 数据行也限制数量，避免过多叶子节点
-      const MAX_DATA_ROWS = 100
-      const limitedData = data.slice(0, MAX_DATA_ROWS)
-      return limitedData.map((row, i) =>
+      return data.map((row, i) =>
         PivotTreeNode.createDataNode(`${parentId}-data-${i}`, level, row)
       )
     }
@@ -363,22 +383,15 @@ export class PivotDataProcessor {
     // 按当前字段分组
     const groups = this.groupByField(data, groupKey)
 
-    // 性能优化：单层节点数量限制
-    const MAX_NODES_PER_LEVEL = 50
+    // 保持数据原始出现顺序, 不按行数重排 ——
+    // 重排会让透视表的行顺序随数据量变化而漂移, 用户无法建立稳定的阅读预期
     const groupEntries = Array.from(groups.entries())
-    
-    // 如果节点过多，按行数降序排序，只保留最重要的节点
-    if (groupEntries.length > MAX_NODES_PER_LEVEL) {
-      groupEntries.sort((a, b) => b[1].length - a[1].length)
-    }
-    
-    const limitedGroups = groupEntries.slice(0, MAX_NODES_PER_LEVEL)
 
     // 为每个分组值创建分组节点
     const nodes: IPivotTreeNode[] = []
     let index = 0
 
-    for (const [groupValue, rows] of limitedGroups) {
+    for (const [groupValue, rows] of groupEntries) {
       // 计算当前分组的聚合数据
       const aggregatedData = this.computeAggregatedData(rows, groupKey, groupValue)
       // 创建分组节点

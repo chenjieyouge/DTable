@@ -266,12 +266,12 @@ export class PivotTable {
     empty.innerHTML = `
       <div class="vt-pivot-empty-icon">
         <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-          <rect x="4" y="12" width="48" height="34" rx="3" stroke="#c7d2fe" stroke-width="2" fill="#f5f7ff"/>
-          <rect x="4" y="12" width="14" height="34" rx="0" stroke="none" fill="#e0e7ff"/>
-          <line x1="4" y1="22" x2="52" y2="22" stroke="#c7d2fe" stroke-width="1.5"/>
-          <line x1="18" y1="12" x2="18" y2="46" stroke="#c7d2fe" stroke-width="1.5"/>
-          <circle cx="40" cy="34" r="10" fill="#6366f1" opacity="0.15"/>
-          <path d="M40 29v10M35 34h10" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+          <rect x="4" y="12" width="48" height="34" rx="3" stroke="#a3c9ff" stroke-width="2" fill="#f0f7ff"/>
+          <rect x="4" y="12" width="14" height="34" rx="0" stroke="none" fill="#e8f3ff"/>
+          <line x1="4" y1="22" x2="52" y2="22" stroke="#a3c9ff" stroke-width="1.5"/>
+          <line x1="18" y1="12" x2="18" y2="46" stroke="#a3c9ff" stroke-width="1.5"/>
+          <circle cx="40" cy="34" r="10" fill="#1677ff" opacity="0.15"/>
+          <path d="M40 29v10M35 34h10" stroke="#1677ff" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="vt-pivot-empty-title">透视表尚未配置</div>
@@ -293,6 +293,47 @@ export class PivotTable {
     `
     wrapper.appendChild(empty)
     this.emptyStateEl = empty
+  }
+
+  /**
+   * 列数超限时的拒绝态
+   *
+   * 为什么是"拒绝生成"而不是"截断后渲染前 N 列":
+   *   列数 = ∏(各列分组唯一值数), 会指数爆炸, 几千列足以拖垮浏览器 —— 所以必须限制。
+   *   但半张透视表**看起来是正常的**, 用户会直接拿去汇报 —— 那是数据事故;
+   *   明确拒绝 + 告诉用户怎么缩小范围, 只是一次当场能解决的体验问题。
+   *   这也是 ag-Grid 的 pivotMaxGeneratedColumns 采用的策略(超限则不生成任何透视列)。
+   */
+  private renderLimitExceeded(): void {
+    if (!this.tableArea) return
+
+    if (this.headerEl) this.headerEl.style.display = 'none'
+    if (this.breadcrumbEl) this.breadcrumbEl.style.display = 'none'
+    if (this.bodyContainer) this.bodyContainer.style.display = 'none'
+
+    // 复用同一个占位槽: 空态和超限态不会同时出现
+    if (this.emptyStateEl) this.emptyStateEl.remove()
+    this.emptyStateEl = null
+
+    const wrapper = this.tableArea.querySelector<HTMLDivElement>('.vt-pivot-table')
+    if (!wrapper) return
+
+    const limit = this.pivotConfig.colMaxLeafCols ?? 50
+    const el = document.createElement('div')
+    el.className = 'vt-pivot-empty-state'
+    el.innerHTML = `
+      <div class="vt-pivot-empty-title">列数超出上限，未生成透视表</div>
+      <div class="vt-pivot-empty-desc">
+        当前列分组可展开的组合超过 ${limit} 列。
+        透视表的列数是各列分组唯一值数量的乘积，很容易指数级增长，
+        因此这里选择不生成，而不是只显示其中一部分。
+      </div>
+      <div class="vt-pivot-empty-desc">
+        解决办法：给「列」区域的字段加上筛选条件缩小取值范围，或减少列分组字段。
+      </div>
+    `
+    wrapper.appendChild(el)
+    this.emptyStateEl = el
   }
 
   /**
@@ -324,6 +365,13 @@ export class PivotTable {
 
     // 1. 先构建列树 (有 colGroups 时生成多层列树, 无则生成 valueField 叶子)
     this.processor.buildColTree(this.data)
+
+    // 列数超限: 拒绝渲染。给半张表比不给更危险 —— 用户看不出少了东西。
+    if (this.processor.isColTruncated()) {
+      this.renderLimitExceeded()
+      return
+    }
+
     const colLeaves = this.processor.getColLeaves()
     const colTree = this.processor.getColTree()
 
@@ -378,7 +426,8 @@ export class PivotTable {
       const activeFilters = this.pivotConfig.rowFilters?.[groupKey] ?? []
       const filterBtn = document.createElement('button')
       filterBtn.className = `vt-pivot-control-btn vt-pivot-filter-btn${activeFilters.length ? ' vt-pivot-filter-active' : ''}`
-      filterBtn.title = `筛选行「${title}」`
+      filterBtn.setAttribute('data-vt-tip', `筛选行「${title}」`)
+      filterBtn.setAttribute('aria-label', `筛选行「${title}」`)
       filterBtn.innerHTML = `≡ ${title} <span class="vt-pivot-filter-icon">${activeFilters.length ? `(${activeFilters.length})` : ''}</span>`
       filterBtn.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -394,7 +443,8 @@ export class PivotTable {
       const activeFilters = this.pivotConfig.colFilters?.[groupKey] ?? []
       const filterBtn = document.createElement('button')
       filterBtn.className = `vt-pivot-control-btn vt-pivot-filter-btn${activeFilters.length ? ' vt-pivot-filter-active' : ''}`
-      filterBtn.title = `筛选列「${title}」`
+      filterBtn.setAttribute('data-vt-tip', `筛选列「${title}」`)
+      filterBtn.setAttribute('aria-label', `筛选列「${title}」`)
       filterBtn.innerHTML = `⫿ ${title} <span class="vt-pivot-filter-icon">${activeFilters.length ? `(${activeFilters.length})` : ''}</span>`
       filterBtn.addEventListener('click', (e) => {
         e.stopPropagation()

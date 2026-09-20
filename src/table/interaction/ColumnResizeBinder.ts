@@ -49,18 +49,22 @@ export class ColumnResizeBinder {
       const startWidth = cell.getBoundingClientRect().width // 单元格自身的宽度
 
       // 创建辅助线
+      //
+      // 挂在滚动容器的父层, 而不是滚动容器里:
+      // 挂滚动容器里时 top:0/height:100% 走的是"内容坐标系", 竖向滚动后
+      // 辅助线会跑出可视区 —— 表格滚到中间拖列宽就看不见线了。
+      // 父层不参与滚动, 用 top:0/bottom:0 正好覆盖整个可见区域。
+      const guideLayer = scrollContainer.parentElement ?? scrollContainer
       this.guidEl?.remove()
       this.guidEl = document.createElement('div')
       this.guidEl.className = 'vt-col-resize-guide'
-      scrollContainer.appendChild(this.guidEl)
+      guideLayer.appendChild(this.guidEl)
 
-      const containerRect = scrollContainer.getBoundingClientRect() // 容器相对视口位置
+      const containerRect = guideLayer.getBoundingClientRect()
 
-      // 标记辅助线在表格中距离左边的距离
+      // 标记辅助线距容器左边的距离 (父层不滚动, 不需要补偿 scrollLeft)
       const updateGuide = (clientX: number) => {
-        // 拖拽后辅助线在容器内的 left 值 = 鼠标拓展前的的位置 - 容器距离视口的距离 + 拖拽的距离
-        const left = clientX - containerRect.left + scrollContainer.scrollLeft
-        this.guidEl!.style.left = `${left}px`
+        this.guidEl!.style.left = `${clientX - containerRect.left}px`
       }
 
       updateGuide(e.clientX) 

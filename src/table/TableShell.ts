@@ -11,6 +11,7 @@ import { ColumnFilterBinder } from "@/table/interaction/ColumnFilterBinder";
 import { TableResizeBinder } from "@/table/interaction/TableResizeBinder";
 import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
 import type { PlaceholderDecision } from "@/table/viewport/emptyState";
+import { bindTooltip } from "@/table/interaction/Tooltip";
 
 
 // 全局弹窗管理器, 弹窗之间互斥出现
@@ -81,10 +82,13 @@ export function mountTableShell(params: {
 
 }): ITableShell {
 
-  const { 
-    config, 
-    renderer, 
-    headerSortBinder, 
+  // 自绘 tooltip 是全局单例, 绑一次即可(幂等)
+  bindTooltip()
+
+  const {
+    config,
+    renderer,
+    headerSortBinder,
     container,
     onToggleSort, 
     onNeedLoadSummary, 
