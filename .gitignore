@@ -46,3 +46,7 @@ div_table.*
 /data/
 *.xlsx
 *.csv
+
+# 本地起服务时的输出重定向
+server-run.log
+vite-run.log
