@@ -1,7 +1,70 @@
 // src/demo.ts - Client/Server 模式测试页面
 import { VirtualTable } from '@/table/VirtualTable'
 import './style.css'
-import type { IUserConfig, IPageResponse, ITableQuery } from '@/types'
+import type { IUserConfig, IPageResponse, ITableQuery, IColumn } from '@/types'
+
+// ============ 门店零售数据 (百万级真实数据) ============
+//
+// 列 key 与数据库列名、CSV 表头完全一致(都是中文), 前后端不需要任何映射
+const PAGE_SIZE = 200 // 百万行下 50/页 要两万页, 调大更贴近实际用法
+
+const RETAIL_COLUMNS: IColumn[] = [
+  { key: '激活日期', title: '激活日期', width: 120, sortable: true, filter: { type: 'dateRange' } },
+  { key: '品牌', title: '品牌', width: 90, filter: { type: 'set' } },
+  { key: '二级', title: '二级', width: 120, filter: { type: 'text' } },
+  { key: '省', title: '省', width: 100, sortable: true, filter: { type: 'set' } },
+  { key: '城市', title: '城市', width: 110, sortable: true, filter: { type: 'set' } },
+  { key: '区县', title: '区县', width: 110, filter: { type: 'text' } },
+  { key: '门店', title: '门店', width: 260, filter: { type: 'text' } },
+  { key: '品类', title: '品类', width: 120, sortable: true, filter: { type: 'set' } },
+  { key: '渠道类型', title: '渠道类型', width: 110, filter: { type: 'set' } },
+  { key: '市场层级', title: '市场层级', width: 110, filter: { type: 'set' } },
+  { key: '条码', title: '条码', width: 150, filter: { type: 'text' } },
+  { key: '销量', title: '销量', width: 80, sortable: true },
+  { key: '积分额', title: '积分额', width: 120, sortable: true, summaryType: 'sum', filter: { type: 'numberRange' } },
+]
+
+/**
+ * 把前端的筛选结构转成服务端约定的 filters 格式
+ *
+ * 注意 dateRange 要映射成 min/max: 服务端 ApplyFilters 只认 min/max 的区间语义,
+ * 直接传 start/end 会被静默忽略(而且是"不报错但不生效"这种最难查的形态)。
+ */
+function buildFilters(query?: ITableQuery): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const cf = query?.columnFilters
+  if (!cf) return out
+
+  for (const [key, f] of Object.entries(cf)) {
+    switch (f.kind) {
+      case 'set':
+        if (f.values.length > 0) out[key] = f.values
+        break
+
+      case 'text':
+        if (f.value.trim() !== '') out[key] = f.value
+        break
+
+      case 'numberRange': {
+        const range: Record<string, number> = {}
+        if (f.min !== undefined) range.min = f.min
+        if (f.max !== undefined) range.max = f.max
+        if (Object.keys(range).length > 0) out[key] = range
+        break
+      }
+
+      case 'dateRange': {
+        const range: Record<string, string> = {}
+        if (f.start) range.min = f.start
+        if (f.end) range.max = f.end
+        if (Object.keys(range).length > 0) out[key] = range
+        break
+      }
+    }
+  }
+
+  return out
+}
 
 let currentTable: VirtualTable | null = null
 let currentMode: 'client' | 'server' | 'client-api' = 'client'
@@ -51,53 +114,34 @@ function getServerConfig(): IUserConfig {
   return {
     container: '#table-container',
     tableHeight: 500,
-    pageSize: 50,
-    columns: [
-      { key: 'id', title: 'ID', width: 80 },
-      { key: 'name', title: '姓名', width: 120 },
-      { key: 'age', title: '年龄', width: 80, sortable: true },
-      { key: 'region', title: '区域', width: 100, sortable: true },
-      { key: 'department', title: '部门', width: 120 },
-      { key: 'salary', title: '薪资', width: 120, sortable: true, summaryType: 'avg' },
-      { key: 'status', title: '状态', width: 100 },
-      { key: 'joinDate', title: '入职日期', width: 120 }
-    ],
+    pageSize: PAGE_SIZE,
+    columns: RETAIL_COLUMNS,
     // 从后端 API 获取分页数据
     fetchPageData: async (pageIndex: number, query?: ITableQuery): Promise<IPageResponse> => {
       try {
-        // 构建查询参数
-        const params = new URLSearchParams({
-          pageIndex: String(pageIndex),
-          pageSize: '50'
+        // 后端 /api/table/page 是 POST + JSON body。
+        // 之前这里用 GET + query 参数请求, 和路由对不上, Server 模式一直是坏的。
+        const response = await fetch('/api/table/page', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pageIndex,
+            pageSize: PAGE_SIZE,
+            sort:
+              query?.sortKey && query?.sortDirection
+                ? `${query.sortKey}:${query.sortDirection}`
+                : '',
+            filters: buildFilters(query),
+          }),
         })
 
-        // 添加排序参数
-        if (query?.sortKey && query?.sortDirection) {
-          params.append('sort', `${query.sortKey}:${query.sortDirection}`)
-        }
-
-        // 添加筛选参数（简化版，实际需要根据后端 API 调整）
-        if (query?.columnFilters) {
-          Object.entries(query.columnFilters).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-              // Set 筛选：传递数组
-              params.append(`filter[${key}]`, value.join(','))
-            } else if (typeof value === 'string') {
-              // 文本筛选
-              params.append(`filter[${key}]`, value)
-            }
-          })
-        }
-
-        const response = await fetch(`/api/table/page?${params.toString()}`)
-        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
 
         const data = await response.json()
-        
-        updateStats({ 
+
+        updateStats({
           total: data.totalRows,
           status: '✅ 加载成功'
         })
@@ -119,7 +163,10 @@ function getServerConfig(): IUserConfig {
     // 获取筛选选项
     fetchFilterOptions: async ({ key }) => {
       try {
-        const response = await fetch(`/api/table/filter-options?columnKey=${key}`)
+        // 中文列名必须 encodeURIComponent, 否则 query string 不合法
+        const response = await fetch(
+          `/api/table/filter-options?columnKey=${encodeURIComponent(key)}`
+        )
         if (!response.ok) return []
         return await response.json()
       } catch (error) {
@@ -143,7 +190,8 @@ function getServerConfig(): IUserConfig {
 async function getClientAPIConfig(): Promise<IUserConfig> {
   try {
     updateStats({ status: '⏳ 从后端加载数据...' })
-    const response = await fetch('/api/table/all?limit=100000')
+    // 不带 limit 走服务端默认上限(100w), 拿全量真实数据在客户端跑
+    const response = await fetch('/api/table/all')
     const data = await response.json()
 
     updateStats({
@@ -155,15 +203,7 @@ async function getClientAPIConfig(): Promise<IUserConfig> {
       container: `#table-container`,
       tableHeight: 500,
       initialData: data.list,
-      columns: [
-        { key: 'id', title: 'ID', width: 80 },
-        { key: 'name', title: '姓名', width: 120, filter: { type: 'text'} },
-        { key: 'region', title: '区域', width: 100, filter: {type: 'set'}, sortable: true },
-        { key: 'department', title: '部门', width: 120, filter: { type: 'set' } },
-        { key: 'salary', title: '薪资', width: 120, sortable: true, summaryType: 'avg' },
-        { key: 'status', title: '状态', width: 100, filter: { type: 'set' } },
-        { key: 'joinDate', title: '入职日期', width: 120 }
-      ],
+      columns: RETAIL_COLUMNS,
       sidePanel: {
         enabled: true,
         defaultOpen: false,

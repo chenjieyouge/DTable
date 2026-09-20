@@ -43,6 +43,27 @@
       .bench-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
       #bench-run { background: #165dff; border-color: #165dff; color: #fff; }
       #bench-run:hover:not(:disabled) { background: #0e42d2; color: #fff; }
+      .bench-file-label {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 14px;
+        border: 1px dashed #c9cdd4;
+        border-radius: 5px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .bench-file-label:hover { border-color: #165dff; color: #165dff; }
+      .bench-file-label input { display: none; }
+      .bench-file-info {
+        padding: 9px 12px;
+        margin-bottom: 12px;
+        background: #e8f3ff;
+        border-left: 3px solid #165dff;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #1d2129;
+      }
       .bench-hint { font-size: 12px; color: #86909c; }
       .bench-hint code { background: #f2f3f5; padding: 1px 5px; border-radius: 3px; }
       table.bench-table { width: 100%; border-collapse: collapse; font-size: 13px; }
