@@ -3,26 +3,52 @@
  * 命名空间: .vt-instance  |  前缀: vt-
  * ============================================================ */
 
-/* ========== 1. CSS 变量 ========== */
-.vt-instance {
-  --vt-primary: #1890ff;
-  --vt-primary-hover: #40a9ff;
-  --vt-primary-bg: rgba(24, 144, 255, 0.1);
-  --vt-border: #d3d3d5;
-  --vt-border-light: #e5e7eb;
-  --vt-border-medium: #d1d5db;
-  --vt-border-panel: #d9d9d9;
-  --vt-bg-header: #f9f9fa;
-  --vt-bg-hover: #e6f7ff;
-  --vt-bg-frozen: #f8f8f9;
-  --vt-text-primary: #333;
-  --vt-text-secondary: #666;
-  --vt-text-muted: #999;
-  --vt-text-dark: #374151;
-  --vt-text-darker: #1f2937;
+/* ========== 1. 设计令牌 ==========
+ *
+ * 定义在 :root 而不是 .vt-instance —— 部分弹层(透视筛选下拉、字段选择器)
+ * 被 append 到 document.body, 不在 .vt-instance 命名空间内; 定义在
+ * .vt-instance 上时这些弹层解析不到变量, 表现为"颜色整个失效"。
+ *
+ * 需要按实例换肤时, 在 .vt-instance 上覆盖同名变量即可(对表格主体生效)。
+ */
+:root {
+  /* 主色: 全站唯一的一个蓝, 收敛掉原本散落的 6 套蓝 */
+  --vt-primary: #1677ff;
+  --vt-primary-hover: #4096ff;
+  --vt-primary-bg: rgba(22, 119, 255, 0.1);
+
+  /* 文字三级 */
+  --vt-text-primary: #1d2129;
+  --vt-text-secondary: #4e5969;
+  --vt-text-muted: #86909c;
+  /* 旧命名, 保留以免外部覆盖样式失效 */
+  --vt-text-dark: #1d2129;
+  --vt-text-darker: #1d2129;
+
+  /* 边框 */
+  --vt-border: #e5e6eb;
+  --vt-border-light: #f2f3f5;
+  --vt-border-medium: #c9cdd4;
+  --vt-border-panel: #e5e6eb;
+
+  /* 背景 */
+  --vt-bg: #ffffff;
+  --vt-bg-subtle: #f7f8fa;
+  --vt-bg-hover: rgba(22, 119, 255, 0.06);
+  --vt-bg-header: #f7f8fa;
+  --vt-bg-frozen: #f7f8fa;
+
+  /* 反色文字: 用在主色底上 */
+  --vt-text-inverse: #ffffff;
+
+  /* 语义色 */
+  --vt-danger: #dc2626;
+  --vt-danger-bg: #fef2f2;
+
   --vt-shadow-popup: 0 2px 8px rgba(0, 0, 0, 0.15);
   --vt-shadow-panel: -2px 0 8px rgba(0, 0, 0, 0.15);
 }
+
 
 /* ========== 2. 布局系统 ========== */
 
@@ -33,7 +59,7 @@
   max-width: 100%;
   height: 100%;
   box-sizing: border-box;
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid var(--vt-border-medium);
 }
 
 .vt-instance .vt-layout-main {
@@ -50,8 +76,8 @@
   flex-shrink: 0;
   width: 40px;
   height: 100%;
-  background-color: #fff;
-  border-left: 1px solid #e0e0e0;
+  background-color: var(--vt-bg);
+  border-left: 1px solid var(--vt-border-light);
   transition: width 0.3s, opacity 0.3s;
   overflow: visible;
   z-index: 100;
@@ -64,7 +90,7 @@
 .vt-instance .vt-layout-container[data-layout-mode="mobile"] {
   width: 100% !important;
   border-left: none;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--vt-border-light);
 }
 
 /* ========== 3. 侧边栏 Tab 系统 ========== */
@@ -75,15 +101,15 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #f5f5f5;
-  border-left: 1px solid #e0e0e0;
+  background-color: var(--vt-bg-subtle);
+  border-left: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-side-tab {
   padding: 16px 8px;
   cursor: pointer;
   text-align: center;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--vt-border-light);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -92,11 +118,11 @@
 }
 
 .vt-instance .vt-side-tab:hover {
-  background-color: #e8e8e8;
+  background-color: var(--vt-border-light);
 }
 
 .vt-instance .vt-side-tab.vt-active {
-  color: #1890ff;
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-side-tab .vt-tab-icon {
@@ -119,8 +145,8 @@
   width: 250px;
   display: flex;
   flex-direction: column;
-  background-color: #fff;
-  border-left: 1px solid #e0e0e0;
+  background-color: var(--vt-bg);
+  border-left: 1px solid var(--vt-border-light);
   overflow: hidden;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
   transition: transform 0.3s ease, opacity 0.3s ease;
@@ -154,28 +180,28 @@
 .vt-instance .vt-table-container {
   position: relative;
   overflow: auto;
-  border: 1px solid #ddd;
+  border: 1px solid var(--vt-border-medium);
   scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
+  scrollbar-color: var(--vt-border-medium) var(--vt-bg-subtle);
   height: 100%;
 }
 
 .vt-instance .vt-table-wrapper {
   position: relative;
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid var(--vt-border-medium);
   min-height: 100%;
   box-sizing: border-box;
 }
 
 .vt-instance .vt-status-bar {
   height: var(--status-bar-height, 32px);
-  background-color: #fafafa;
-  border-top: 1px solid #e0e0e0;
+  background-color: var(--vt-bg-subtle);
+  border-top: 1px solid var(--vt-border-light);
   display: flex;
   align-items: center;
   padding: 0 12px;
   font-size: 13px;
-  color: #666;
+  color: var(--vt-text-secondary);
   flex-shrink: 0;
 }
 
@@ -184,7 +210,7 @@
 }
 
 .vt-instance .vt-status-bar-item strong {
-  color: #333;
+  color: var(--vt-text-primary);
   margin-left: 4px;
 }
 
@@ -199,17 +225,17 @@
   padding: 2px 10px;
   font-size: 12px;
   border-radius: 4px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+  border: 1px solid var(--vt-border-medium);
+  background: var(--vt-bg);
+  color: var(--vt-text-dark);
   cursor: pointer;
   line-height: 20px;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .vt-instance .vt-export-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: var(--vt-bg-subtle);
+  border-color: var(--vt-text-muted);
 }
 
 .vt-instance .vt-export-btn:disabled {
@@ -218,12 +244,12 @@
 }
 
 .vt-instance .vt-export-selected {
-  border-color: #6366f1;
-  color: #4f46e5;
+  border-color: var(--vt-primary);
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-export-selected:hover:not(:disabled) {
-  background: #eef2ff;
+  background: var(--vt-primary-bg);
 }
 
 /* ========== 5. 表头与单元格 ========== */
@@ -232,13 +258,13 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: #f9f9fa;
+  background-color: var(--vt-bg-header);
 }
 
 .vt-instance .vt-header-cell {
   position: relative;
   user-select: none;
-  background-color: #f9f9fa;
+  background-color: var(--vt-bg-header);
   font-weight: bold;
   height: var(--header-height, 32px);
 }
@@ -256,7 +282,7 @@
   position: absolute;
   top: 0;
   width: 1px;
-  background-color: red;
+  background-color: var(--vt-primary);
   height: 100%;
   pointer-events: none;
   z-index: 999;
@@ -269,13 +295,14 @@
 }
 
 .vt-instance .vt-header-text:hover {
-  color: #1890ff;
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-sort-indicator {
   margin-left: 10px;
   font-size: 12px;
-  color: red;
+  /* 原本是红色, 与列筛选的激活态统一到主色 */
+  color: var(--vt-primary);
   min-width: 12px;
   text-align: center;
 }
@@ -283,7 +310,7 @@
 .vt-instance .vt-sticky-summary {
   position: sticky;
   top: var(--header-height, 30px);
-  background-color: #fff;
+  background-color: var(--vt-bg);
   font-weight: bold;
   z-index: 99;
 }
@@ -296,7 +323,7 @@
 .vt-instance .vt-table-cell {
   box-sizing: border-box;
   overflow: hidden;
-  border-right: 1px solid #d3d3d5;
+  border-right: 1px solid var(--vt-border);
   padding: 10px;
   display: flex;
   align-items: center;
@@ -311,12 +338,12 @@
   left: 0;
   right: 0;
   height: 1px;
-  background-color: #d3d3d5;
+  background-color: var(--vt-border);
 }
 
 .vt-instance .vt-cell-frozen {
   position: sticky;
-  background-color: #f8f8f9;
+  background-color: var(--vt-bg-frozen);
   z-index: 10;
 }
 
@@ -356,11 +383,11 @@
 }
 
 .vt-instance .vt-virtual-row:hover {
-  background-color: #e6f7ff;
+  background-color: var(--vt-bg-hover);
 }
 
 .vt-instance .vt-virtual-row:hover .vt-cell-frozen {
-  background-color: #e6f7ff;
+  background-color: var(--vt-bg-hover);
 }
 
 /* ========== 行选中 ========== */
@@ -372,7 +399,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-right: 1px solid #d3d3d5;
+  border-right: 1px solid var(--vt-border);
   box-sizing: border-box;
 }
 
@@ -380,20 +407,20 @@
   width: 15px;
   height: 15px;
   cursor: pointer;
-  accent-color: #4f46e5;
+  accent-color: var(--vt-primary);
   margin: 0;
 }
 
 .vt-instance .vt-row-selected {
-  background-color: #eef2ff !important;
+  background-color: var(--vt-primary-bg) !important;
 }
 
 .vt-instance .vt-row-selected .vt-cell-frozen {
-  background-color: #eef2ff !important;
+  background-color: var(--vt-primary-bg) !important;
 }
 
 .vt-instance .vt-row-selected:hover {
-  background-color: #e0e7ff !important;
+  background-color: var(--vt-primary-bg) !important;
 }
 
 /* ========== 7. 列筛选弹层 ========== */
@@ -410,7 +437,7 @@
   line-height: 18px;
   text-align: center;
   user-select: none;
-  color: #999;
+  color: var(--vt-text-muted);
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -418,22 +445,22 @@
 }
 
 .vt-instance .vt-col-filter-btn:hover {
-  color: #1890ff;
-  background-color: rgba(24, 144, 255, 0.1);
+  color: var(--vt-primary);
+  background-color: var(--vt-primary-bg);
   border-radius: 3px;
 }
 
 /* 该列正在筛选: 原来只改了颜色, 太不显眼, 补上底色让用户一眼能扫到 */
 .vt-instance .vt-col-filter-btn.vt-active {
-  color: #1890ff;
-  background-color: rgba(24, 144, 255, 0.12);
+  color: var(--vt-primary);
+  background-color: var(--vt-primary-bg);
   border-radius: 3px;
 }
 
 .vt-instance .vt-col-filter-popup {
   position: absolute;
-  background-color: white;
-  border: 1px solid #ccc;
+  background-color: var(--vt-bg);
+  border: 1px solid var(--vt-border-medium);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   padding: 8px;
   max-height: 300px;
@@ -470,7 +497,7 @@
   width: 100%;
   padding: 6px;
   margin-bottom: 10px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   box-sizing: border-box;
 }
@@ -479,7 +506,7 @@
   width: 100%;
   padding: 6px;
   margin: 4px 0;
-  border: 1px solid #ccc;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   box-sizing: border-box;
 }
@@ -488,7 +515,7 @@
   width: 100%;
   padding: 6px;
   margin: 4px 0;
-  border: 1px solid #ccc;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   box-sizing: border-box;
 }
@@ -496,7 +523,7 @@
 .vt-instance .vt-col-filter-popup > div {
   margin-bottom: 8px;
   font-size: 13px;
-  color: #333;
+  color: var(--vt-text-primary);
 }
 
 /* ========== 8. 表格宽度拖拽 ========== */
@@ -523,7 +550,7 @@
 }
 
 .vt-instance .vt-table-resize-corner svg {
-  color: #6366f1;
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-table-resize-btn {
@@ -532,11 +559,11 @@
   right: 46px;
   width: 16px;
   height: 32px;
-  background-color: #fff;
+  background-color: var(--vt-bg);
   border-radius: 4px;
   cursor: col-resize;
   padding: 0;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--vt-border-panel);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -545,9 +572,9 @@
 }
 
 .vt-instance .vt-table-resize-btn:hover {
-  border-color: #1890ff;
-  background-color: #f0f7ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+  border-color: var(--vt-primary);
+  background-color: var(--vt-primary-bg);
+  box-shadow: 0 2px 8px var(--vt-primary-bg);
 }
 
 /* ========== 9. 列菜单弹窗 ========== */
@@ -563,25 +590,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999;
+  color: var(--vt-text-muted);
   transition: all 0.2s;
   border-radius: 3px;
 }
 
 .vt-instance .vt-col-menu-btn:hover {
-  color: #1890ff;
-  background-color: rgba(24, 144, 255, 0.1);
+  color: var(--vt-primary);
+  background-color: var(--vt-primary-bg);
 }
 
 .vt-instance .vt-col-menu-btn.vt-active {
-  color: #1890ff;
-  background-color: rgba(24, 144, 255, 0.1);
+  color: var(--vt-primary);
+  background-color: var(--vt-primary-bg);
 }
 
 .vt-instance .vt-col-menu-popup {
   position: absolute;
-  background-color: #fff;
-  border: 1px solid #d9d9d9;
+  background-color: var(--vt-bg);
+  border: 1px solid var(--vt-border-panel);
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   min-width: 180px;
@@ -599,16 +626,16 @@
 }
 
 .vt-instance .vt-col-menu-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-col-menu-item.vt-active {
-  background-color: #e6f7ff;
-  color: #1890ff;
+  background-color: var(--vt-bg-hover);
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-col-menu-item.vt-disabled {
-  color: #bbb;
+  color: var(--vt-text-muted);
   cursor: not-allowed;
 }
 
@@ -638,13 +665,13 @@
   width: 32px;
   height: 32px;
   border: none;
-  background-color: #fff;
+  background-color: var(--vt-bg);
   border-radius: 4px;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #666;
+  color: var(--vt-text-secondary);
   transition: all 0.2s;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   margin-bottom: -32px;
@@ -652,9 +679,9 @@
 }
 
 .vt-instance .vt-colmgr-trigger:hover {
-  color: #1890ff;
-  background-color: #f0f0f0;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+  color: var(--vt-primary);
+  background-color: var(--vt-bg-subtle);
+  box-shadow: 0 2px 8px var(--vt-primary-bg);
 }
 
 .vt-instance .vt-colmgr-panel {
@@ -663,8 +690,8 @@
   right: 0;
   width: 250px;
   height: 100%;
-  background-color: #fff;
-  border-left: 1px solid #d9d9d9;
+  background-color: var(--vt-bg);
+  border-left: 1px solid var(--vt-border-panel);
   box-shadow: -2px 0px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
@@ -683,13 +710,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-colmgr-title {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--vt-text-primary);
 }
 
 .vt-instance .vt-colmgr-close {
@@ -698,13 +725,13 @@
   border: none;
   background-color: transparent;
   font-size: 20px;
-  color: #999;
+  color: var(--vt-text-muted);
   cursor: pointer;
   transition: color 0.2s;
 }
 
 .vt-instance .vt-colmgr-close:hover {
-  color: #333;
+  color: var(--vt-text-primary);
 }
 
 .vt-instance .vt-colmgr-list {
@@ -722,7 +749,7 @@
 }
 
 .vt-instance .vt-colmgr-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-colmgr-item input[type='checkbox'] {
@@ -740,14 +767,14 @@
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-colmgr-btn {
   flex: 1;
   padding: 6px 12px;
-  border: 1px solid #d9d9d9;
-  background-color: #fff;
+  border: 1px solid var(--vt-border-panel);
+  background-color: var(--vt-bg);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -755,8 +782,8 @@
 }
 
 .vt-instance .vt-colmgr-btn:hover {
-  color: #1890ff;
-  border-color: #1890ff;
+  color: var(--vt-primary);
+  border-color: var(--vt-primary);
 }
 
 /* ========== 11. 示例面板 ========== */
@@ -778,14 +805,14 @@
 .vt-instance .vt-demo-panel .vt-panel-header p {
   margin: 0;
   font-size: 14px;
-  color: #666;
+  color: var(--vt-text-secondary);
 }
 
 .vt-instance .vt-demo-panel .vt-panel-body {
-  background-color: #fff;
+  background-color: var(--vt-bg);
   padding: 16px;
   border-radius: 4px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-demo-panel .vt-panel-body p {
@@ -795,7 +822,7 @@
 }
 
 .vt-instance .vt-demo-panel .vt-panel-body pre {
-  background: #f5f5f5;
+  background: var(--vt-bg-subtle);
   padding: 12px;
   border-radius: 4px;
   font-size: 12px;
@@ -805,8 +832,8 @@
 
 .vt-instance .vt-demo-panel .vt-panel-body button {
   padding: 8px 16px;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: var(--vt-primary);
+  color: var(--vt-bg);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -814,7 +841,7 @@
 }
 
 .vt-instance .vt-demo-panel .vt-panel-body button:hover {
-  background-color: #40a9ff;
+  background-color: var(--vt-primary-hover);
 }
 
 /* ========== 12. 列管理面板 (侧边栏版) ========== */
@@ -824,7 +851,7 @@
   flex-direction: column;
   height: 100%;
   padding: 12px;
-  background-color: #fff;
+  background-color: var(--vt-bg);
 }
 
 .vt-instance .vt-column-panel-pivot-config {
@@ -840,17 +867,17 @@
 }
 
 .vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--vt-bg-subtle);
   border-radius: 3px;
 }
 
 .vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--vt-border-medium);
   border-radius: 3px;
 }
 
 .vt-instance .vt-column-panel-pivot-config::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--vt-text-muted);
 }
 
 .vt-instance .vt-column-panel-search {
@@ -860,7 +887,7 @@
 .vt-instance .vt-column-panel-search-input {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   font-size: 14px;
   outline: none;
@@ -868,14 +895,14 @@
 }
 
 .vt-instance .vt-column-panel-search-input:focus {
-  border-color: #3b82f6;
+  border-color: var(--vt-primary);
 }
 
 .vt-instance .vt-column-panel-list {
   flex: 1;
   overflow-y: auto;
   margin-bottom: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--vt-border-light);
   border-radius: 4px;
   padding: 8px;
 }
@@ -891,12 +918,12 @@
 }
 
 .vt-instance .vt-column-panel-item:hover {
-  background-color: #f3f4f6;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-column-panel-item.vt-dragging {
   opacity: 0.5;
-  background-color: #e3f2fd;
+  background-color: var(--vt-primary-bg);
 }
 
 .vt-instance .vt-column-panel-item--hidden {
@@ -906,13 +933,13 @@
 .vt-instance .vt-drop-indicator {
   margin: 2px;
   height: 2px;
-  background-color: #1890ff;
+  background-color: var(--vt-primary);
   pointer-events: none;
 }
 
 .vt-instance .vt-column-panel-drag-handle {
   margin-right: 8px;
-  color: #999;
+  color: var(--vt-text-muted);
   cursor: grab;
   font-size: 16px;
 }
@@ -929,7 +956,7 @@
 .vt-instance .vt-column-panel-item label {
   flex: 1;
   font-size: 14px;
-  color: #374151;
+  color: var(--vt-text-dark);
   cursor: pointer;
   user-select: none;
 }
@@ -938,28 +965,28 @@
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-column-panel-btn {
   flex: 1;
   padding: 8px 12px;
   border-radius: 4px;
-  background-color: #fff;
-  color: #374151;
+  background-color: var(--vt-bg);
+  color: var(--vt-text-dark);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .vt-instance .vt-column-panel-btn:hover {
-  background-color: #f9fafb;
-  border-color: #38b2f6;
-  color: #3b82f6;
+  background-color: var(--vt-bg-subtle);
+  border-color: var(--vt-primary);
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-column-panel-btn:active {
-  background-color: #f3f4f6;
+  background-color: var(--vt-bg-subtle);
 }
 
 /* ========== 13. 透视表核心 ========== */
@@ -972,16 +999,16 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background-color: #f3f4f6;
-  border-bottom: 2px solid #d1d5db;
+  background-color: var(--vt-bg-subtle);
+  border-bottom: 2px solid var(--vt-border-medium);
 }
 
 .vt-instance .vt-pivot-header-cell {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--vt-text-darker);
   font-size: 14px;
-  background-color: #f9fafb;
-  border-right: 1px solid #e5e7eb;
+  background-color: var(--vt-bg-subtle);
+  border-right: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-pivot-header-cell:not(:first-child) {
@@ -999,7 +1026,7 @@
 .vt-instance .vt-pivot-table .vt-table-cell {
   box-sizing: border-box;
   overflow: hidden;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--vt-border-light);
   padding: 8px 12px;
   display: flex;
   align-items: center;
@@ -1018,7 +1045,7 @@
 }
 
 .vt-instance .vt-pivot-group-row:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 /* 分组行：简洁样式，无背景色 */
@@ -1028,7 +1055,7 @@
 }
 
 .vt-instance .vt-pivot-group-row--l0:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-group-row--l1 {
@@ -1036,7 +1063,7 @@
 }
 
 .vt-instance .vt-pivot-group-row--l1:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-group-row--l2 {
@@ -1044,7 +1071,7 @@
 }
 
 .vt-instance .vt-pivot-group-row--l2:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-group-cell {
@@ -1062,72 +1089,72 @@
   font-size: 10px;
   cursor: pointer;
   user-select: none;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   border-radius: 4px;
   transition: all 0.15s;
   flex-shrink: 0;
 }
 
 .vt-instance .vt-pivot-expand-icon:hover {
-  color: #1890ff;
-  background-color: rgba(24, 144, 255, 0.1);
+  color: var(--vt-primary);
+  background-color: var(--vt-primary-bg);
 }
 
 .vt-instance .vt-pivot-group-label {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--vt-text-darker);
 }
 
 .vt-instance .vt-pivot-count-badge {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   margin-left: 4px;
 }
 
 .vt-instance .vt-pivot-agg-cell {
-  color: #1890ff;
+  color: var(--vt-primary);
   font-weight: 500;
 }
 
 .vt-instance .vt-pivot-data-row {
-  background-color: #fff;
+  background-color: var(--vt-bg);
 }
 
 .vt-instance .vt-pivot-data-row:hover {
-  background-color: #f0f7ff;
+  background-color: var(--vt-primary-bg);
 }
 
 /* ========== 14. 透视表小计与总计 ========== */
 
 .vt-instance .vt-pivot-row-subtotal {
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+  border-top: 1px solid var(--vt-border-light);
+  border-bottom: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-pivot-row-subtotal:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-row-subtotal .vt-table-cell {
-  color: #374151;
+  color: var(--vt-text-dark);
   font-weight: 600;
 }
 
 .vt-instance .vt-pivot-row-grandtotal {
   position: sticky;
   bottom: 0;
-  background-color: #ffffff;
-  border-top: 1px solid #d1d5db;
-  border-bottom: 1px solid #d1d5db;
+  background-color: var(--vt-bg);
+  border-top: 1px solid var(--vt-border-medium);
+  border-bottom: 1px solid var(--vt-border-medium);
   z-index: 2;
 }
 
 .vt-instance .vt-pivot-row-grandtotal:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-row-grandtotal .vt-table-cell {
-  color: #1f2937;
+  color: var(--vt-text-darker);
   font-weight: 700;
   font-size: 14px;
 }
@@ -1145,13 +1172,13 @@
 .vt-instance .vt-pivot-config-title {
   font-size: 16px;
   font-weight: 600;
-  color: #374151;
+  color: var(--vt-text-dark);
   margin-bottom: 16px;
 }
 
 .vt-instance .vt-pivot-quick-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--vt-primary) 0%, var(--vt-primary) 100%);
+  color: var(--vt-text-inverse);
   border: none;
   padding: 6px 12px;
   border-radius: 6px;
@@ -1165,7 +1192,7 @@
 .vt-instance .vt-pivot-quick-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  background: linear-gradient(135deg, var(--vt-primary) 0%, var(--vt-primary) 100%);
 }
 
 .vt-instance .vt-pivot-quick-btn:active {
@@ -1181,17 +1208,17 @@
   margin-top: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--vt-text-dark);
 }
 
 .vt-instance .vt-pivot-select {
   width: 100%;
   padding: 4px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   font-size: 13px;
-  color: #374151;
-  background: white;
+  color: var(--vt-text-dark);
+  background: var(--vt-bg);
   cursor: pointer;
 }
 
@@ -1208,12 +1235,12 @@
   gap: 8px;
   padding: 4px;
   border-radius: 4px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--vt-border-light);
   transition: background-color 0.15s;
 }
 
 .vt-instance .vt-pivot-value-field-item:hover {
-  background-color: #f3f4f6;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-value-field-item input[type="checkbox"] {
@@ -1223,23 +1250,23 @@
 
 .vt-instance .vt-pivot-value-field-item label {
   font-size: 14px;
-  color: #374151;
+  color: var(--vt-text-dark);
   cursor: pointer;
 }
 
 .vt-instance .vt-pivot-agg-select {
   padding: 3px 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   font-size: 12px;
-  color: #6b7280;
-  background-color: #fff;
+  color: var(--vt-text-secondary);
+  background-color: var(--vt-bg);
   outline: none;
   flex-shrink: 0;
 }
 
 .vt-instance .vt-pivot-agg-select:focus {
-  border-color: #1890ff;
+  border-color: var(--vt-primary);
 }
 
 .vt-instance .vt-pivot-agg-select:disabled {
@@ -1253,18 +1280,18 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background-color: #eef2ff;
-  border-left: 3px solid #6366f1;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.12);
+  background-color: var(--vt-primary-bg);
+  border-left: 3px solid var(--vt-primary);
+  box-shadow: 0 2px 6px var(--vt-primary-bg);
   opacity: 0.96;
 }
 
 .vt-instance .vt-pivot-group-fields-container {
   margin: 4px 0;
   padding: 4px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--vt-border-light);
   border-radius: 4px;
-  background-color: #fafafa;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-group-field-item {
@@ -1272,21 +1299,21 @@
   display: flex;
   align-items: center;
   padding: 6px 8px;
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  background-color: var(--vt-bg);
+  border: 1px solid var(--vt-border-light);
   border-radius: 4px;
   cursor: default;
   transition: all 0.2s;
 }
 
 .vt-instance .vt-pivot-group-field-item:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-group-field-item.vt-dragging {
   opacity: 0.5;
-  background-color: #e0f2fe;
-  border-color: #3b82f6;
+  background-color: var(--vt-primary-bg);
+  border-color: var(--vt-primary);
 }
 
 .vt-instance .vt-pivot-drag-handle {
@@ -1312,15 +1339,15 @@
 .vt-instance .vt-pivot-section-label {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   margin-top: 0px;
   margin-bottom: 4px;
   padding-left: 4px;
 }
 
 .vt-instance .vt-pivot-selected-fields {
-  border: 2px dashed #3b82f6;
-  background-color: #eff6ff;
+  border: 2px dashed var(--vt-primary);
+  background-color: var(--vt-primary-bg);
 }
 
 .vt-instance .vt-pivot-selected-fields:has(.vt-pivot-group-field-item) {
@@ -1338,24 +1365,24 @@
 }
 
 .vt-instance .vt-pivot-available-fields::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: var(--vt-bg-subtle);
   border-radius: 3px;
 }
 
 .vt-instance .vt-pivot-available-fields::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--vt-border-medium);
   border-radius: 3px;
 }
 
 .vt-instance .vt-pivot-available-fields::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--vt-text-muted);
 }
 
 .vt-instance .vt-pivot-empty-hint {
   padding: 12px;
   text-align: center;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   font-style: italic;
 }
 
@@ -1369,7 +1396,7 @@
   min-height: 280px;
   padding: 32px 24px;
   gap: 12px;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   user-select: none;
 }
 
@@ -1381,12 +1408,12 @@
 .vt-instance .vt-pivot-empty-title {
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: var(--vt-text-dark);
 }
 
 .vt-instance .vt-pivot-empty-desc {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   margin-bottom: 4px;
 }
 
@@ -1396,8 +1423,8 @@
   gap: 8px;
   width: 100%;
   max-width: 320px;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--vt-bg-subtle);
+  border: 1px solid var(--vt-border-light);
   border-radius: 8px;
   padding: 14px 16px;
 }
@@ -1407,12 +1434,12 @@
   align-items: flex-start;
   gap: 10px;
   font-size: 13px;
-  color: #4b5563;
+  color: var(--vt-text-secondary);
   line-height: 1.5;
 }
 
 .vt-instance .vt-pivot-empty-step strong {
-  color: #6366f1;
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-pivot-empty-step-num {
@@ -1420,8 +1447,8 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #6366f1;
-  color: #fff;
+  background: var(--vt-primary);
+  color: var(--vt-bg);
   font-size: 11px;
   font-weight: 700;
   display: flex;
@@ -1431,26 +1458,26 @@
 }
 
 .vt-instance .vt-pivot-selected-fields .vt-pivot-group-field-item {
-  background-color: #eff6ff;
-  border-color: #bfdbfe;
+  background-color: var(--vt-primary-bg);
+  border-color: var(--vt-border-medium);
 }
 
 .vt-instance .vt-pivot-selected-fields .vt-pivot-group-field-item:hover {
-  background-color: #dbeafe;
-  border-color: #93c5fd;
+  background-color: var(--vt-primary-bg);
+  border-color: var(--vt-primary-hover);
 }
 
 .vt-instance .vt-pivot-available-fields .vt-pivot-group-field-item {
-  background-color: #fff;
-  border-color: #e5efeb;
+  background-color: var(--vt-bg);
+  border-color: var(--vt-border-light);
 }
 
 .vt-instance .vt-pivot-available-fields .vt-pivot-group-field-item:hover {
-  background-color: #f9fafb;
+  background-color: var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-group-field-item input[type="checkbox"]:disabled ~ label {
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   cursor: not-allowed;
 }
 
@@ -1461,7 +1488,7 @@
   margin-right: 10px;
   margin-bottom: 10px;
   font-size: 14px;
-  color: #666;
+  color: var(--vt-text-secondary);
   font-weight: 500;
   line-height: 20px;
 }
@@ -1486,7 +1513,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
+  background-color: var(--vt-border-medium);
   border-radius: 18px;
   transition: 0.3s;
 }
@@ -1498,13 +1525,13 @@
   width: 14px;
   left: 2px;
   bottom: 2px;
-  background-color: #fff;
+  background-color: var(--vt-bg);
   border-radius: 50%;
   transition: 0.3s;
 }
 
 .vt-instance .vt-pivot-switch-input:checked + .vt-pivot-switch-slider {
-  background-color: #1890ff;
+  background-color: var(--vt-primary);
 }
 
 .vt-instance .vt-pivot-switch-input:checked + .vt-pivot-switch-slider::before {
@@ -1530,7 +1557,7 @@
   min-height: 0;
   /* 确保滚动条始终可见 */
   scrollbar-width: auto;
-  scrollbar-color: #9ca3af #f3f4f6;
+  scrollbar-color: var(--vt-text-muted) var(--vt-bg-subtle);
 }
 
 /* 美化滚动条（Webkit浏览器） */
@@ -1540,18 +1567,18 @@
 }
 
 .vt-instance .vt-pivot-scroll-container::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: var(--vt-bg-subtle);
   border-radius: 6px;
 }
 
 .vt-instance .vt-pivot-scroll-container::-webkit-scrollbar-thumb {
-  background: #9ca3af;
+  background: var(--vt-text-muted);
   border-radius: 6px;
-  border: 2px solid #f3f4f6;
+  border: 2px solid var(--vt-bg-subtle);
 }
 
 .vt-instance .vt-pivot-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--vt-text-secondary);
 }
 
 .vt-instance .vt-pivot-scroll-spacer {
@@ -1577,8 +1604,8 @@
 .vt-instance .vt-pivot-header-wrapper {
   display: flex;
   flex-direction: column;
-  background-color: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
+  background-color: var(--vt-bg-subtle);
+  border-bottom: 2px solid var(--vt-border-light);
   min-width: fit-content;
   width: fit-content;
   overflow-x: auto;
@@ -1598,7 +1625,7 @@
   flex-direction: row;
   min-width: fit-content;
   width: fit-content;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-pivot-header-wrapper > .vt-table-row:last-child {
@@ -1629,7 +1656,7 @@
   flex-direction: row;
   min-height: 32px;
   height: 32px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--vt-border-light);
 }
 
 /* 行的冻结部分：固定220px */
@@ -1640,8 +1667,8 @@
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  border-right: 1px solid #d1d5db;
-  background-color: #ffffff;
+  border-right: 1px solid var(--vt-border-medium);
+  background-color: var(--vt-bg);
 }
 
 /* 行的滚动部分：可滚动 */
@@ -1658,16 +1685,16 @@
   flex: 0 0 220px;
   display: flex;
   flex-direction: column;
-  border-right: 2px solid #d1d5db;
-  background: #fff;
+  border-right: 2px solid var(--vt-border-medium);
+  background: var(--vt-bg);
   z-index: 20;
   min-height: 0;
 }
 
 .vt-instance .vt-pivot-frozen-header {
   flex: 0 0 auto;
-  background-color: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
+  background-color: var(--vt-bg-subtle);
+  border-bottom: 2px solid var(--vt-border-light);
   overflow: hidden;
 }
 
@@ -1678,7 +1705,7 @@
 
 .vt-instance .vt-pivot-frozen-header-wrapper > .vt-table-row {
   display: flex;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-pivot-frozen-header-wrapper > .vt-table-row:last-child {
@@ -1704,9 +1731,9 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  background-color: #eef2ff;
-  border-left: 3px solid #6366f1;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.12);
+  background-color: var(--vt-primary-bg);
+  border-left: 3px solid var(--vt-primary);
+  box-shadow: 0 2px 6px var(--vt-primary-bg);
   opacity: 0.96;
 }
 
@@ -1721,7 +1748,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--vt-bg-subtle);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -1790,9 +1817,9 @@
 .vt-instance .vt-pivot-control-btn {
   padding: 3px 10px;
   font-size: 12px;
-  color: #374151;
-  background-color: #ffffff;
-  border: 1px solid #d1d5db;
+  color: var(--vt-text-dark);
+  background-color: var(--vt-bg);
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1800,27 +1827,27 @@
 }
 
 .vt-instance .vt-pivot-control-btn:hover {
-  background-color: #eef2ff;
-  border-color: #6366f1;
-  color: #6366f1;
+  background-color: var(--vt-primary-bg);
+  border-color: var(--vt-primary);
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-pivot-control-btn:active {
-  background-color: #e5e7eb;
+  background-color: var(--vt-border-light);
 }
 
 .vt-instance .vt-pivot-filter-btn.vt-pivot-filter-active {
-  border-color: #6366f1;
-  background: #eef2ff;
-  color: #4f46e5;
+  border-color: var(--vt-primary);
+  background: var(--vt-primary-bg);
+  color: var(--vt-primary);
 }
 
 /* ── 透视筛选下拉框 ── */
 .vt-pivot-filter-dropdown {
   position: absolute;
   z-index: 9999;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border-light);
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   min-width: 160px;
@@ -1832,12 +1859,12 @@
   display: flex;
   gap: 12px;
   padding: 0 12px 6px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--vt-bg-subtle);
   margin-bottom: 4px;
 }
 
 .vt-pivot-filter-actions span {
-  color: #6366f1;
+  color: var(--vt-primary);
   cursor: pointer;
   font-size: 12px;
 }
@@ -1863,7 +1890,7 @@
 }
 
 .vt-pivot-filter-item:hover {
-  background: #f3f4f6;
+  background: var(--vt-bg-subtle);
 }
 
 .vt-pivot-filter-confirm {
@@ -1871,8 +1898,8 @@
   width: calc(100% - 16px);
   margin: 6px 8px 4px;
   padding: 4px 0;
-  background: #6366f1;
-  color: #fff;
+  background: var(--vt-primary);
+  color: var(--vt-bg);
   border: none;
   border-radius: 4px;
   font-size: 12px;
@@ -1880,7 +1907,7 @@
 }
 
 .vt-pivot-filter-confirm:hover {
-  background: #4f46e5;
+  background: var(--vt-primary);
 }
 
 /* ========== 21. 面包屑导航 ========== */
@@ -1890,26 +1917,26 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background-color: #fffbeb;
-  border-bottom: 1px solid #e5e7eb;
+  background-color: var(--vt-bg)beb;
+  border-bottom: 1px solid var(--vt-border-light);
   font-size: 13px;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   flex-wrap: wrap;
 }
 
 .vt-instance .vt-pivot-breadcrumb-item {
-  color: #3b82f6;
+  color: var(--vt-primary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .vt-instance .vt-pivot-breadcrumb-item:hover {
-  color: #2563eb;
+  color: var(--vt-primary);
   text-decoration: underline;
 }
 
 .vt-instance .vt-pivot-breadcrumb-separator {
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   margin: 0 4px;
   user-select: none;
 }
@@ -1918,10 +1945,10 @@
 
 .vt-instance .vt-pivot-subtotal-toggle {
   padding: 8px 12px;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+  border-top: 1px solid var(--vt-border-light);
+  border-bottom: 1px solid var(--vt-border-light);
   margin-top: 12px;
-  background-color: #ffffff;
+  background-color: var(--vt-bg);
 }
 
 .vt-instance .vt-pivot-subtotal-label {
@@ -1929,7 +1956,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #374151;
+  color: var(--vt-text-dark);
   cursor: pointer;
   user-select: none;
 }
@@ -1952,14 +1979,14 @@
   flex-direction: column;
   flex: 0 0 auto;
   max-height: 220px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--vt-border-light);
   padding: 8px 0 0;
 }
 
 .vt-instance .vt-px-section-header {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0 10px 6px;
@@ -1968,15 +1995,15 @@
 .vt-instance .vt-px-pool-search {
   margin: 0 10px 6px;
   padding: 4px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   font-size: 12px;
   outline: none;
-  color: #374151;
+  color: var(--vt-text-dark);
 }
 .vt-instance .vt-px-pool-search:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+  border-color: var(--vt-primary);
+  box-shadow: 0 0 0 2px var(--vt-primary-bg);
 }
 
 .vt-instance .vt-px-pool-list {
@@ -1993,31 +2020,31 @@
   border-radius: 4px;
   cursor: grab;
   font-size: 13px;
-  color: #374151;
+  color: var(--vt-text-dark);
   user-select: none;
   transition: background 0.1s;
 }
 .vt-instance .vt-px-pool-item:hover {
-  background: #f3f4f6;
+  background: var(--vt-bg-subtle);
 }
 
 /* 已使用的字段标记样式 */
 .vt-instance .vt-px-pool-item--used {
   opacity: 0.5;
-  background: #f9fafb;
-  border-left: 3px solid #6366f1;
+  background: var(--vt-bg-subtle);
+  border-left: 3px solid var(--vt-primary);
 }
 
 .vt-instance .vt-px-pool-item--used:hover {
   opacity: 0.7;
-  background: #f3f4f6;
+  background: var(--vt-bg-subtle);
 }
 .vt-instance .vt-px-pool-item.vt-dragging {
   opacity: 0.4;
 }
 
 .vt-instance .vt-px-handle {
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   font-size: 14px;
   line-height: 1;
   cursor: grab;
@@ -2035,8 +2062,8 @@
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 700;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--vt-text-secondary);
+  background: var(--vt-bg-subtle);
   border-radius: 3px;
   padding: 1px 4px;
   line-height: 1.4;
@@ -2044,7 +2071,7 @@
 
 .vt-instance .vt-px-pool-empty {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   text-align: center;
   padding: 12px 0;
 }
@@ -2053,11 +2080,11 @@
 .vt-instance .vt-px-divider {
   flex-shrink: 0;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   text-align: center;
   padding: 5px 10px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fafafa;
+  border-bottom: 1px solid var(--vt-border-light);
+  background: var(--vt-bg-subtle);
   letter-spacing: 0.02em;
 }
 
@@ -2075,8 +2102,8 @@
 .vt-instance .vt-px-zone {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid var(--vt-border-light);
+  border-bottom: 1px solid var(--vt-border-light);
   min-height: 0;
   transition: background 0.15s;
 }
@@ -2088,12 +2115,12 @@
   border-bottom: none;
 }
 .vt-instance .vt-px-zone--over {
-  background: #eef2ff;
+  background: var(--vt-primary-bg);
 }
 
 .vt-instance .vt-px-zone--rejected {
-  background: #fef2f2;
-  border-color: #fca5a5;
+  background: var(--vt-danger-bg);
+  border-color: var(--vt-danger);
   cursor: not-allowed;
 }
 
@@ -2102,15 +2129,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 6px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--vt-bg-subtle);
+  border-bottom: 1px solid var(--vt-border-light);
   flex-shrink: 0;
 }
 
 .vt-instance .vt-px-zone-label {
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2120,16 +2147,16 @@
 
 .vt-instance .vt-px-zone-icon {
   font-size: 12px;
-  color: #6366f1;
+  color: var(--vt-primary);
 }
 
 .vt-instance .vt-px-zone-add {
   width: 18px;
   height: 18px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 3px;
-  background: white;
-  color: #6b7280;
+  background: var(--vt-bg);
+  color: var(--vt-text-secondary);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -2140,9 +2167,9 @@
   transition: all 0.1s;
 }
 .vt-instance .vt-px-zone-add:hover {
-  background: #6366f1;
-  color: white;
-  border-color: #6366f1;
+  background: var(--vt-primary);
+  color: var(--vt-text-inverse);
+  border-color: var(--vt-primary);
 }
 
 .vt-instance .vt-px-zone-body {
@@ -2157,14 +2184,14 @@
 
 .vt-instance .vt-px-zone-hint {
   font-size: 11px;
-  color: #d1d5db;
+  color: var(--vt-border-medium);
   text-align: center;
   padding: 8px 4px;
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed #e5e7eb;
+  border: 1px dashed var(--vt-border-light);
   border-radius: 4px;
   margin: 2px 0;
 }
@@ -2175,19 +2202,19 @@
   align-items: center;
   gap: 3px;
   padding: 3px 4px;
-  background: white;
-  border: 1px solid #d1d5db;
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   font-size: 12px;
-  color: #374151;
+  color: var(--vt-text-dark);
   cursor: grab;
   user-select: none;
   min-width: 0;
   transition: box-shadow 0.1s;
 }
 .vt-instance .vt-px-chip:hover {
-  border-color: #6366f1;
-  box-shadow: 0 1px 3px rgba(99,102,241,0.15);
+  border-color: var(--vt-primary);
+  box-shadow: 0 1px 3px var(--vt-primary-bg);
 }
 .vt-instance .vt-px-chip.vt-dragging {
   opacity: 0.4;
@@ -2207,7 +2234,7 @@
   height: 14px;
   border: none;
   background: none;
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
@@ -2218,22 +2245,22 @@
   border-radius: 2px;
 }
 .vt-instance .vt-px-chip-remove:hover {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--vt-danger-bg);
+  color: var(--vt-danger);
 }
 
 .vt-instance .vt-px-chip--filtered {
-  background: #eef2ff;
-  border-color: #6366f1;
-  color: #4f46e5;
+  background: var(--vt-primary-bg);
+  border-color: var(--vt-primary);
+  color: var(--vt-primary);
 }
 
 /* 筛选器值选择下拉框 */
 .vt-px-filter-picker {
   position: fixed;
   z-index: 9999;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border-light);
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   min-width: 160px;
@@ -2244,8 +2271,8 @@
 .vt-px-filter-header {
   padding: 0 12px 6px;
   font-weight: 600;
-  color: #374151;
-  border-bottom: 1px solid #f3f4f6;
+  color: var(--vt-text-dark);
+  border-bottom: 1px solid var(--vt-bg-subtle);
   font-size: 13px;
 }
 
@@ -2253,7 +2280,7 @@
   width: calc(100% - 24px);
   margin: 8px 12px;
   padding: 6px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
   font-size: 13px;
   outline: none;
@@ -2261,14 +2288,14 @@
 }
 
 .vt-px-filter-search:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  border-color: var(--vt-primary);
+  box-shadow: 0 0 0 2px var(--vt-primary-bg);
 }
 
 .vt-px-filter-empty {
   padding: 20px 12px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--vt-text-muted);
   font-size: 12px;
 }
 
@@ -2276,11 +2303,11 @@
   display: flex;
   gap: 12px;
   padding: 6px 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--vt-bg-subtle);
 }
 
 .vt-px-filter-actions span {
-  color: #6366f1;
+  color: var(--vt-primary);
   cursor: pointer;
   font-size: 12px;
 }
@@ -2301,7 +2328,7 @@
 }
 
 .vt-px-filter-item:hover {
-  background: #f3f4f6;
+  background: var(--vt-bg-subtle);
 }
 
 .vt-px-filter-confirm {
@@ -2309,8 +2336,8 @@
   width: calc(100% - 16px);
   margin: 8px 8px 4px;
   padding: 4px 0;
-  background: #6366f1;
-  color: #fff;
+  background: var(--vt-primary);
+  color: var(--vt-bg);
   border: none;
   border-radius: 4px;
   font-size: 12px;
@@ -2318,7 +2345,7 @@
 }
 
 .vt-px-filter-confirm:hover {
-  background: #4f46e5;
+  background: var(--vt-primary);
 }
 
 /* 数值范围筛选器 */
@@ -2331,27 +2358,27 @@
 
 .vt-px-number-range label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   margin-bottom: 2px;
 }
 
 .vt-px-number-input {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--vt-border-light);
   border-radius: 4px;
   font-size: 13px;
 }
 
 .vt-px-number-input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: var(--vt-primary);
 }
 
 /* 日期范围筛选器 */
 .vt-px-date-granularity {
   padding: 8px 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--vt-bg-subtle);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2374,21 +2401,21 @@
 
 .vt-px-date-range label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--vt-text-secondary);
   margin-bottom: 2px;
 }
 
 .vt-px-date-input {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--vt-border-light);
   border-radius: 4px;
   font-size: 13px;
 }
 
 .vt-px-date-input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: var(--vt-primary);
 }
 
 /* 筛选器按钮组 */
@@ -2396,7 +2423,7 @@
   display: flex;
   gap: 8px;
   padding: 8px 12px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--vt-bg-subtle);
 }
 
 .vt-px-filter-btn {
@@ -2410,31 +2437,31 @@
 }
 
 .vt-px-filter-btn--primary {
-  background: #6366f1;
-  color: #fff;
+  background: var(--vt-primary);
+  color: var(--vt-bg);
 }
 
 .vt-px-filter-btn--primary:hover {
-  background: #4f46e5;
+  background: var(--vt-primary);
 }
 
 .vt-px-filter-btn--secondary {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--vt-bg-subtle);
+  color: var(--vt-text-secondary);
 }
 
 .vt-px-filter-btn--secondary:hover {
-  background: #e5e7eb;
+  background: var(--vt-border-light);
 }
 
 /* values 区 agg 下拉 */
 .vt-instance .vt-px-agg-select {
   flex-shrink: 0;
   font-size: 11px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--vt-border-light);
   border-radius: 3px;
-  background: #f9fafb;
-  color: #6b7280;
+  background: var(--vt-bg-subtle);
+  color: var(--vt-text-secondary);
   padding: 0 2px;
   height: 18px;
   max-width: 46px;
@@ -2450,20 +2477,20 @@
   gap: 6px;
   padding: 6px 10px;
   font-size: 12px;
-  color: #6b7280;
-  border-top: 1px solid #e5e7eb;
+  color: var(--vt-text-secondary);
+  border-top: 1px solid var(--vt-border-light);
   cursor: pointer;
   user-select: none;
-  background: #fafafa;
+  background: var(--vt-bg-subtle);
 }
 .vt-instance .vt-px-subtotal-row:hover {
-  color: #374151;
+  color: var(--vt-text-dark);
 }
 
 /* ── 字段选择 picker 弹窗 ── */
 .vt-px-picker {
-  background: white;
-  border: 1px solid #d1d5db;
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border-medium);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
   z-index: 9999;
@@ -2476,13 +2503,13 @@
 .vt-px-picker-item {
   padding: 6px 10px;
   font-size: 13px;
-  color: #374151;
+  color: var(--vt-text-dark);
   border-radius: 4px;
   cursor: pointer;
 }
 .vt-px-picker-item:hover {
-  background: #f3f4f6;
-  color: #6366f1;
+  background: var(--vt-bg-subtle);
+  color: var(--vt-primary);
 }
 
 /* ===== 数据区占位层 (加载态 / 空态共用) =====
@@ -2499,38 +2526,38 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: #fff;
+  background: var(--vt-bg);
   z-index: 5;
 }
 .vt-placeholder-title {
   font-size: 14px;
-  color: #4e5969;
+  color: var(--vt-text-secondary);
 }
 .vt-placeholder-hint {
   font-size: 12px;
-  color: #86909c;
+  color: var(--vt-text-muted);
 }
 .vt-placeholder-clear {
   margin-top: 6px;
   padding: 5px 14px;
-  border: 1px solid #c9cdd4;
+  border: 1px solid var(--vt-border-medium);
   border-radius: 4px;
-  background: #fff;
-  color: #165dff;
+  background: var(--vt-bg);
+  color: var(--vt-primary);
   font-size: 13px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 .vt-placeholder-clear:hover {
-  border-color: #165dff;
-  background: #f2f6ff;
+  border-color: var(--vt-primary);
+  background: var(--vt-primary-bg);
 }
 /* 纯 css 转圈, 不引入任何图片资源 */
 .vt-placeholder-spinner {
   width: 22px;
   height: 22px;
-  border: 2px solid #e5e6eb;
-  border-top-color: #165dff;
+  border: 2px solid var(--vt-border-light);
+  border-top-color: var(--vt-primary);
   border-radius: 50%;
   animation: vt-placeholder-spin 0.7s linear infinite;
 }
