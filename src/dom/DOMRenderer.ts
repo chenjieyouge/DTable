@@ -38,6 +38,21 @@ export class DOMRenderer {
     return cell
   }
 
+  /**
+   * 标记冻结列
+   *
+   * @param colIndex 列序号 —— 必须是"不包含 checkbox 占位格"的数据列序号,
+   *                  否则开了行选中时所有冻结列都会错位
+   */
+  private markFrozen(cell: HTMLDivElement, colIndex: number): void {
+    const frozenCount = this.config.frozenColumns
+    const isFrozen = colIndex < frozenCount
+
+    cell.classList.toggle('vt-cell-frozen', isFrozen)
+    // 最后一列冻结列承担边界阴影, 只在横向滚动后由外层 class 显示
+    cell.classList.toggle('vt-cell-frozen-last', isFrozen && colIndex === frozenCount - 1)
+  }
+
   /** 更新行选中状态（class + checkbox） */
   public setRowSelected(rowEl: HTMLDivElement, isSelected: boolean): void {
     rowEl.classList.toggle('vt-row-selected', isSelected)
@@ -114,11 +129,7 @@ export class DOMRenderer {
 
       cell.classList.add('vt-table-cell')
       // 重复加一次冻结样式, 兜底冻结列不生效
-      if (idx < this.config.frozenColumns) {
-        cell.classList.add('vt-cell-frozen')
-      } else {
-        cell.classList.remove('vt-cell-frozen')
-      }
+      this.markFrozen(cell, idx)
 
       // 优先自定义渲染器
       if (col.render) {
@@ -174,8 +185,8 @@ export class DOMRenderer {
       cell.dataset.columnKey = col.key 
 
       // 处理冻结列
+      this.markFrozen(cell, index)
       if (index < this.config.frozenColumns) {
-        cell.classList.add('vt-cell-frozen')
         cell.style.left = `${leftOffset}px`
       }
       // TODO: 拓展更多字段配置
@@ -299,9 +310,7 @@ export class DOMRenderer {
     cell.appendChild(menuBtn)
 
     // 添加-冻结列处理
-    if (index < this.config.frozenColumns) {
-      cell.classList.add('vt-cell-frozen')
-    }
+    this.markFrozen(cell, index)
     return cell 
   }
 
@@ -315,9 +324,7 @@ export class DOMRenderer {
     cell.textContent = summaryData?.[col.key] ?? (index === 0 ? '合计' : '')
 
     // 添加-冻结列处理
-    if (index < this.config.frozenColumns) {
-      cell.classList.add('vt-cell-frozen')
-    }
+    this.markFrozen(cell, index)
     return cell
   }
 
@@ -368,10 +375,8 @@ export class DOMRenderer {
       }
     }
     // 处理冻结列
-    if (colIndex < this.config.frozenColumns) {
-      cell.classList.add('vt-cell-frozen')
-    }
-    return cell 
+    this.markFrozen(cell, colIndex)
+    return cell
   }
 
   /**
@@ -396,14 +401,22 @@ export class DOMRenderer {
   public applyFrozenStyles(row: HTMLDivElement): void {
     // 优先用 css 变量, 避免用 getBoundingClientRect() 产生重排
     const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.vt-table-cell'))
-    cells.forEach((cell, index) => {
+
+    // 注意: 这里必须自己数数据列的序号, 不能用 forEach 的 index ——
+    // checkbox 占位格也在 .vt-table-cell 里, 会让序号整体偏一位,
+    // 导致开了行选中时第 N 列冻结失效
+    let colIndex = -1
+
+    cells.forEach((cell) => {
       const key = cell.dataset.columnKey
-      // 先移除所有冻结列样式
-      cell.classList.remove('vt-cell-frozen')
+      if (!key) return // checkbox 占位格不参与冻结列计数
+
+      colIndex++
+
       cell.style.left = ''
-      // 根据所有重新应用冻结列样式
-      if (index < this.config.frozenColumns && key) {
-        cell.classList.add('vt-cell-frozen')
+      this.markFrozen(cell, colIndex)
+
+      if (colIndex < this.config.frozenColumns) {
         // 优先使用 css 变量, 比 getBoundingClientRect 性能更好
         cell.style.left = `var(--col-${key}-left, 0px)`
       }

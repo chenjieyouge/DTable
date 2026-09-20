@@ -181,6 +181,12 @@ export function mountTableShell(params: {
 
   // 2. 表格包裹层 wrapper -> header
   const tableWrapper = createTableWrapper(config)
+
+  // 冻结列边界阴影: 只在横向滚动之后出现 —— 没滚动时画一条阴影线是噪音。
+  // 2px 容差, 避免亚像素滚动距离导致阴影忽闪
+  const syncFrozenShadow = () => {
+    tableWrapper.classList.toggle('vt-scrolled-x', scrollContainer.scrollLeft > 2)
+  }
   const headerRow = renderer.createHeaderRow()
   // 绑定排序按钮
   headerSortBinder.bind(headerRow, (key) => onToggleSort(key))
@@ -302,7 +308,10 @@ export function mountTableShell(params: {
       sortIndicatorView.set(sort)
     },
     bindScroll(onRafScroll: () => void) {
-      scrollBinder.bind(scrollContainer, onRafScroll)
+      scrollBinder.bind(scrollContainer, () => {
+        syncFrozenShadow()
+        onRafScroll()
+      })
     },
     updateColumnWidths(columns, dataRows) {
       let leftOffset = 0

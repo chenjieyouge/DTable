@@ -320,6 +320,20 @@
   z-index: 10;
 }
 
+/* 冻结列边界阴影: 只在横向滚动后出现, 提示"左边这几列是不动的"。
+   画在最后一列冻结列上 —— 它是 sticky 的, 阴影会自动跟着停住。
+   注意 sticky 也属于"已定位", 所以能作为 ::after 的包含块。 */
+.vt-instance .vt-table-wrapper.vt-scrolled-x .vt-cell-frozen-last::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  width: 6px;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
 /* ========== 6. 虚拟滚动 ========== */
 
 .vt-instance .vt-data-container {
