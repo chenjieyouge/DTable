@@ -25,6 +25,7 @@ export const DATA_EFFECT_ACTIONS = new Set<string>([
   'SORT_SET',
   'SET_FILTER_TEXT',
   'CLEAR_FILTER_TEXT',
+  'CLEAR_ALL_FILTERS',
   'COLUMN_FILTER_SET',
   'COLUMN_FILTER_CLEAR'
 ])
@@ -82,6 +83,7 @@ export const actionHandlers = new Map<string, ActionHandler>([
   ['SORT_SET', handleDataChange],
   ['SET_FILTER_TEXT', handleDataChange],
   ['CLEAR_FILTER_TEXT', handleDataChange],
+  ['CLEAR_ALL_FILTERS', handleDataChange],
   ['COLUMN_FILTER_SET', handleDataChange],
   ['COLUMN_FILTER_CLEAR', handleDataChange]
 ])

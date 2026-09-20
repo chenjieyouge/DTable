@@ -374,6 +374,24 @@ export class DOMRenderer {
     return cell 
   }
 
+  /**
+   * 高亮"正在筛选"的列的漏斗图标
+   *
+   * 复用已有的 vt-active 约定 (样式表里 .vt-col-filter-btn.vt-active 早就定义了,
+   * 只是一直没人给它加上这个 class)。
+   * 幂等: 表头每次重建后都要重新应用, 所以用 toggle 而不是 add/remove。
+   */
+  public applyFilterIndicators(headerRow: HTMLDivElement, activeKeys: string[]): void {
+    const active = new Set(activeKeys)
+    const btns = headerRow.querySelectorAll<HTMLElement>('.vt-col-filter-btn')
+
+    btns.forEach((btn) => {
+      const key = btn.dataset.columnKey
+      if (!key) return
+      btn.classList.toggle('vt-active', active.has(key))
+    })
+  }
+
   // 辅助方法: 统一应用冻结列样式和位置
   public applyFrozenStyles(row: HTMLDivElement): void {
     // 优先用 css 变量, 避免用 getBoundingClientRect() 产生重排

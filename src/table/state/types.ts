@@ -29,6 +29,7 @@ export type TableAction =
   | { type: 'SET_MODE'; payload: { mode: TableMode }}
   | { type: 'SET_FILTER_TEXT'; payload: { text: string }}
   | { type: 'CLEAR_FILTER_TEXT' } // 清空筛选
+  | { type: 'CLEAR_ALL_FILTERS' } // 一键清空: 全局搜索 + 所有列筛选
   | { type: 'SORT_TOGGLE'; payload: { key: string }}
   | { type: 'SORT_SET'; payload: { sort: SortValue }} // 列值排序
   | { type: 'COLUMN_ORDER_SET'; payload: { order: string[]} }  // 设置列顺序

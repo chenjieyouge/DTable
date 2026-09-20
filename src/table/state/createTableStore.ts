@@ -85,6 +85,25 @@ export function createTableStore(params: {
         }
       }
 
+      case 'CLEAR_ALL_FILTERS': {
+        // 一次 dispatch 同时清掉全局搜索和所有列筛选:
+        // 分两次派发会触发两轮 applyQuery, 白白多发一次请求
+        const nextQuery: ITableQuery = {
+          ...prev.data.query,
+          filterText: '',
+          columnFilters: {}
+        }
+        return {
+          ...prev,
+          data: {
+            ...prev.data,
+            query: nextQuery,
+            clientFilterText: '',
+            columnFilters: {}
+          }
+        }
+      }
+
       case 'SET_FILTER_TEXT': {
         const text = action.payload.text
         const nextQuery: ITableQuery = { ...prev.data.query, filterText: text }

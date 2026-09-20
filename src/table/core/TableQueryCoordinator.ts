@@ -23,7 +23,8 @@ export class TableQueryCoordinator {
   private shell: ITableShell
   private renderer: DOMRenderer
   private getScroller: () => VirtualScroller
-  private setScroller: (scroller: VirtualScroller) => void 
+  private setScroller: (scroller: VirtualScroller) => void
+  private setLoading: (on: boolean) => void
 
   constructor(params: {
     config: IConfig,
@@ -33,7 +34,8 @@ export class TableQueryCoordinator {
     shell: ITableShell,
     renderer: DOMRenderer,
     getScroller: () => VirtualScroller,
-    setScroller: (scroller: VirtualScroller) => void
+    setScroller: (scroller: VirtualScroller) => void,
+    setLoading: (on: boolean) => void
 
   }) {
     this.config = params.config
@@ -44,39 +46,46 @@ export class TableQueryCoordinator {
     this.renderer = params.renderer
     this.getScroller = params.getScroller
     this.setScroller = params.setScroller
+    this.setLoading = params.setLoading
   }
 
   /**
    * 应用查询 (统一入口)
    */
   public async applyQuery(query: ITableQuery): Promise<void> {
-    // 1. 调用 strategy 应用查询
-    const result = await this.dataStrategy.applyQuery(query)
-    // 2. 更新 totalRows 和 scroller 
-    this.config.totalRows = result.totalRows
-    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: result.totalRows } })
+    this.setLoading(true)
+    try {
+      // 1. 调用 strategy 应用查询
+      const result = await this.dataStrategy.applyQuery(query)
+      // 2. 更新 totalRows 和 scroller
+      this.config.totalRows = result.totalRows
+      this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: result.totalRows } })
 
-    const newScroller = new VirtualScroller(this.config)
-    this.setScroller(newScroller)
-    this.viewport.setScroller(newScroller)
-    this.shell.setScrollHeight(newScroller)
-    // 3. 若需要回到顶部
-    if (result.shouldResetScroll) {
-      this.shell.scrollContainer.scrollTop = 0
+      const newScroller = new VirtualScroller(this.config)
+      this.setScroller(newScroller)
+      this.viewport.setScroller(newScroller)
+      this.shell.setScrollHeight(newScroller)
+      // 3. 若需要回到顶部
+      if (result.shouldResetScroll) {
+        this.shell.scrollContainer.scrollTop = 0
+      }
+      // 4. 协议校验
+      if (process.env.NODE_ENV === 'development') {
+        RenderProtocalValidator.validate(
+          RenderScenario.QUERY_CHANGE,
+          RenderMethod.REFRESH,
+          'TableQueryCoordinator.applyQuery'
+        )
+      }
+      // 5. 刷新可视区, 状态栏
+      this.viewport.refresh()
+      this.updateStatusBar()
+      // 6. 刷新总结行
+      this.refreshSummary()
+    } finally {
+      // 查询失败也必须收起加载态, 否则表格会永远转圈
+      this.setLoading(false)
     }
-    // 4. 协议校验
-    if (process.env.NODE_ENV === 'development') {
-      RenderProtocalValidator.validate(
-        RenderScenario.QUERY_CHANGE,
-        RenderMethod.REFRESH,
-        'TableQueryCoordinator.applyQuery'
-      )
-    }
-    // 5. 刷新可视区, 状态栏
-    this.viewport.refresh()
-    this.updateStatusBar()
-    // 6. 刷新总结行
-    this.refreshSummary()
   }
 
   /** 同步刷新总结行 */

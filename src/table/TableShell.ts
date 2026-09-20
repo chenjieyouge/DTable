@@ -10,6 +10,7 @@ import { ColumnDragBinder } from "@/table/interaction/ColumnDragBinder";
 import { ColumnFilterBinder } from "@/table/interaction/ColumnFilterBinder";
 import { TableResizeBinder } from "@/table/interaction/TableResizeBinder";
 import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
+import type { PlaceholderDecision } from "@/table/viewport/emptyState";
 
 
 // 全局弹窗管理器, 弹窗之间互斥出现
@@ -37,13 +38,15 @@ export interface ITableShell {
   virtualContent: HTMLDivElement
   summaryRow?: HTMLDivElement
   headerRow: HTMLDivElement // 缓存表头引用
+  placeholderEl: HTMLDivElement // 数据区占位层 (加载态/空态共用, 只盖数据区, 保留表头)
 
   setScrollHeight(scroller: VirtualScroller): void // 统一更新滚动高度
   // 统一控制排序箭头
-  setSortIndicator(sort: { key: string, direction: 'asc' | 'desc' } | null): void 
+  setSortIndicator(sort: { key: string, direction: 'asc' | 'desc' } | null): void
   bindScroll(onRafScroll: () => void): void // 绑定滚动, 内部 raf, 外部只传要做什么
   // 增量更新列宽 (css 变量), 顺带将 dataRows 也捎过来呗
-  updateColumnWidths(columns: IConfig['columns'], dataRows?: HTMLDivElement[]): void  
+  updateColumnWidths(columns: IConfig['columns'], dataRows?: HTMLDivElement[]): void
+  setPlaceholder(decision: PlaceholderDecision): void // 展示/隐藏占位层
   destroy(): void
 }
 
@@ -140,6 +143,16 @@ export function mountTableShell(params: {
   // 4. 挂载关系: userContainer -> portalContainer -> scrollContainer
   portalContainer.appendChild(scrollContainer)
   containerEl.appendChild(portalContainer)
+
+  // 5. 数据区占位层(加载态/空态共用): 只盖数据区, 保留表头,
+  //    否则用户没法撤回自己的筛选条件
+  const placeholderEl = document.createElement('div')
+  placeholderEl.className = 'vt-placeholder'
+  placeholderEl.style.display = 'none'
+  // 覆盖起点 = 表头 + 总结行高度, 用 css 变量传给样式表
+  const placeholderTop = config.headerHeight + (config.showSummary ? config.summaryHeight : 0)
+  portalContainer.style.setProperty('--vt-placeholder-top', `${placeholderTop}px`)
+  portalContainer.appendChild(placeholderEl)
 
   // 创建底部状态栏 (可选)
   let statusBar: HTMLDivElement | null = null 
@@ -276,6 +289,11 @@ export function mountTableShell(params: {
     virtualContent,
     summaryRow,
     headerRow,  // 对外暴露 headerRow 引用
+    placeholderEl,
+
+    setPlaceholder(decision: PlaceholderDecision) {
+      renderPlaceholder(placeholderEl, decision)
+    },
 
     setScrollHeight(scroller: VirtualScroller) {
       dataContainer.style.height = `${scroller.getActualScrollHeight()}px`
@@ -336,6 +354,30 @@ export function mountTableShell(params: {
       menuBinder.unbind() // 解绑列菜单
     }
   }
+}
+
+// 辅助函数-渲染数据区占位层
+// 注意: 文案全部来自 emptyState 里的常量, 不插值任何用户输入(如搜索关键词), 避免注入
+function renderPlaceholder(el: HTMLDivElement, decision: PlaceholderDecision): void {
+  if (decision.kind === 'none') {
+    el.style.display = 'none'
+    el.innerHTML = ''
+    return
+  }
+
+  const spinner = decision.showSpinner ? '<div class="vt-placeholder-spinner"></div>' : ''
+  const hint = decision.hint ? `<div class="vt-placeholder-hint">${decision.hint}</div>` : ''
+  const action = decision.canClearFilters
+    ? '<button class="vt-placeholder-clear" type="button">清空筛选</button>'
+    : ''
+
+  el.innerHTML = `
+    ${spinner}
+    <div class="vt-placeholder-title">${decision.title}</div>
+    ${hint}
+    ${action}
+  `
+  el.style.display = 'flex'
 }
 
 // 辅助函数-获取大容器

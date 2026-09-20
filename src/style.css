@@ -409,8 +409,11 @@
   border-radius: 3px;
 }
 
+/* 该列正在筛选: 原来只改了颜色, 太不显眼, 补上底色让用户一眼能扫到 */
 .vt-instance .vt-col-filter-btn.vt-active {
   color: #1890ff;
+  background-color: rgba(24, 144, 255, 0.12);
+  border-radius: 3px;
 }
 
 .vt-instance .vt-col-filter-popup {
@@ -2466,4 +2469,65 @@
 .vt-px-picker-item:hover {
   background: #f3f4f6;
   color: #6366f1;
+}
+
+/* ===== 数据区占位层 (加载态 / 空态共用) =====
+   只盖数据区(top 从表头+总结行之后开始), 保留表头可见 ——
+   用户要能自己撤回筛选条件, 而不是面对一片空白无从下手 */
+.vt-placeholder {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--vt-placeholder-top, 40px);
+  bottom: 0;
+  display: none; /* 由 JS 切到 flex */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #fff;
+  z-index: 5;
+}
+.vt-placeholder-title {
+  font-size: 14px;
+  color: #4e5969;
+}
+.vt-placeholder-hint {
+  font-size: 12px;
+  color: #86909c;
+}
+.vt-placeholder-clear {
+  margin-top: 6px;
+  padding: 5px 14px;
+  border: 1px solid #c9cdd4;
+  border-radius: 4px;
+  background: #fff;
+  color: #165dff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.vt-placeholder-clear:hover {
+  border-color: #165dff;
+  background: #f2f6ff;
+}
+/* 纯 css 转圈, 不引入任何图片资源 */
+.vt-placeholder-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #e5e6eb;
+  border-top-color: #165dff;
+  border-radius: 50%;
+  animation: vt-placeholder-spin 0.7s linear infinite;
+}
+@keyframes vt-placeholder-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 尊重系统的"减少动效"设置 */
+@media (prefers-reduced-motion: reduce) {
+  .vt-placeholder-spinner {
+    animation-duration: 2s;
+  }
 }

@@ -29,6 +29,8 @@ import { MountHelper } from '@/table/factory/TableMountHelper'
 import type { IPivotConfig } from '@/types/pivot'
 import { PivotTable } from '@/table/pivot/PivotTable'
 import { inferColumnTypes } from '@/utils/inferColumnType'
+import { resolvePlaceholder } from '@/table/viewport/emptyState'
+import { getActiveFilterKeys } from '@/table/state/filterState'
 import { RowSelectionManager } from '@/table/interaction/RowSelectionManager'
 import { exportCSV } from '@/utils/exportCSV'
 import type { ExportCSVOptions } from '@/utils/exportCSV'
@@ -58,8 +60,12 @@ export class VirtualTable {
   private sidePanelManager: SidePanelManager | null = null 
   private scrollStopTimer?: number // 滚动停止检测定时器
 
-  private pivotTable: PivotTable | null = null 
-  private isPivotMode = false 
+  private pivotTable: PivotTable | null = null
+  private isPivotMode = false
+  // server 模式首批数据是否已到达 (到达前 totalRows=0 代表"未加载"而非"无数据")
+  private serverBootstrapped = false
+  private isQuerying = false // 查询是否在途
+  private loadingTimer: number | null = null // 加载态延迟显示的定时器
   private savedMainContent: HTMLDivElement | null = null 
 
   private lifecycle!: TableLifecycle
@@ -209,7 +215,10 @@ export class VirtualTable {
       this.updateStatusBar()
       
       // 要表格数据加载完后, 才订阅 store 和 同步更新 summary 数据
-      this.subscribeStore() 
+      this.subscribeStore()
+      // 首批数据已到达: 从此刻起 totalRows=0 才真的代表"没有数据"
+      this.serverBootstrapped = true
+      this.updatePlaceholder()
       if (this.config.showSummary) {
         this.refreshSummary()
       }
@@ -267,6 +276,9 @@ export class VirtualTable {
     this.shell = this.lifecycle.shell
     this.viewport = this.lifecycle.viewport
     this.columnManager = this.lifecycle.columnManager
+
+    this.bindPlaceholderAction()
+    this.updateFilterIndicators()
     // 创建 TableQueryCoordinator
     this.queryCoordinator = new TableQueryCoordinator({
       config: this.config,
@@ -276,7 +288,8 @@ export class VirtualTable {
       renderer: this.renderer,
       store: this.store,
       getScroller: () => this.scroller,
-      setScroller: (scroller: VirtualScroller) => { this.scroller = scroller }
+      setScroller: (scroller: VirtualScroller) => { this.scroller = scroller },
+      setLoading: (on: boolean) => { this.setQuerying(on) }
     })
 
     // 首次挂载后, 就立刻同步一次滚动高度
@@ -391,6 +404,75 @@ export class VirtualTable {
     this.queryCoordinator.updateStatusBar()
   }
 
+  /** 绑定占位层里"清空筛选"按钮 (事件委托, 占位层内容每次状态变化都重绘) */
+  private bindPlaceholderAction(): void {
+    this.shell.placeholderEl.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('.vt-placeholder-clear')) return
+      this.dispatch({ type: 'CLEAR_ALL_FILTERS' })
+    })
+  }
+
+  /** 是否处于加载中 */
+  private isLoading(): boolean {
+    // server 模式首批数据到达前, 表格就是空的且没有数据 —— 那是在加载
+    if (this.mode === 'server' && !this.serverBootstrapped) return true
+    return this.isQuerying
+  }
+
+  /** 高亮"正在筛选"的列的表头漏斗图标 */
+  private updateFilterIndicators(): void {
+    if (!this.shell || !this.store) return
+    this.renderer.applyFilterIndicators(
+      this.shell.headerRow,
+      getActiveFilterKeys(this.store.getState().data.columnFilters)
+    )
+  }
+
+  /** 依据当前 state 决定数据区占位层显示什么 */
+  private updatePlaceholder(): void {
+    if (!this.shell || !this.store) return
+
+    const state = this.store.getState()
+    const filterText = state.data.mode === 'client'
+      ? state.data.clientFilterText
+      : (state.data.query.filterText ?? '')
+
+    this.shell.setPlaceholder(
+      resolvePlaceholder({
+        loading: this.isLoading(),
+        totalRows: state.data.totalRows,
+        columnFilters: state.data.columnFilters,
+        filterText,
+      })
+    )
+  }
+
+  /**
+   * 统一控制"查询在途"状态
+   *
+   * 加 150ms 延迟阈值: client 模式的查询是同步完成的,
+   * 不加阈值的话每次筛选都会闪一下加载态, 比不显示还糟。
+   */
+  private setQuerying(on: boolean): void {
+    if (this.loadingTimer !== null) {
+      clearTimeout(this.loadingTimer)
+      this.loadingTimer = null
+    }
+
+    if (on) {
+      this.loadingTimer = window.setTimeout(() => {
+        this.loadingTimer = null
+        this.isQuerying = true
+        this.updatePlaceholder()
+      }, 150)
+      return
+    }
+
+    if (!this.isQuerying) return
+    this.isQuerying = false
+    this.updatePlaceholder()
+  }
+
   /** 加载总结行数据 (同步) */
   private loadSummaryData(summaryRow: HTMLDivElement): void {
     // 没配置显示就不处理
@@ -456,17 +538,18 @@ export class VirtualTable {
 
   // state 变化后的统一入口, 使用策略模式, 路由到 ActionHandler 映射, 并检测走白名单
   private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
+    // 空态取决于 totalRows 和筛选条件, 任何 action 都可能影响它
+    this.updatePlaceholder()
+
     // 先查找是否有注册的处理器
     const handler = actionHandlers.get(action.type)
 
     if (handler) {
       const context: ActionContext = { table: this }
       handler(action, context) // 动作名称, 响应视图逻辑
-      return  // 处理完就返回, 不再走后续逻辑
-    } 
 
-    // 若没有注册处理器, 检查是否再白名单中, 在 dev 模式下给出警告
-    if (process.env.NODE_ENV === 'development') {
+    } else if (process.env.NODE_ENV === 'development') {
+      // 若没有注册处理器, 检查是否在白名单中, 在 dev 模式下给出警告
       const allKnowActions = new Set([
         ...DATA_EFFECT_ACTIONS,
         ...COLUMN_EFFTECT_ACTIONS,
@@ -483,6 +566,9 @@ export class VirtualTable {
 
     // 不再有默认的 handleDataChange 兜底
     // 这样可以避免 "未知 action 误触发数据刷新" 的重大问题
+    //
+    // 指示器放最后: 处理器可能重建了表头(列宽/列序变化), 重建后需要重新标记
+    this.updateFilterIndicators()
   }
 
   // client 模式下, 推导列可选值 (topN 或全量去重, 避免百万枚举卡死)
@@ -541,7 +627,10 @@ export class VirtualTable {
     this.shell = this.lifecycle.shell
     this.viewport = this.lifecycle.viewport
     this.columnManager = this.lifecycle.columnManager
-   
+
+    // shell 是全新的, 空态按钮的监听需要重新绑定
+    this.bindPlaceholderAction()
+
   }
 
 
@@ -649,6 +738,10 @@ export class VirtualTable {
     // 清理滚动停止定时器
     if (this.scrollStopTimer) {
       clearTimeout(this.scrollStopTimer)
+    }
+    if (this.loadingTimer !== null) {
+      clearTimeout(this.loadingTimer)
+      this.loadingTimer = null
     }
     // 重新挂载
     this.mount(containerSelector)
@@ -816,6 +909,10 @@ export class VirtualTable {
     // 清空定时器
     if (this.scrollStopTimer) {
       clearTimeout(this.scrollStopTimer)
+    }
+    if (this.loadingTimer !== null) {
+      clearTimeout(this.loadingTimer)
+      this.loadingTimer = null
     }
   }
 
