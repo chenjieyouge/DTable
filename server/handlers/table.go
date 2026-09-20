@@ -115,8 +115,16 @@ func GetFilterOptions(c *gin.Context) {
 		return
 	}
 
+	// 字段名会被拼进 SQL 语句, 必须过白名单 —— 这是这个接口唯一的注入防线
+	column, ok := models.ResolveColumn(body.Columnkey)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不合法的 columnKey"})
+		return
+	}
+
 	var options []string
-	query := "select distinct " + body.Columnkey + " from table_data where " + body.Columnkey + " is not null"
+	// column 来自白名单常量, 不是请求原文, 因此拼接安全
+	query := "select distinct " + column + " from table_data where " + column + " is not null"
 
 	if err := config.DB.Raw(query).Scan(&options).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询筛选选项失败"})

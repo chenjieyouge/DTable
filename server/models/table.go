@@ -21,6 +21,35 @@ func (TableData) TableName() string {
 	return "table_data"
 }
 
+// allowedColumns 允许出现在 SQL 中的字段白名单: 接口字段名 -> 数据库列名
+//
+// 为什么必须有: 排序字段名和筛选字段名会被拼进 SQL 语句文本,
+// 参数绑定(?)只能保护"值", 保护不了"字段名"。例如:
+//
+//	sort = "name;DROP TABLE table_data--:asc"
+//	filter = {"region) UNION SELECT ...--": "x"}
+//
+// 新增 TableData 字段时, 记得在这里同步登记, 否则该字段无法排序/筛选。
+var allowedColumns = map[string]string{
+	"id":         "id",
+	"name":       "name",
+	"age":        "age",
+	"region":     "region",
+	"department": "department",
+	"salary":     "salary",
+	"status":     "status",
+	"joinDate":   "join_date", // 接口用驼峰, 数据库是下划线, 需要映射
+	"createdAt":  "created_at",
+	"updatedAt":  "updated_at",
+}
+
+// ResolveColumn 把请求里传来的字段名解析成数据库列名。
+// 不在白名单中的一律拒绝, 返回 ok=false, 调用方必须据此放弃该字段。
+func ResolveColumn(name string) (string, bool) {
+	col, ok := allowedColumns[name]
+	return col, ok
+}
+
 // 分页响应结构, 对应前端 IPageResponse
 type PageResponse struct {
 	List      []TableData            `json:"list"`

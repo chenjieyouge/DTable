@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"div_table_server/handlers"
@@ -47,5 +48,27 @@ func TestFilterOptionsRejectsMissingColumnKey(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("缺少 columnKey 时应返回 400, 实际: %d", w.Code)
+	}
+}
+
+// 非法字段名会被拼进 SQL 语句, 必须在进入查询前就拒绝
+func TestFilterOptionsRejectsIllegalColumn(t *testing.T) {
+	payloads := []string{
+		"region;DROP TABLE table_data--",
+		"region) UNION SELECT password FROM users--",
+		"1=1",
+		"password",
+	}
+
+	for _, p := range payloads {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/table/filter-options?columnKey="+url.QueryEscape(p), nil)
+
+		newFilterOptionsRouter().ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("非法字段名 %q 应被拒绝(400), 实际: %d", p, w.Code)
+		}
 	}
 }
