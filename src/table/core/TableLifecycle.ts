@@ -122,13 +122,14 @@ export class TableLifecycle {
 
     // 4. 重新应用数据状态
     const state = this.store.getState()
-    this.shell.setSortIndicator(state.data.sort)
+    this.shell.setSortIndicator(state.data.sorts ?? [])
 
     // 关键!: 只在 client 模式下调用 applyQuery, server 模式下 只需要 updateVisibleRows
     if (state.data.mode === 'client') {
       const query: ITableQuery = {
         sortKey: state.data.sort?.key,
         sortDirection: state.data.sort?.direction,
+        sorts: state.data.sorts ?? [],
         filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
         columnFilters: state.data.columnFilters
     }

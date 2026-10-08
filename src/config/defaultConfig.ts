@@ -26,6 +26,7 @@ export function createDefaultConfig(): Omit<IConfig, 'columns'> {
     // 默认分页
     pageSize: 200,
     bufferRows: 20,
+    bufferCols: 2, // 横向虚拟滚动缓冲区列数
     maxCachedPages: 10,
     // 底部状态栏
     showStatusBar: true,

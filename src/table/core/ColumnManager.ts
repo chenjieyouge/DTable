@@ -129,6 +129,13 @@ export class ColumnManager {
   private updateDataRows(rows: HTMLDivElement[], columns: IColumn[]): void {
     // 批量更新数据行, 也是循环一行行啦
     rows.forEach(row => {
+      // 新结构 (列虚拟化): 冻结列常驻 + .vt-scroll-body 承载滚动列
+      if (row.querySelector<HTMLDivElement>('.vt-scroll-body')) {
+        this.updateFrozenCells(row, columns)
+        return
+      }
+
+      // ===== 旧结构 (平铺 cell) 兼容路径 =====
       const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.vt-table-cell'))
       const cellMap = new Map<string, HTMLDivElement>()
 
@@ -163,6 +170,51 @@ export class ColumnManager {
       row.appendChild(fragment)
       this.renderer.applyFrozenStyles(row) // 应用冻结列样式
     })
+  }
+
+  /** 新结构下只增量更新冻结列 (滚动列由列虚拟化负责) */
+  private updateFrozenCells(row: HTMLDivElement, columns: IColumn[]): void {
+    const frozen = this.renderer.getFrozenCount()
+    const rowIndex = parseInt(row.dataset.rowIndex || '0', 10)
+    const rowData = this.dataStratety.getRow(rowIndex)
+    const scrollBody = row.querySelector<HTMLDivElement>('.vt-scroll-body')
+
+    // 行直属的冻结列 cell (排除 checkbox 占位格与 scroll-body 内部)
+    const frozenCells = Array.from(row.children).filter(
+      (el): el is HTMLDivElement =>
+        el instanceof HTMLDivElement &&
+        el.classList.contains('vt-table-cell') &&
+        !el.classList.contains('vt-checkbox-cell')
+    )
+    const cellMap = new Map<string, HTMLDivElement>()
+    frozenCells.forEach(cell => {
+      const key = cell.dataset.columnKey
+      if (key) cellMap.set(key, cell)
+    })
+
+    const needed = new Set(columns.slice(0, frozen).map(col => col.key))
+    frozenCells.forEach(cell => {
+      const key = cell.dataset.columnKey
+      if (key && !needed.has(key)) {
+        cell.remove()
+        cellMap.delete(key)
+      }
+    })
+
+    const fragment = document.createDocumentFragment()
+    columns.slice(0, frozen).forEach((col, index) => {
+      let cell = cellMap.get(col.key)
+      if (!cell && rowData) {
+        cell = this.renderer.createDataCell(col, rowData, rowIndex, index)
+      }
+      if (cell) fragment.appendChild(cell)
+    })
+    // 插到 scroll-body 之前 (checkbox 之后)
+    if (scrollBody) {
+      scrollBody.before(fragment)
+    } else {
+      row.appendChild(fragment)
+    }
   }
 
 }

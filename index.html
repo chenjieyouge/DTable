@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -157,11 +157,22 @@
   </head>
   <body>
     <div class="wrap">
-      <h1 class="page-title">DTable · 百万级真实数据实测</h1>
+      <h1 class="page-title">DTable · 轻量化虚拟滚动表格 · 百万行实测</h1>
       <p class="page-sub">
-        数据源：门店零售明细 1,048,575 行 × 13 列，全中文列名。
-        Client 模式读本地 CSV，Server 模式走 MySQL。
+        打开即体验：页面自动加载 20 万行真实零售数据。数据源：门店零售明细 <strong>1,048,575 行 × 13 列</strong>，
+        Client 模式读本地 CSV，Server 模式连本地 MySQL（<code>server/</code> 目录 <code>go run .</code> 即启）。
       </p>
+      <div class="tip" style="background:var(--primary-bg);border:1px solid rgba(22,119,255,.25);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+        可体验的完整能力：
+        <code>表头点击排序</code>（按住 Shift 多列排序）·
+        <code>漏斗筛选</code>·
+        <code>双击单元格编辑</code>·
+        <code>行分组折叠</code>（下方"功能演示"数据）·
+        <code>单元格合并</code>（功能演示数据）·
+        <code>列管理/冻结列</code>（表格右上角）·
+        <code>横向/纵向虚拟化滚动</code>（百万行 60fps）·
+        <code>透视表</code>（bench 页）
+      </div>
 
       <!-- 模式切换 -->
       <div class="card">
@@ -188,6 +199,10 @@
             <option value="1048575">全部 104 万（约占 1GB 内存）</option>
           </select>
           <button class="primary" id="btn-client-load">加载</button>
+          <span style="width: 12px"></span>
+          <button id="btn-demo" class="primary" style="background:#00b42a;border-color:#00b42a;">功能演示（分组/编辑/合并）</button>
+          <span style="width: 12px"></span>
+          <button id="btn-back-real" style="display:none">返回真实数据</button>
         </div>
 
         <div class="bar" id="bar-server" style="display: none">

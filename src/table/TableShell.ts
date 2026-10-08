@@ -1,8 +1,9 @@
-import type { IConfig, ColumnFilterValue, IColumn } from "@/types";
+﻿import type { IConfig, ColumnFilterValue, IColumn } from "@/types";
 import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { HeaderSortBinder } from "@/table/interaction/HeaderSortBinder";
 import { ScrollBinder } from "@/table/interaction/ScrollBinder";
+import type { SortEntry } from "@/types";
 
 import { SortIndicatorView } from "@/table/interaction/SortIndicatorView";
 import { ColumnResizeBinder } from "@/table/interaction/ColumnResizeBinder";
@@ -42,8 +43,8 @@ export interface ITableShell {
   placeholderEl: HTMLDivElement // 数据区占位层 (加载态/空态共用, 只盖数据区, 保留表头)
 
   setScrollHeight(scroller: VirtualScroller): void // 统一更新滚动高度
-  // 统一控制排序箭头
-  setSortIndicator(sort: { key: string, direction: 'asc' | 'desc' } | null): void
+  // 统一控制排序箭头 (多列)
+  setSortIndicator(sorts: SortEntry[]): void
   bindScroll(onRafScroll: () => void): void // 绑定滚动, 内部 raf, 外部只传要做什么
   // 增量更新列宽 (css 变量), 顺带将 dataRows 也捎过来呗
   updateColumnWidths(columns: IConfig['columns'], dataRows?: HTMLDivElement[]): void
@@ -57,7 +58,7 @@ export function mountTableShell(params: {
   headerSortBinder: HeaderSortBinder
   container?: HTMLDivElement | string 
 
-  onToggleSort: (key: string) => void 
+  onToggleSort: (key: string, multi?: boolean) => void 
   onNeedLoadSummary?: (summaryRow: HTMLDivElement) => void
 
   onColumnResizeEnd?: (key: string, width: number) => void  // 列宽拖拽结束后回调
@@ -192,8 +193,8 @@ export function mountTableShell(params: {
     tableWrapper.classList.toggle('vt-scrolled-x', scrollContainer.scrollLeft > 2)
   }
   const headerRow = renderer.createHeaderRow()
-  // 绑定排序按钮
-  headerSortBinder.bind(headerRow, (key) => onToggleSort(key))
+  // 绑定排序按钮 (Shift + 点击 = 多列排序)
+  headerSortBinder.bind(headerRow, (key, multi) => onToggleSort(key, multi))
 
   // 绑定列宽拖拽
   const resizeBinder = new ColumnResizeBinder()
@@ -308,8 +309,8 @@ export function mountTableShell(params: {
     setScrollHeight(scroller: VirtualScroller) {
       dataContainer.style.height = `${scroller.getActualScrollHeight()}px`
     },
-    setSortIndicator(sort) {
-      sortIndicatorView.set(sort)
+    setSortIndicator(sorts) {
+      sortIndicatorView.set(sorts ?? [])
     },
     bindScroll(onRafScroll: () => void) {
       scrollBinder.bind(scrollContainer, () => {
@@ -346,10 +347,16 @@ export function mountTableShell(params: {
         // 直接同步执行更新, 不用异步 requestAnimationFrame, 避免页面闪烁
         if (headerRow) renderer.applyFrozenStyles(headerRow)
         if (summaryRow) renderer.applyFrozenStyles(summaryRow)
-        // 使用从 VirtualTable 中捎带过来的 dataRows, 若没有则查询兜底呗
-        // const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
-        const rows = dataRows!
-        rows.forEach(row => renderer.applyFrozenStyles(row))
+        // 数据行是列虚拟化结构: 冻结区宽度变化时, 更新 scroll-body 的 left
+        const rows = dataRows ?? []
+        let frozenW = 0
+        for (let i = 0; i < Math.min(config.frozenColumns, columns.length); i++) {
+          frozenW += columns[i].width || 100
+        }
+        rows.forEach(row => {
+          const scrollBody = row.querySelector<HTMLDivElement>('.vt-scroll-body')
+          if (scrollBody) scrollBody.style.left = `${frozenW}px`
+        })
       }
     },
     // 其他更多回调函数拓展...

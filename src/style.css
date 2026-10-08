@@ -417,7 +417,6 @@
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
   will-change: transform;
 }
 
@@ -436,7 +435,107 @@
   background-color: var(--vt-bg-hover);
 }
 
-/* ========== 行选中 ========== */
+/* ===== 列虚拟化: 非冻结区容器 (行内绝对定位) ===== */
+.vt-instance .vt-scroll-body {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+  will-change: transform;
+  min-width: 0;
+}
+
+/* ===== 内联编辑 ===== */
+.vt-instance .vt-cell-editable {
+  cursor: text;
+}
+
+.vt-instance .vt-cell-editable:hover {
+  box-shadow: inset 0 0 0 1px var(--vt-primary);
+}
+
+.vt-instance .vt-cell-editing {
+  padding: 0;
+  z-index: 5;
+}
+
+.vt-instance .vt-cell-editing::after {
+  display: none;
+}
+
+.vt-instance .vt-cell-editor {
+  width: 100%;
+  height: 100%;
+  min-height: 24px;
+  border: 2px solid var(--vt-primary);
+  border-radius: 2px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--vt-text-primary);
+  outline: none;
+  background: var(--vt-bg);
+}
+
+/* ===== 单元格合并 ===== */
+.vt-instance .vt-cell-merged {
+  z-index: 3;
+  background-color: var(--vt-bg);
+  overflow: hidden;
+}
+
+.vt-instance .vt-virtual-row:hover .vt-cell-merged {
+  background-color: var(--vt-bg);
+}
+
+/* ===== 行分组 (组头) ===== */
+.vt-instance .vt-virtual-row.vt-row-group {
+  background-color: var(--vt-bg-subtle);
+}
+
+.vt-instance .vt-virtual-row.vt-row-group:hover {
+  background-color: var(--vt-bg-subtle);
+}
+
+.vt-instance .vt-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--vt-text-secondary);
+  border-radius: 4px;
+  margin-right: 6px;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.vt-instance .vt-group-toggle:hover {
+  color: var(--vt-primary);
+  background-color: var(--vt-primary-bg);
+}
+
+.vt-instance .vt-group-label {
+  font-weight: 600;
+  color: var(--vt-text-primary);
+}
+
+.vt-instance .vt-group-count {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--vt-text-muted);
+  background: var(--vt-border-light);
+  border-radius: 8px;
+  padding: 0 7px;
+  line-height: 16px;
+}
+
+/* ===== 行选中 ===== */
 .vt-instance .vt-checkbox-cell {
   width: 40px !important;
   min-width: 40px !important;

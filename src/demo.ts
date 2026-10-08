@@ -268,6 +268,107 @@ function buildServerFilters(query?: ITableQuery): Record<string, unknown> {
 }
 
 // ============================================================
+// 功能演示数据 (分组 / 编辑 / 合并 / 多列排序 一站体验)
+// ============================================================
+
+const DEMO_CATEGORIES = ['数码产品', '家用电器', '图书文具', '运动户外']
+const DEMO_STATUS = ['在售', '缺货', '下架']
+const DEMO_CITIES = ['北京', '上海', '广州', '深圳', '杭州']
+
+/** 300 行 + 1 行合计。按 类别→状态 排序生成, 保证 rowSpan 相邻可合并 */
+function genDemoRows(): Record<string, any>[] {
+  const rows: Record<string, any>[] = []
+  let id = 1
+  for (const cat of DEMO_CATEGORIES) {
+    for (const status of DEMO_STATUS) {
+      for (let i = 0; i < 25; i++) {
+        const qty = 1 + ((id * 7) % 99)
+        rows.push({
+          id,
+          类别: cat,
+          名称: `${cat}·样品${i + 1}`,
+          数量: qty,
+          单价: 10 + ((id * 13) % 990),
+          金额: 0,
+          城市: DEMO_CITIES[id % DEMO_CITIES.length],
+          状态: status,
+          备注: `备注 ${id}`,
+        })
+        id++
+      }
+    }
+  }
+  for (const r of rows) r['金额'] = Math.round(r['数量'] * r['单价'] * 100) / 100
+  // 末行: 合计, 用 colSpan 跨列 (体验单元格合并)
+  rows.push({ id, 类别: '', 名称: '—— 合计（跨列合并单元格）——', 数量: '', 单价: '', 金额: '', 城市: '', 状态: '', 备注: '' })
+  return rows
+}
+
+const DEMO_COLUMNS: IColumn[] = [
+  { key: 'id', title: 'ID', width: 70 },
+  { key: '类别', title: '类别', width: 110, sortable: true, filter: { type: 'set' } },
+  {
+    key: '名称', title: '名称', width: 200, sortable: true,
+    // colSpan: 合计行跨 7 列展示
+    colSpan: (v: any) => (typeof v === 'string' && v.startsWith('——') ? 7 : 1),
+  },
+  { key: '数量', title: '数量', width: 90, sortable: true, editable: true, editor: 'number', filter: { type: 'numberRange' } },
+  { key: '单价', title: '单价', width: 100, sortable: true },
+  { key: '金额', title: '金额', width: 110, sortable: true, summaryType: 'sum', filter: { type: 'numberRange' } },
+  { key: '城市', title: '城市', width: 100, sortable: true, filter: { type: 'set' } },
+  {
+    key: '状态', title: '状态', width: 100, sortable: true, editable: true, editor: 'text',
+    filter: { type: 'set' },
+    // rowSpan: 相邻相同状态向下合并 (每 25 行一组)
+    rowSpan: (v: any) => (typeof v === 'string' && v.length > 0 ? 25 : 1),
+  },
+  { key: '备注', title: '备注', width: 140 },
+]
+
+function buildDemoConfig(): IUserConfig {
+  return {
+    container: '#table-container',
+    tableHeight: 560,
+    initialData: genDemoRows(),
+    columns: DEMO_COLUMNS,
+    groupBy: ['类别'],
+    sidePanel: { enabled: true, defaultOpen: false, defaultPanel: 'columns', panels: [] },
+    onCellValueChange: (key, _rowIndex, newValue, oldValue) => {
+      note(`单元格已编辑：${key} ${JSON.stringify(oldValue)} → ${JSON.stringify(newValue)}`, 'ok')
+    },
+  }
+}
+
+async function startDemoMode(): Promise<void> {
+  destroyTable()
+  setProgress(null)
+  setStat('stat-mode', '功能演示')
+  setStat('stat-total', '301 行')
+  setStat('stat-parse', '—')
+  setStat('stat-render', '—')
+
+  const back = $('btn-back-real')
+  if (back) back.style.display = ''
+
+  const renderStart = performance.now()
+  currentTable = new VirtualTable(buildDemoConfig())
+  await currentTable.ready
+  setStat('stat-render', fmtMs(performance.now() - renderStart))
+  refreshMemory()
+  note(
+    '功能演示就绪：点组头 ▾ 折叠/展开分组 · 双击 数量/状态 内联编辑 · 状态列相邻合并 · 末行跨列合计 · ' +
+      'Shift+点列头多列排序 · 漏斗筛选 · 列管理全部可体验。',
+    'ok'
+  )
+}
+
+async function backToRealMode(): Promise<void> {
+  const back = $('btn-back-real')
+  if (back) back.style.display = 'none'
+  await startClientMode()
+}
+
+// ============================================================
 // 配置构造
 // ============================================================
 
@@ -574,6 +675,14 @@ function bindEvents(): void {
     startServerMode().catch((e) => note(String(e), 'err'))
   })
 
+  $('btn-demo')?.addEventListener('click', () => {
+    startDemoMode().catch((e) => note(e instanceof Error ? e.message : String(e), 'err'))
+  })
+
+  $('btn-back-real')?.addEventListener('click', () => {
+    backToRealMode().catch((e) => note(e instanceof Error ? e.message : String(e), 'err'))
+  })
+
   $('btn-server-reset')?.addEventListener('click', () => {
     if (!currentTable) return
     // 全局搜索 + 所有列筛选一起清, 并且回到第一页 —— 只清筛选不重置页码的话,
@@ -589,5 +698,10 @@ function bindEvents(): void {
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents()
-  switchMode('client')
+  // ?demo=1 直达完整功能演示 (分组/编辑/合并), 便于分享与自动化验证
+  if (new URLSearchParams(location.search).get('demo') === '1') {
+    startDemoMode().catch((e) => note(e instanceof Error ? e.message : String(e), 'err'))
+  } else {
+    switchMode('client')
+  }
 })

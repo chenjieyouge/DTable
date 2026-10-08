@@ -1,19 +1,31 @@
+﻿import type { SortEntry } from "@/types";
+
 export class SortIndicatorView {
   // 将排序状态映射到 dom, 但不参与任何排序业务
   constructor(private scrollContainer: HTMLDivElement) {}
 
-  public set(sort: { key: string, direction: 'asc' | 'desc' } | null) {
+  public set(sorts: SortEntry[]) {
     this.clear()
-    if (!sort) return 
-    const targetHeader = this.scrollContainer.querySelector<HTMLDivElement>(
-      `.vt-header-cell[data-column-key="${sort.key}"]`
-    )
-    if (!targetHeader) return 
+    if (!sorts || sorts.length === 0) return
 
-    const indicator = document.createElement('span')
-    indicator.className = 'vt-sort-indicator'
-    indicator.textContent = sort.direction === 'asc' ? '↑' : '↓'
-    targetHeader.appendChild(indicator)
+    sorts.forEach((sort, idx) => {
+      if (!sort) return
+      const targetHeader = this.scrollContainer.querySelector<HTMLDivElement>(
+        `.vt-header-cell[data-column-key="${sort.key}"]`
+      )
+      if (!targetHeader) return
+
+      const indicator = document.createElement('span')
+      indicator.className = 'vt-sort-indicator'
+      indicator.textContent = sort.direction === 'asc' ? '↑' : '↓'
+      if (idx > 0) {
+        const order = document.createElement('span')
+        order.className = 'vt-sort-order'
+        order.textContent = String(idx + 1)
+        targetHeader.appendChild(order)
+      }
+      targetHeader.appendChild(indicator)
+    })
   }
 
   public clear() {
@@ -21,6 +33,8 @@ export class SortIndicatorView {
     allHeaders.forEach((header) => {
       const indicator = header.querySelector('.vt-sort-indicator')
       if (indicator) indicator.remove()
+      const order = header.querySelector('.vt-sort-order')
+      if (order) order.remove()
     })
   }
 }

@@ -15,7 +15,7 @@ export type ActionHandler = (
   context: ActionContext
 ) => void 
 
-// ===== effects 副作用白名单分类: 数据; 列管理; 表结构; 纯状态; ========== 
+// ===== effects 副作用白名单分类: 数据; 列管理; 表结构; 纯状态; 分组; ========== 
 /**
  * 数据-副作用白名单:  这些 action 会触发数据更新 (排序/筛选/查询等变化)
  * 只有这些 action 才能调用 applyClientState / applyServerQuery
@@ -23,11 +23,21 @@ export type ActionHandler = (
 export const DATA_EFFECT_ACTIONS = new Set<string>([
   'SORT_TOGGLE',
   'SORT_SET',
+  'SORTS_SET',
   'SET_FILTER_TEXT',
   'CLEAR_FILTER_TEXT',
   'CLEAR_ALL_FILTERS',
   'COLUMN_FILTER_SET',
   'COLUMN_FILTER_CLEAR'
+])
+
+/**
+ * 分组-副作用白名单: 折叠/展开只重展平, 不重排序筛选
+ */
+export const GROUP_EFFECT_ACTIONS = new Set<string>([
+  'GROUP_TOGGLE',
+  'GROUP_EXPAND_ALL',
+  'GROUP_COLLAPSE_ALL'
 ])
 
 /**
@@ -81,11 +91,16 @@ export const actionHandlers = new Map<string, ActionHandler>([
   // 数据副作用
   ['SORT_TOGGLE', handleDataChange],
   ['SORT_SET', handleDataChange],
+  ['SORTS_SET', handleDataChange],
   ['SET_FILTER_TEXT', handleDataChange],
   ['CLEAR_FILTER_TEXT', handleDataChange],
   ['CLEAR_ALL_FILTERS', handleDataChange],
   ['COLUMN_FILTER_SET', handleDataChange],
-  ['COLUMN_FILTER_CLEAR', handleDataChange]
+  ['COLUMN_FILTER_CLEAR', handleDataChange],
+  // 行分组
+  ['GROUP_TOGGLE', handleGroupChange],
+  ['GROUP_EXPAND_ALL', handleGroupChange],
+  ['GROUP_COLLAPSE_ALL', handleGroupChange]
 ])
 
 // 列宽处理器
@@ -169,18 +184,28 @@ export function handleDataChange(action: TableAction, ctx: ActionContext): void 
   const shell = ctx.table['shell']
   const store = ctx.table['store']
   const state = store.getState()
-  // 排序指示器永远以 state 为准
-  shell?.setSortIndicator(store.getState().data.sort)
+  // 排序指示器永远以 state 为准 (多列)
+  shell?.setSortIndicator(state.data.sorts ?? [])
 
   // 统一走 applyQuery, 不再区分 client/server
   const query: ITableQuery = {
     sortKey: state.data.sort?.key,
     sortDirection: state.data.sort?.direction,
+    sorts: state.data.sorts ?? [],
     filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
     columnFilters: state.data.columnFilters
   }
 
   void ctx.table['applyQuery'](query)
+}
+
+// 行分组折叠/展开处理器: 只重展平, 不重排序筛选
+export function handleGroupChange(action: TableAction, ctx: ActionContext): void {
+  if (!GROUP_EFFECT_ACTIONS.has(action.type)) {
+    console.error(`[handleGroupChange] action "${action.type}" 不在分组副作用白名单中!`)
+    return 
+  }
+  ctx.table['applyGroup']()
 }
 
 // 空处理器, 用于更新 state, 不触发副作用的 action 

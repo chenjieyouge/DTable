@@ -68,7 +68,25 @@ export interface DataStrategy {
    * 透视表需要用全量数据进行分组聚合, 返回用 filteredData 能响应全局筛选, 因而接口定义为可选
    */
   getAllData?(): Record<string, any>[]
-  
+
+  /**
+   * 更新某行数据 (可选, 内联编辑)
+   * @param rowIndex 行下标 (展平行下标, 分组模式由策略内部映射)
+   * @param patch 字段补丁
+   * @returns 更新后的行数据; 不支持或失败返回 null
+   */
+  setRow?(rowIndex: number, patch: Record<string, any>): Record<string, any> | null
+
+  /**
+   * 行分组: 设置分组字段与折叠集合 (可选, 仅 client 模式支持)
+   * @param groupBy 分组字段数组
+   * @param collapsed 已折叠分组 key 数组
+   * @returns 展平后的总行数
+   */
+  applyGroup?(groupBy: string[] | undefined, collapsed: string[]): number
+
+  /** 当前查询下的全部分组 key (可选) */
+  getGroupKeys?(): string[]
 }
 
 /**

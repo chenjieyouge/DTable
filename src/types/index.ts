@@ -23,11 +23,15 @@ export interface SortFilterParmas {
   filterText: string
 }
 
+// 排序条目 (单列或多列排序中的一项)
+export type SortEntry = { key: string; direction: 'asc' | 'desc' }
+
 // 服务端查询参数, 用于分页接口, 如排序, 筛选等
 // 关键点: 字段要尽量扁平, 方便拼接缓存 key 和后端处理
 export interface ITableQuery {
-  sortKey?: string // 排序字段名 key
+  sortKey?: string // 排序字段名 key (单列排序, 兼容旧字段)
   sortDirection?: 'asc' | 'desc'
+  sorts?: SortEntry[] // 多列排序 (优先级从前到后)
   filterText?: string // 模糊搜索关键词
   columnFilters?: Record<string, ColumnFilterValue> // 列值筛选 (key -> 筛选值结构)
 }
@@ -51,7 +55,42 @@ export interface IPageInfo {
 export type ColumnDataType = 'string' | 'number' | 'date' | 'boolean'
 
 
-// 列字段配置, 文档约定必传哦!
+// 单元格渲染器上下文 (渲染器组件与编辑器共享)
+export interface ICellRendererContext {
+  value: any
+  row: Record<string, any>
+  rowIndex: number
+  colKey: string
+  /** 强制重跑一次列配置 (render/cellStyle/cellClassName) 的刷新入口 */
+  refresh(): void
+}
+
+/** 单元格渲染器组件: 支持生命周期, 对标 ag-grid 的 ICellRenderer */
+export interface ICellRenderer {
+  mount(el: HTMLElement, ctx: ICellRendererContext): void
+  update?(ctx: ICellRendererContext): void
+  destroy?(): void
+}
+
+/** render 回调的返回值: 字符串 / DOM 元素 / 渲染器组件 */
+export type CellRenderResult = string | HTMLElement | ICellRenderer
+
+/** 单元格编辑器上下文 */
+export interface ICellEditorContext extends ICellRendererContext {
+  /** 提交编辑值 (Enter/失焦) */
+  commit(value: any): void
+  /** 取消编辑 (Esc) */
+  cancel(): void
+}
+
+/** 单元格编辑器: 对标 ag-grid 的 ICellEditor */
+export interface ICellEditor {
+  mount(el: HTMLElement, ctx: ICellEditorContext): void
+  getValue(): any
+  destroy?(): void
+}
+
+/** 列字段配置, 文档约定必传哦! */
 export interface IColumn {
   key: string
   title: string
@@ -62,12 +101,21 @@ export interface IColumn {
   sortable?: boolean
   filter?: IColumnFilterConfig  // 列筛选配置 (不配置则表示不可筛选)
   summaryType?: 'sum' | 'avg' | 'count' | 'none' // 总结行聚合类型
-  // 自定义渲染器: 支持返回 html 字符串或 dom 元素
-  render?: (value: any, row: Record<string, any>, rowIndex: number) => string | HTMLDivElement
+  // 自定义渲染器: 支持返回 html 字符串 / dom 元素 / 渲染器组件
+  render?: (value: any, row: Record<string, any>, rowIndex: number) => CellRenderResult
   // 单元格样式制定: 根据值返回 className
   cellClassName?: (value: any, row: Record<string, any>) => string
   // 单元格行内样式, 支持各种 html 元素 (条件格式更方便)
   cellStyle?: (value: any, row: Record<string, any>, rowIndex: number) => Partial<CSSStyleDeclaration> | null 
+  // ===== 对标 ag-grid 的新能力 =====
+  // 内联编辑: true 表示整列可编辑, 或按行判断
+  editable?: boolean | ((value: any, row: Record<string, any>, rowIndex: number) => boolean)
+  // 编辑器类型: text 默认; number 只允许数字
+  editor?: 'text' | 'number' | ((ctx: ICellEditorContext) => ICellEditor)
+  // 单元格合并: 向右合并 N 列 (含自身), 返回 1 表示不合并
+  colSpan?: (value: any, row: Record<string, any>, rowIndex: number) => number
+  // 单元格合并: 向下合并 N 行 (含自身), 返回 1 表示不合并
+  rowSpan?: (value: any, row: Record<string, any>, rowIndex: number) => number
 }
 
 // ======= 右侧面板配置 =========
@@ -109,6 +157,14 @@ export interface ITableCallbacks {
   // 行点击回调
   onRowClick?: (row: Record<string, any>, rowIndex: number, event: MouseEvent) => void
   onCellClick?: (value: any, key: string, row: Record<string, any>, rowIndex: number, event: MouseEvent) => void
+  // 单元格编辑提交回调 (内联编辑)
+  onCellValueChange?: (
+    key: string,
+    rowIndex: number,
+    newValue: any,
+    oldValue: any,
+    row: Record<string, any>
+  ) => void
 }
 
 // =========== 内部配置 (运行时, 所有字段必填) ===========
@@ -123,7 +179,7 @@ export interface IConfig extends ITableCallbacks {
   maxTableHeight?: number       // auto 模式下最大高度, 默认不限
   headerHeight: number
   summaryHeight: number
-  rowHeight: number
+  rowHeight: number | ((rowIndex: number) => number) // 可变行高: 数值或按行回调
   minColumnWidth?: number // 默认最新列宽, 默认 100
   // 数据
   totalRows: number 
@@ -134,7 +190,10 @@ export interface IConfig extends ITableCallbacks {
   // 分页
   pageSize: number // 每页多少行
   bufferRows: number // 缓冲区行数
+  bufferCols?: number // 横向缓冲区列数, 默认 2
   maxCachedPages: number // 最大缓存页面数 (仅数据)
+  // 行分组 (对标 ag-grid 的 groupBy 折叠展开, 仅 client 模式生效)
+  groupBy?: string[]
   // 可选功能-右侧管理面板
   sidePanel?: SidePanelConfig
   // 行选中

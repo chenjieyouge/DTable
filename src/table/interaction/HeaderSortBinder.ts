@@ -1,7 +1,7 @@
 export class HeaderSortBinder {
   private handler: ((e: MouseEvent) => void) | null = null 
 
-  bind(headerRow: HTMLDivElement, onSort: (key: string) => void) {
+  bind(headerRow: HTMLDivElement, onSort: (key: string, multi: boolean) => void) {
     // 绑定前先解绑, 避免重复触发回调
     this.unbind(headerRow)
 
@@ -19,7 +19,7 @@ export class HeaderSortBinder {
       const key = cell.dataset.columnKey 
       if (!key) return 
 
-      onSort(key) //执行回调函数,进行排序逻辑
+      onSort(key, e.shiftKey) // Shift + 点击 = 多列排序追加
     }
     // 事件委托, 监听表头行里面每个单元格的点击动作
     headerRow.addEventListener('click', this.handler)

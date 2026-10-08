@@ -28,8 +28,8 @@ export class ShellCallbacks {
   public getCallbacks() {
     return {
       // 回调函数
-      onToggleSort: (key: string) => {
-        this.store.dispatch({type: 'SORT_TOGGLE', payload: {key}})
+      onToggleSort: (key: string, multi?: boolean) => {
+        this.store.dispatch({type: 'SORT_TOGGLE', payload: {key, multi: multi === true}})
       },
       onNeedLoadSummary: (summaryRow: HTMLDivElement) => {
           this.loadSummaryData(summaryRow)

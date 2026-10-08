@@ -1,7 +1,7 @@
-import { TableConfig } from '@/config/TableConfig'
+﻿import { TableConfig } from '@/config/TableConfig'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import type { IConfig, ITableQuery, IUserConfig, IColumn } from '@/types'
+import type { IConfig, ITableQuery, IUserConfig, IColumn, SortEntry } from '@/types'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 import type { ITableShell } from '@/table/TableShell'
@@ -16,6 +16,7 @@ import { SidePanelManager } from '@/table/panel/SidePanelManager'
 import { ShellCallbacks } from '@/table/handlers/ShellCallbacks' 
 import { 
   actionHandlers, COLUMN_EFFTECT_ACTIONS, DATA_EFFECT_ACTIONS, 
+  GROUP_EFFECT_ACTIONS,
   STATE_ONLY_ACTIONS, 
   STRUCTURAL_EFFECT_ACTIONS } from '@/table/handlers/ActionHandlers'
 import type { ActionContext } from '@/table/handlers/ActionHandlers'
@@ -126,7 +127,7 @@ export class VirtualTable {
         const result = initServerMode(this.config, this.originalColumns)
         this.initComponents(result)
         this.mount()
-        this.shell.setSortIndicator(this.store.getState().data.sort)
+        this.shell.setSortIndicator(this.store.getState().data.sorts ?? [])
         this.config.onModeChange?.(this.mode)
         this.markAsReady()
         this.bootstrapServerData()  // 从后台加载数据
@@ -144,9 +145,13 @@ export class VirtualTable {
 
         this.mount()
         
-        this.shell.setSortIndicator(this.store.getState().data.sort)
+        this.shell.setSortIndicator(this.store.getState().data.sorts ?? [])
         this.config.onModeChange?.(this.mode)
         this.subscribeStore()
+        // client 模式 + 行分组: 初始化时立即应用分组展平
+        if (this.config.groupBy) {
+          this.applyGroup()
+        }
         this.markAsReady()
       }
       
@@ -324,6 +329,14 @@ export class VirtualTable {
     if (this.selectionManager) {
       this.wireSelectionManager()
     }
+
+    // 注入组头折叠回调
+    this.viewport.setGroupToggleHandler((rowIndex: number) => {
+      const rowData = this.dataStrategy.getRow(rowIndex)
+      if (rowData && rowData.__key) {
+        this.dispatch({ type: 'GROUP_TOGGLE', payload: { groupKey: rowData.__key } })
+      }
+    })
   }
 
   /** 将 selectionManager 注入 viewport，并绑定回调 */
@@ -525,12 +538,14 @@ export class VirtualTable {
     // 性能监控
     PerformanceMonitor.measure('列更新', () => {
       this.applyColumnsFromState()
-      // 用 ColumnManager 统一更新, 并使用 shell 的缓存 DOM 引用, 减少重复查询, 也没有 refresh!
+      // 表头/汇总行走 ColumnManager 增量更新; 数据行冻结列增量 + 滚动列重建
       this.columnManager.updateColumns(this.config.columns, {
-        headerRow: this.shell.headerRow, 
+        headerRow: this.shell.headerRow,
         summaryRow: this.shell.summaryRow,
         dataRows: this.viewport.getVisibleRows()
       })
+      // 数据行: 重建列虚拟化并按新列集重渲染可见行 (列顺序/显隐变化)
+      this.viewport.refresh()
       // 更新列宽, 同时会设置 css 变量
       this.shell.updateColumnWidths(this.config.columns, this.viewport.getVisibleRows())
     })
@@ -554,6 +569,7 @@ export class VirtualTable {
         ...DATA_EFFECT_ACTIONS,
         ...COLUMN_EFFTECT_ACTIONS,
         ...STRUCTURAL_EFFECT_ACTIONS,
+        ...GROUP_EFFECT_ACTIONS,
         ...STATE_ONLY_ACTIONS,
       ])
 
@@ -644,6 +660,45 @@ export class VirtualTable {
   private async applyQuery(query: ITableQuery) {
     //委托给 queryCoordinator
     await this.queryCoordinator.applyQuery(query)
+    // client 模式 + 行分组: 查询后重新展平 (折叠状态来自 store)
+    if (this.mode === 'client' && this.config.groupBy) {
+      this.applyGroup()
+    }
+  }
+
+  /**
+   * 行分组: 折叠/展开后只重展平, 不重排序筛选
+   */
+  private applyGroup(): void {
+    const strategy = this.dataStrategy
+    if (!strategy.applyGroup) return
+    const collapsed = this.store.getState().data.groupCollapsed
+    const total = strategy.applyGroup(this.config.groupBy, collapsed)
+
+    this.config.totalRows = total
+    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: total } })
+
+    this.scroller = new VirtualScroller(this.config)
+    this.viewport.setScroller(this.scroller)
+    this.shell.setScrollHeight(this.scroller)
+    this.viewport.refresh()
+    this.updatePlaceholder()
+    this.updateStatusBar()
+  }
+
+  /** 全部折叠 / 全部展开 */
+  public collapseAllGroups(): void {
+    const keys = this.dataStrategy.getGroupKeys?.() ?? []
+    this.dispatch({ type: 'GROUP_COLLAPSE_ALL', payload: { keys } })
+  }
+
+  public expandAllGroups(): void {
+    this.dispatch({ type: 'GROUP_EXPAND_ALL' })
+  }
+
+  /** 设置多列排序 */
+  public setSorts(sorts: SortEntry[]): void {
+    this.store.dispatch({ type: 'SORTS_SET', payload: { sorts } })
   }
 
   // 从 localStorage 恢复列宽, 表格宽, 列顺序

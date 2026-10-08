@@ -1,4 +1,4 @@
-import type { IColumn, ITableQuery } from "@/types";
+﻿import type { IColumn, ITableQuery, SortEntry } from "@/types";
 import type { TableAction, TableState, TableMode, SortValue } from "@/table/state/types";
 
 export type StateListener = (next: TableState, prev: TableState, action: TableAction) => void 
@@ -26,9 +26,11 @@ export function createTableStore(params: {
       query: { filterText: '' },
       clientFilterText: '',
       sort: null,
+      sorts: [],
       columnFilters: {}, // 初始无筛选
       totalRows: 0,  // 行数初始化
-      currentPage: 0, 
+      currentPage: 0,
+      groupCollapsed: [], // 初始无折叠分组
     },
     columns: {
       order: columns.map((c) => c.key),
@@ -120,32 +122,81 @@ export function createTableStore(params: {
       case 'SORT_SET': {
         // { key: 'sales', direction: 'acs' }
         const sort: SortValue = action.payload.sort
+        const sorts: SortEntry[] = sort ? [sort] : []
         const nextQuery: ITableQuery = {
           ...prev.data.query,
           sortKey: sort?.key,
-          sortDirection: sort?.direction
+          sortDirection: sort?.direction,
+          sorts,
         }
-        return { ...prev, data: { ...prev.data, sort, query: nextQuery }}
+        return { ...prev, data: { ...prev.data, sort, sorts, query: nextQuery }}
+      }
+
+      case 'SORTS_SET': {
+        const sorts: SortEntry[] = action.payload.sorts
+        const first = sorts[0] ?? null
+        const nextQuery: ITableQuery = {
+          ...prev.data.query,
+          sortKey: first?.key,
+          sortDirection: first?.direction,
+          sorts,
+        }
+        return { ...prev, data: { ...prev.data, sort: first, sorts, query: nextQuery }}
       }
 
       case 'SORT_TOGGLE': {
-        const key = action.payload.key 
-        const curr = prev.data.sort 
-        let next: SortValue
-        // 继续沿用排序三态: desc -> asc -> null 
-        if (curr && curr.key === key) { // 当前字段
-          if (curr.direction === 'desc') next = { key, direction: 'asc' }
-          else next = null 
+        const key = action.payload.key
+        const multi = action.payload.multi === true
+        const curr = multi ? (prev.data.sorts ?? []) : (prev.data.sort ? [prev.data.sort] : [])
+        let next: SortEntry[]
+        const existingIdx = curr.findIndex((s) => s?.key === key)
+
+        if (existingIdx >= 0) {
+          const existing = curr[existingIdx]!
+          if (existing.direction === 'desc') {
+            // desc -> asc
+            next = curr.map((s, i) => (i === existingIdx ? { key, direction: 'asc' as const } : s))
+          } else {
+            // asc -> 移除 (三态)
+            next = curr.filter((_, i) => i !== existingIdx)
+          }
+        } else if (multi) {
+          // shift 多选: 追加到末尾
+          next = [...curr, { key, direction: 'desc' as const }]
         } else {
-          // 点击排序的是其他字段, 则先默认降序
-          next = { key, direction: 'desc' }
+          next = [{ key, direction: 'desc' as const }]
         }
+
+        const first = next[0] ?? null
         const nextQuery: ITableQuery = {
           ...prev.data.query,
-          sortKey: next?.key,
-          sortDirection: next?.direction
+          sortKey: first?.key,
+          sortDirection: first?.direction,
+          sorts: next,
         }
-        return { ...prev, data: { ...prev.data, sort: next, query: nextQuery }}
+        return { ...prev, data: { ...prev.data, sort: first, sorts: next, query: nextQuery }}
+      }
+
+      case 'GROUP_TOGGLE': {
+        const { groupKey } = action.payload
+        const collapsed = prev.data.groupCollapsed.includes(groupKey)
+          ? prev.data.groupCollapsed.filter((k) => k !== groupKey)
+          : [...prev.data.groupCollapsed, groupKey]
+        return { ...prev, data: { ...prev.data, groupCollapsed: collapsed } }
+      }
+
+      case 'GROUP_EXPAND_ALL': {
+        return { ...prev, data: { ...prev.data, groupCollapsed: [] } }
+      }
+
+      case 'GROUP_COLLAPSE_ALL': {
+        return {
+          ...prev,
+          data: {
+            ...prev.data,
+            groupCollapsed: action.payload.keys,
+          },
+        }
       }
 
       case 'COLUMN_ORDER_SET': {

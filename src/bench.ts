@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DTable 性能基准
  *
  * 用法: pnpm dev 后打开 http://localhost:5173/bench.html
@@ -202,9 +202,9 @@ function makeConfig(data: Record<string, any>[], columns: IColumn[]): IUserConfi
 // ============ 场景 ============
 
 /** 滚动 N 步, 返回每帧耗时 */
-async function benchScroll(root: HTMLElement, steps: number): Promise<number[]> {
-  const scroller = root.querySelector<HTMLElement>('.vt-table-container')
-  if (!scroller) throw new Error('找不到滚动容器 .vt-table-container')
+async function benchScroll(root: HTMLElement, steps: number, selector = '.vt-table-container'): Promise<number[]> {
+  const scroller = root.querySelector<HTMLElement>(selector)
+  if (!scroller) throw new Error(`找不到滚动容器 ${selector}`)
 
   const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
   const stepSize = maxScroll / steps
@@ -342,7 +342,10 @@ async function run() {
     // 8. 滚动透视表
     await recordFrameStats('透视滚动 300 帧', await benchScroll(root, 300))
 
-    // 9. 内存
+    // 9. ag-grid A/B 对照 (同数据同视口, CDN 可用时)
+    await runAGGrid(data, columns)
+
+    // 10. 内存
     const mem = readMemory()
     if (mem) record('堆内存', Number.parseFloat(mem), 'MB')
   } catch (err) {
@@ -383,6 +386,59 @@ async function loadFile(file: File) {
     fileMeta = null
     metrics.length = 0
     record('❌ 文件加载失败', 0, '', String(e))
+  }
+}
+
+// ============ ag-grid A/B 对照 ============
+
+interface AggridApi {
+  Grid: new (el: HTMLElement, opts: Record<string, any>) => { destroy: () => void; api: Record<string, any> }
+}
+
+/**
+ * 同数据、同视口下跑 ag-grid 社区版, 输出可对比指标。
+ * ag-grid 仅由 bench.html 的 CDN 加载, 不进入库的运行时依赖。
+ */
+async function runAGGrid(data: Record<string, any>[], columns: IColumn[]): Promise<void> {
+  const ag = (window as any).agGrid as AggridApi | undefined
+  if (!ag?.Grid) {
+    record('ag-grid A/B', 0, '', 'CDN 未加载/失败, 跳过 (仅基准页引用, 不影响库本体)')
+    return
+  }
+
+  const root = document.getElementById('bench-table') as HTMLElement
+  root.innerHTML = ''
+  const host = document.createElement('div')
+  host.style.cssText = 'height:520px;width:100%;'
+  root.appendChild(host)
+
+  const colDefs = columns.map((c) => ({ field: c.key, headerName: c.title ?? c.key, width: c.width ?? 120 }))
+
+  try {
+    const tInit = performance.now()
+    const grid = new ag.Grid(host, {
+      columnDefs: colDefs,
+      rowData: data,
+      rowHeight: 28,
+      suppressCellFocus: true,
+      animateRows: false,
+      suppressColumnVirtualisation: false,
+      defaultColDef: { suppressMenu: true },
+    })
+    await waitForIdle(root)
+    record('ag-grid 初始化 ready', performance.now() - tInit, 'ms', `${data.length.toLocaleString()} 行 × ${colDefs.length} 列`)
+
+    const countRows = () => host.querySelectorAll<HTMLElement>('.ag-row').length
+    record('ag-grid 初始 DOM 行数', countRows(), '行', '虚拟化上限参考')
+
+    await recordFrameStats('ag-grid 滚动 300 帧', await benchScroll(root, 300, '.ag-body-viewport'))
+    record('ag-grid 滚动后 DOM 行数', countRows(), '行', '虚拟化上限参考')
+
+    grid.destroy()
+  } catch (err) {
+    record('ag-grid A/B ❌', 0, '', String(err))
+  } finally {
+    root.innerHTML = ''
   }
 }
 
@@ -441,6 +497,7 @@ function render() {
       ${fileLine}
       <div class="bench-hint">
         不选文件则跑内置合成数据，规模用 URL 参数调：<code>?rows=1000000&amp;cols=20</code><br>
+        末尾自动跑 <strong>ag-grid 社区版 A/B 对照</strong>（同数据同视口；CDN 加载失败则自动跳过，不影响库本体）<br>
         选文件则跑真实数据 —— <strong>文件只在本机读取，不会上传，也不会进仓库</strong>
       </div>
       <table class="bench-table">
@@ -448,7 +505,6 @@ function render() {
         <tbody>${rowsHtml || '<tr><td colspan="4" class="bench-empty">尚未运行</td></tr>'}</tbody>
       </table>
     </div>
-    <div id="bench-table"></div>
   `
 
   document.getElementById('bench-run')?.addEventListener('click', run)

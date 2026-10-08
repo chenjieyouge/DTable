@@ -1,9 +1,11 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DTable 性能基准</title>
+    <title>DTable 性能基准 (ag-grid A/B)</title>
+    <!-- 仅基准页引用 ag-grid (CDN), 用于 A/B 对照; 库本身保持零运行时依赖 -->
+    <script defer src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"></script>
     <style>
       /* 仅基准页使用, 不污染库的 style.css */
       body {
@@ -82,6 +84,7 @@
   </head>
   <body>
     <div id="bench-root"></div>
+    <div id="bench-table"></div>
     <script type="module" src="/src/bench.ts"></script>
   </body>
 </html>
