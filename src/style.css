@@ -166,7 +166,7 @@
 
 .vt-instance .vt-side-panel-content {
   flex: 1;
-  overflow: hidden;
+  overflow: y: auto;
   padding: 16px;
   box-sizing: border-box;
 }
@@ -1003,7 +1003,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: y: auto;
   min-height: 0;
 }
 
@@ -2764,4 +2764,53 @@
 .vt-quick-query-toast {
   background: #fffbe6; border: 1px solid #ffe58f; color: #d46b08;
   border-radius: 6px; padding: 6px 10px; font-size: 12px;
+}
+
+
+/* ========== 平铺式列管理面板 (展开态) ==========
+   展开时侧边栏实体占位(宽度由 LayoutManager 内联控制),
+   Tab 栏横排在顶部, 面板占满剩余空间, 不再浮层覆盖表格 */
+.vt-layout-side:not(.vt-collapsed) .vt-side-tabs-container {
+  position: relative;
+  flex-direction: row;
+  height: 40px;
+  width: 100%;
+  border-left: none;
+  border-bottom: 1px solid var(--vt-border-light);
+}
+.vt-layout-side:not(.vt-collapsed) .vt-side-tab {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  border-bottom: none;
+  border-right: 1px solid var(--vt-border-light);
+}
+.vt-layout-side:not(.vt-collapsed) .vt-side-tab .vt-tab-icon {
+  margin-bottom: 0;
+  font-size: 15px;
+}
+.vt-layout-side:not(.vt-collapsed) .vt-side-tab .vt-tab-title {
+  writing-mode: horizontal-tb;
+  letter-spacing: 0;
+}
+.vt-layout-side:not(.vt-collapsed) .vt-side-panel-wrapper {
+  right: 0;
+  top: 40px;
+  bottom: 0;
+  width: 100%;
+  border-left: none;
+  box-shadow: none;
+}
+/* 快速查询: 查询按钮吸底, 列表区域限高内滚 */
+.vt-quick-query-submit {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.06);
+}
+.vt-quick-query-dim-list {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
 }

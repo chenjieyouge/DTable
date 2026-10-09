@@ -45,20 +45,27 @@ export class LayoutManager {
     this.mainArea = document.createElement('div')
     this.mainArea.className = 'vt-layout-main'
     this.container.appendChild(this.mainArea)
-    // 右侧面板区域 (绝对定位, 从右侧滑入)
+    // 右侧面板区域: 展开时实体占位(平铺), 收起时退化为 40px Tab 条
     if (this.layoutConfig.sidePanel) {
       this.sideArea = document.createElement('div')
       this.sideArea.className = 'vt-layout-side'
-      // 只设置动态宽度, 其他样式都写在 css 文件中
-      // this.sideArea.style.width = `${this.layoutConfig.sidePanel.width}px`
 
       // 默认隐藏 (向右平移到屏幕外)
       if (!this.layoutConfig.sidePanel.defaultOpen) {
         this.sideArea.classList.add('vt-collapsed')
       }
+      this.applySideWidth()
       this.container.appendChild(this.sideArea)
     }
     return this.container
+  }
+
+  /** 按展开/收起状态同步侧边栏占位宽度 (展开=配置宽, 收起=40px Tab 条) */
+  private applySideWidth(): void {
+    if (!this.sideArea) return
+    const collapsed = this.sideArea.classList.contains('vt-collapsed')
+    const width = collapsed ? 40 : (this.layoutConfig.sidePanel?.width ?? 250)
+    this.sideArea.style.width = `${width}px`
   }
 
   // 获取主表格区域容器
@@ -126,6 +133,7 @@ export class LayoutManager {
     } else {
       this.sideArea.classList.add('vt-collapsed')
     }
+    this.applySideWidth()
   }
 
   // 销毁容器, 解引用

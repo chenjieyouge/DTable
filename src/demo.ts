@@ -332,7 +332,7 @@ function buildDemoConfig(): IUserConfig {
     initialData: genDemoRows(),
     columns: DEMO_COLUMNS,
     groupBy: ['类别'],
-    sidePanel: { enabled: true, defaultOpen: false, defaultPanel: 'columns', panels: [] },
+    sidePanel: { enabled: true, defaultOpen: true, width: 380, defaultPanel: 'columns', panels: [] },
     onCellValueChange: (key, _rowIndex, newValue, oldValue) => {
       note(`单元格已编辑：${key} ${JSON.stringify(oldValue)} → ${JSON.stringify(newValue)}`, 'ok')
     },
@@ -376,7 +376,7 @@ function baseConfig(): Pick<IUserConfig, 'container' | 'columns' | 'sidePanel'> 
   return {
     container: '#table-container',
     columns: RETAIL_COLUMNS,
-    sidePanel: { enabled: true, defaultOpen: false, defaultPanel: 'columns', panels: [] },
+    sidePanel: { enabled: true, defaultOpen: true, width: 380, defaultPanel: 'columns', panels: [] },
   }
 }
 
