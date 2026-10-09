@@ -378,6 +378,20 @@ export class PivotRenderer {
     const wrapper = document.createElement('div')
     wrapper.className = 'vt-pivot-frozen-header-wrapper'
 
+    // 快速查询 (扁平模式): 每个勾选字段一列, 与行单元格一一对齐
+    if (this.config.flatMode) {
+      const row = this.createHeaderRow()
+      for (const key of this.config.rowGroups) {
+        const col = this.columns.find(c => c.key === key)
+        const cell = this.createHeaderCell(col?.title ?? key, 1)
+        cell.style.minWidth = '120px'
+        cell.style.width = '120px'
+        row.appendChild(cell)
+      }
+      wrapper.appendChild(row)
+      return wrapper
+    }
+
     const rowGroupLabel = this.config.rowGroups
       .map(key => this.columns.find(c => c.key === key)?.title ?? key)
       .join(' / ')
@@ -476,6 +490,41 @@ export class PivotRenderer {
 
   /** 渲染冻结区行单元格（行分组标签） */
   public renderRowFrozenPart(flatRow: IPivotFlatRow): HTMLDivElement {
+    // 快速查询 (扁平模式): 每个勾选字段单独一列, 相邻同值不合并
+    if (this.config.flatMode) {
+      const row = document.createElement('div')
+      row.className = 'vt-table-row vt-pivot-scroll-row'
+      if (flatRow.rowType === 'grandtotal') row.classList.add('vt-pivot-row-grandtotal')
+
+      const groupKeys = this.config.rowGroups
+      groupKeys.forEach((key, i) => {
+        const cell = document.createElement('div')
+        cell.className = 'vt-table-cell vt-pivot-frozen-cell'
+        if (flatRow.rowType === 'grandtotal') cell.classList.add('vt-pivot-row-grandtotal')
+        cell.style.minWidth = '120px'
+        cell.style.width = '120px'
+        cell.style.flex = 'none'
+        cell.style.paddingLeft = '12px'
+        cell.style.overflow = 'hidden'
+        cell.style.textOverflow = 'ellipsis'
+        cell.style.whiteSpace = 'nowrap'
+
+        if (flatRow.rowType === 'grandtotal') {
+          if (i === 0) {
+            cell.textContent = '总计'
+            cell.style.fontWeight = '700'
+            cell.style.color = '#1f2937'
+          }
+        } else {
+          cell.textContent = String(flatRow.data[key] ?? '')
+        }
+        row.appendChild(cell)
+      })
+
+      // 总计行: 剩余未渲染的字段列保持空位 (与第一列"总计"同行)
+      return row
+    }
+
     const cell = document.createElement('div')
     cell.className = 'vt-table-cell vt-pivot-frozen-cell'
 

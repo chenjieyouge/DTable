@@ -50,3 +50,10 @@ div_table.*
 # 本地起服务时的输出重定向
 server-run.log
 vite-run.log
+# 本地交付物与临时工作目录（不提交）
+output/
+.word-work/
+.lark-slides/
+
+dev-server.log
+

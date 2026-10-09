@@ -30,6 +30,12 @@ export interface IPivotConfig {
   showColSubtotals?: boolean  // 是否显示列小计, 默认 false
   colMaxLeafCols?: number     // 限制最大叶子列数, 默认 50
 
+  /**
+   * 快速查询模式 (扁平透视): 勾选字段按顺序作为行分组, 每组一行,
+   * 所有勾选字段值平铺显示, 不合并相邻同值单元格, 无树形展开/折叠与小计。
+   */
+  flatMode?: boolean
+
   // 行分组字段过滤: key=groupField, value=允许显示的值集合（空数组=不过滤）
   rowFilters?: Record<string, string[]>
 

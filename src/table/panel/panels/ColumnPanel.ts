@@ -2,6 +2,7 @@ import type { IPanel } from "@/table/panel/IPanel";
 import type { TableStore } from "@/table/state/createTableStore";
 import type { IColumn } from "@/types";
 import type { IPivotConfig, AggregationType } from "@/types/pivot";
+import { QuickQueryPanel } from "@/table/pivot/QuickQueryPanel";
 
 // 四个区域的名称
 type ZoneName = 'filters' | 'columns' | 'rows' | 'values'
@@ -363,6 +364,13 @@ export class ColumnPanel implements IPanel {
     quickBtn.title = '智能识别维度和度量，一键生成透视表'
     quickBtn.addEventListener('click', () => this.quickPivot())
     poolHeader.appendChild(quickBtn)
+
+    const quickQueryBtn = document.createElement('button')
+    quickQueryBtn.className = 'vt-pivot-quick-btn vt-pivot-quick-btn--query'
+    quickQueryBtn.textContent = '⚡ 快速查询'
+    quickQueryBtn.title = '勾选字段按顺序自动透视，不合并行'
+    quickQueryBtn.addEventListener('click', () => this.enterQuickQuery())
+    poolHeader.appendChild(quickQueryBtn)
     
     poolSection.appendChild(poolHeader)
 
@@ -1312,6 +1320,23 @@ export class ColumnPanel implements IPanel {
     // 4. 刷新界面并触发配置更新
     this.refreshAllZones()
     this.emitConfig()
+  }
+
+  /** 进入快速查询模式: 字段窗格 (勾选顺序透视, 扁平不合并) */
+  private enterQuickQuery(): void {
+    if (!this.pivotConfgSection) return
+
+    this.pivotConfgSection.innerHTML = ''
+
+    const panel = new QuickQueryPanel(
+      this.originalColumns,
+      // 查询结果直通透视表 (flatMode=true, 不经过四区域 zones)
+      (config) => this.onPivotConfigChange?.(config),
+      // 返回高级透视: 重建四区域配置区
+      () => this.renderPivotConfig()
+    )
+
+    this.pivotConfgSection.appendChild(panel.render())
   }
 
   public destroy(): void {

@@ -2717,3 +2717,51 @@
     animation-duration: 2s;
   }
 }
+
+
+/* ================= 快速查询 (Quick Query) ================= */
+.vt-quick-query-panel { padding: 4px 2px; display: flex; flex-direction: column; gap: 8px; }
+.vt-quick-query-header { display: flex; justify-content: space-between; align-items: center; }
+.vt-quick-query-title { font-size: 14px; font-weight: 700; color: #1f2937; }
+.vt-quick-query-back-btn {
+  border: 1px solid #d1d5db; background: #fff; color: #374151;
+  border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.vt-quick-query-back-btn:hover { border-color: #1677ff; color: #1677ff; }
+.vt-quick-query-tip {
+  background: #fff1f0; border: 1px solid #ffccc7; color: #cf1322;
+  border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.5;
+}
+.vt-quick-query-actions { display: flex; gap: 8px; }
+.vt-quick-query-link-btn {
+  border: none; background: transparent; color: #1677ff;
+  font-size: 12px; cursor: pointer; padding: 2px 0;
+}
+.vt-quick-query-link-btn:hover { text-decoration: underline; }
+.vt-quick-query-dim-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow: auto; }
+.vt-quick-query-dim-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px;
+  border-radius: 4px; cursor: pointer; font-size: 13px; color: #374151;
+}
+.vt-quick-query-dim-item:hover { background: #f3f4f6; }
+.vt-quick-query-dim-checkbox { width: 14px; height: 14px; cursor: pointer; accent-color: #1677ff; }
+.vt-quick-query-dim-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-quick-query-measure-list { display: flex; flex-direction: column; gap: 2px; max-height: 120px; overflow: auto; }
+.vt-quick-query-measure-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 6px; font-size: 12px; color: #6b7280; background: #f9fafb; border-radius: 4px;
+}
+.vt-quick-query-agg-badge {
+  font-size: 11px; color: #1677ff; background: #e6f4ff;
+  border-radius: 4px; padding: 1px 6px;
+}
+.vt-quick-query-submit {
+  background: #1677ff; color: #fff; border: none; border-radius: 6px;
+  padding: 8px 0; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.vt-quick-query-submit:hover { background: #4096ff; }
+.vt-quick-query-limit-tip { font-size: 11px; color: #9ca3af; text-align: center; }
+.vt-quick-query-toast {
+  background: #fffbe6; border: 1px solid #ffe58f; color: #d46b08;
+  border-radius: 6px; padding: 6px 10px; font-size: 12px;
+}

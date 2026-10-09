@@ -385,8 +385,19 @@ export class PivotTable {
     // 3. 构建行树
     this.treeRoot = this.processor.buildPivotTree(this.data)
 
-    // 4. 展平为虚拟滚动行
-    this.flatRows = PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
+    // 4. 展平为虚拟滚动行 (快速查询=扁平不合并, 标准透视=树形层级)
+    this.flatRows = this.pivotConfig.flatMode
+      ? PivotTreeNode.flattenFlat(this.treeRoot, this.pivotConfig.rowGroups)
+      : PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
+
+    // 快速查询: 冻结区宽度 = 勾选字段数 x 120px (每个字段一列, 覆盖默认 220px)
+    if (this.frozenCol) {
+      const flatWidth = this.pivotConfig.flatMode
+        ? `${Math.max(1, this.pivotConfig.rowGroups.length) * 120}px`
+        : ''
+      this.frozenCol.style.width = flatWidth
+      this.frozenCol.style.flex = flatWidth ? `0 0 ${flatWidth}` : '' // CSS flex-basis 优先于 width, 需同步覆盖
+    }
 
     // 5. 渲染表头 (列结构变了需要重建)
     this.renderHeader(colTree)
@@ -409,15 +420,21 @@ export class PivotTable {
     const buttonGroup = document.createElement('div')
     buttonGroup.className = 'vt-pivot-button-group'
 
-    const expandAllBtn = document.createElement('button')
-    expandAllBtn.className = 'vt-pivot-control-btn'
-    expandAllBtn.textContent = '展开'
-    expandAllBtn.addEventListener('click', () => this.expandAll())
+    // 快速查询 (扁平) 模式无树形层级, 不显示展开/折叠
+    const isFlat = !!this.pivotConfig.flatMode
+    let expandAllBtn: HTMLButtonElement | null = null
+    let collapseAllBtn: HTMLButtonElement | null = null
+    if (!isFlat) {
+      expandAllBtn = document.createElement('button')
+      expandAllBtn.className = 'vt-pivot-control-btn'
+      expandAllBtn.textContent = '展开'
+      expandAllBtn.addEventListener('click', () => this.expandAll())
 
-    const collapseAllBtn = document.createElement('button')
-    collapseAllBtn.className = 'vt-pivot-control-btn'
-    collapseAllBtn.textContent = '折叠'
-    collapseAllBtn.addEventListener('click', () => this.collapseAll())
+      collapseAllBtn = document.createElement('button')
+      collapseAllBtn.className = 'vt-pivot-control-btn'
+      collapseAllBtn.textContent = '折叠'
+      collapseAllBtn.addEventListener('click', () => this.collapseAll())
+    }
 
     // 行分组字段筛选按钮（每个 rowGroup 一个）
     for (const groupKey of this.pivotConfig.rowGroups) {
@@ -459,8 +476,8 @@ export class PivotTable {
     exportBtn.textContent = '导出 CSV'
     exportBtn.addEventListener('click', () => this.exportPivotCSV())
 
-    buttonGroup.appendChild(expandAllBtn)
-    buttonGroup.appendChild(collapseAllBtn)
+    if (expandAllBtn) buttonGroup.appendChild(expandAllBtn)
+    if (collapseAllBtn) buttonGroup.appendChild(collapseAllBtn)
     buttonGroup.appendChild(exportBtn)
     this.headerEl.appendChild(buttonGroup)
 

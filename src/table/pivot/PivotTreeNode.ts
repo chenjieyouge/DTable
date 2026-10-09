@@ -165,6 +165,93 @@ export class PivotTreeNode {
   }
 
   /**
+   * 扁平展平 (快速查询模式): 每组一行、字段平铺、不合并相邻同值单元格
+   *
+   * 与 flattenTree 的区别:
+   * - 不产出 group 行 / 小计行: 没有树形层级与展开/折叠
+   * - 每个"叶子组合"(最深分组节点) 生成一行, data 里补齐**全部** rowGroups 路径值
+   *   (树节点的 aggregatedData 只含当前层分组值, 祖先层值在这里从路径补齐)
+   * - 末尾追加一行总计 (取根节点聚合数据), 语义与 flattenTree 的总计行一致
+   *
+   * @param node      行树根节点 (level = -1)
+   * @param rowGroups 行分组字段数组 (顺序即勾选顺序)
+   * @param includeTotal 是否追加总计行, 默认 true
+   */
+  static flattenFlat(
+    node: IPivotTreeNode,
+    rowGroups: string[],
+    includeTotal: boolean = true
+  ): IPivotFlatRow[] {
+    const result: IPivotFlatRow[] = []
+    const pathValues: any[] = []
+
+    // 用栈模拟递归, 记录 (节点, 层级) 避免大树时调用栈溢出
+    const stack: { node: IPivotTreeNode; level: number }[] = node.children
+      .slice()
+      .reverse()
+      .map(child => ({ node: child, level: 0 }))
+
+    while (stack.length > 0) {
+      const { node: current, level } = stack.pop()!
+
+      if (current.type === 'group') {
+        pathValues[level] = current.groupValue
+
+        // 判断是否为"叶子组合": 无子分组节点 (子节点为空 或 全部是 data 节点)
+        const hasGroupChildren = current.children.some(c => c.type === 'group')
+
+        if (!hasGroupChildren) {
+          // 组装完整组合行: 全路径字段值 + 聚合值
+          const data: Record<string, any> = {}
+          for (let i = 0; i <= level; i++) {
+            const key = rowGroups[i]
+            if (key !== undefined) data[key] = pathValues[i]
+          }
+          // 并入该组合的聚合数据 (含当前层分组值 + 各 valueField / 交叉 cellKey)
+          for (const [k, v] of Object.entries(current.aggregatedData ?? {})) {
+            data[k] = v
+          }
+
+          result.push({
+            nodeId: `${current.id}-flat`,
+            type: 'data',
+            rowType: 'nomal',
+            level,
+            data,
+            rowCount: current.rowCount,
+            groupVale: current.groupValue,
+            parentId: current.id.split('-').slice(0, -1).join('-') || 'root',
+          })
+        }
+
+        // 压栈子节点 (逆序保证深度优先顺序与 flattenTree 一致)
+        const children = current.children.filter(c => c.type === 'group')
+        for (let i = children.length - 1; i >= 0; i--) {
+          stack.push({ node: children[i], level: level + 1 })
+        }
+      }
+      // data 节点在扁平模式下不产出 (组合聚合由最深分组节点承担)
+    }
+
+    // 末尾追加总计行 (与 flattenTree 语义一致)
+    if (includeTotal && result.length > 0) {
+      result.push({
+        nodeId: 'grand-total',
+        type: 'group',
+        rowType: 'grandtotal',
+        level: 0,
+        data: { ...(node.aggregatedData ?? {}) },
+        isExpanded: false,
+        rowCount: node.rowCount,
+        groupVale: '总计',
+        parentId: 'root',
+      })
+    }
+
+    return result
+  }
+
+  /**
    * 切换节点 展开/折叠 状态
    * 
    * 原理: 
