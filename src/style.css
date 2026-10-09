@@ -3002,3 +3002,21 @@
   box-shadow: inset 0 0 0 1.5px rgba(30, 120, 200, 0.85);
   z-index: 1;
 }
+
+/* ========== AG-GRID 对齐: 字段勾选列表搜索 ========== */
+
+.vt-instance .vt-px-checkbox-search {
+  margin: 0 10px 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--vt-border-medium);
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  color: var(--vt-text-dark);
+  box-sizing: border-box;
+}
+
+.vt-instance .vt-px-checkbox-search:focus {
+  border-color: var(--vt-primary);
+  box-shadow: 0 0 0 2px var(--vt-primary-bg);
+}

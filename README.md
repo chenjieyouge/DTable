@@ -8,7 +8,7 @@ DTable 是一个纯 TypeScript + DOM 实现的轻量级虚拟滚动表格库，�
 [![npm](https://img.shields.io/npm/v/@youge/dtable)](https://www.npmjs.com/package/@youge/dtable)
 [![license](https://img.shields.io/npm/l/@youge/dtable)](./LICENSE)
 ![bundle](https://img.shields.io/badge/gzip-%3C%2050KB-00b42a)
-![tests](https://img.shields.io/badge/tests-97%20passed-165dff)
+![tests](https://img.shields.io/badge/tests-99%20passed-165dff)
 
 ---
 
@@ -142,7 +142,7 @@ pnpm dev        # 打开 http://localhost:5173
 右键菜单、展开状态记忆、键盘导航/单元格选择/Ctrl+C 复制、状态持久化、导出 Excel）：
 
 ```bash
-pnpm test                                  # 全部 97 个测试
+pnpm test                                  # 全部 99 个测试
 pnpm vitest run tests/pivot-persist.test.ts # 透视表持久化 + 大数据保护
 pnpm build                                 # tsc + vite 构建
 ```

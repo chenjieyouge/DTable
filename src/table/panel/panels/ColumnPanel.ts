@@ -389,11 +389,26 @@ export class ColumnPanel implements IPanel {
     poolSection.appendChild(poolHeader)
 
     // Excel 风格字段列表: 勾选 = 自动分配到对应区域, 取消 = 移出所有区域
+    // (对标 ag-grid 字段面板: 支持按名称搜索过滤)
+    const checkboxSearch = document.createElement('input')
+    checkboxSearch.type = 'text'
+    checkboxSearch.className = 'vt-px-checkbox-search'
+    checkboxSearch.placeholder = '搜索字段...'
+    poolSection.appendChild(checkboxSearch)
+
     const checkboxList = document.createElement('div')
     checkboxList.className = 'vt-px-checkbox-list'
     checkboxList.title = '勾选字段自动加入透视区域（文本→行, 数值→值）'
     poolSection.appendChild(checkboxList)
     this.renderFieldCheckboxList(checkboxList)
+
+    checkboxSearch.addEventListener('input', () => {
+      const q = checkboxSearch.value.trim()
+      checkboxList.querySelectorAll<HTMLElement>('.vt-px-checkbox-item').forEach(item => {
+        const title = item.dataset.fieldTitle ?? ''
+        item.style.display = (!q || title.includes(q)) ? '' : 'none'
+      })
+    })
 
     const poolSearch = document.createElement('input')
     poolSearch.type = 'text'
@@ -411,6 +426,28 @@ export class ColumnPanel implements IPanel {
     this.renderPool(poolList, '')
     poolSearch.addEventListener('input', () => {
       this.renderPool(poolList, poolSearch.value.trim())
+    })
+
+    // 对标 ag-grid: 把字段从任意区域拖回字段池 = 移出该区域
+    poolList.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      if (this.dragState && this.dragState.fromZone !== 'pool') {
+        e.dataTransfer!.dropEffect = 'move'
+        poolList.classList.add('vt-px-zone--over')
+      }
+    })
+    poolList.addEventListener('dragleave', () => {
+      poolList.classList.remove('vt-px-zone--over')
+    })
+    poolList.addEventListener('drop', (e) => {
+      e.preventDefault()
+      poolList.classList.remove('vt-px-zone--over')
+      if (this.dragState && this.dragState.fromZone !== 'pool') {
+        const { key, fromZone } = this.dragState
+        this.dragState = null
+        this.removeFromZone(key, fromZone)
+        this.clearAllDropIndicators()
+      }
     })
 
     // ── 2. 分割线 ──────────────────────────────────────────
@@ -1258,6 +1295,7 @@ export class ColumnPanel implements IPanel {
     for (const col of this.originalColumns) {
       const item = document.createElement('label')
       item.className = 'vt-px-checkbox-item'
+      item.dataset.fieldTitle = col.title
       item.title = `${this.isNumericField(col) ? '数值字段 → 自动加入「值」区域' : '文本字段 → 自动加入「行」区域'}`
 
       const cb = document.createElement('input')
