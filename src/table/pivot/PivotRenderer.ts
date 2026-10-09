@@ -22,6 +22,12 @@ export class PivotRenderer {
     this.columns = columns
   }
 
+  /** 行分组列宽 (Excel 树形布局每层一列, 默认 130) — 可由用户拖拽调整 */
+  public rowGroupWidth = 130
+
+  /** 值列宽 (每个叶子列, 默认 120) — 可由用户拖拽调整 */
+  public valueWidth = 120
+
   /** 由 PivotTable.refresh() 在每次重建列树后注入 */
   public setColLeaves(leaves: IPivotColNode[]): void {
     this.colLeaves = leaves
@@ -156,7 +162,7 @@ export class PivotRenderer {
     cell.textContent = text
     cell.style.fontWeight = 'bold'
     // 使用固定宽度而不是flex，确保多级列分组对齐
-    const cellWidth = leafCount * 120 // 每个叶子列120px
+    const cellWidth = leafCount * this.valueWidth // 每个叶子列宽可拖拽调整
     cell.style.minWidth = `${cellWidth}px`
     cell.style.width = `${cellWidth}px`
     cell.style.flex = 'none'
@@ -397,9 +403,9 @@ export class PivotRenderer {
     cell.textContent = this.formatValue(value, format)
     cell.style.textAlign = 'right'
     cell.style.paddingRight = '12px'
-    // 固定宽度120px，确保和表头对齐
-    cell.style.minWidth = '120px'
-    cell.style.width = '120px'
+    // 固定宽度可拖拽调整，确保和表头对齐
+    cell.style.minWidth = `${this.valueWidth}px`
+    cell.style.width = `${this.valueWidth}px`
     cell.style.flex = 'none'
     return cell
   }
@@ -438,13 +444,13 @@ export class PivotRenderer {
       const row = this.createHeaderRow()
       for (const key of this.config.rowGroups) {
         const col = this.columns.find(c => c.key === key)
-        const cell = this.createFrozenHeaderCell(col?.title ?? key, 130)
+        const cell = this.createFrozenHeaderCell(col?.title ?? key, this.rowGroupWidth)
         row.appendChild(cell)
       }
       wrapper.appendChild(row)
     } else {
       const depth = this.getColTreeDepth(colTree)
-      const frozenCellWidth = 130 * this.config.rowGroups.length
+      const frozenCellWidth = this.rowGroupWidth * this.config.rowGroups.length
       for (let d = 0; d < depth; d++) {
         const row = this.createHeaderRow()
         const cell = this.createFrozenHeaderCell(d === 0 ? rowGroupLabel : '', frozenCellWidth)

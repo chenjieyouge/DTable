@@ -3020,3 +3020,53 @@
   border-color: var(--vt-primary);
   box-shadow: 0 0 0 2px var(--vt-primary-bg);
 }
+
+/* ========== 透视表列宽拖拽 (Excel/ag-grid 式) ========== */
+
+.vt-instance .vt-pivot-header-cell {
+  position: relative;
+}
+
+.vt-instance .vt-pivot-resizer {
+  position: absolute;
+  top: 0;
+  right: -1px;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.vt-instance .vt-pivot-resizer:hover,
+.vt-instance .vt-pivot-resizer:active {
+  background: var(--vt-primary, #1677ff);
+  opacity: 0.35;
+}
+
+/* ========== 透视表底部状态栏 (Excel/ag-grid 式信息反馈) ========== */
+
+.vt-instance .vt-pivot-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 24px;
+  padding: 0 12px;
+  border-top: 1px solid var(--vt-border-medium, #e5e7eb);
+  background: var(--vt-statusbar-bg, #fafbfc);
+  font-size: 12px;
+  color: var(--vt-text-secondary, #6b7280);
+  flex-shrink: 0;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.vt-instance .vt-pivot-statusbar::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vt-primary, #1677ff);
+  opacity: 0.7;
+  flex-shrink: 0;
+}

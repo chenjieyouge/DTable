@@ -71,6 +71,14 @@ export class PivotTable {
   // Shift 扩展选区的锚点
   private selAnchor: { row: number; col: number } | null = null
 
+  /** 用户可拖拽调整的列宽 (行组列 / 值列), 持久化到 localStorage */
+  private pivotWidths = { rowGroup: 130, value: 120 }
+  private static readonly WIDTH_STORAGE_KEY = 'dtable.pivot.widths'
+  private colResizing: { type: 'rowGroup' | 'value'; startX: number; startWidth: number; origW: number } | null = null
+
+  /** 底部状态栏 (共N行 / 已选RxC / 展开组数) — Excel/ag-grid 式信息反馈 */
+  private statusBarEl: HTMLDivElement | null = null
+
   // 展开状态持久化 key (localStorage)
   private static readonly EXPANDED_STORAGE_KEY = 'dtable.pivot.expanded'
 
@@ -163,6 +171,11 @@ export class PivotTable {
     this.breadcrumbEl = document.createElement('div')
     this.breadcrumbEl.className = 'vt-pivot-breadcrumb-wrapper'
     wrapper.appendChild(this.breadcrumbEl)
+
+    // ── 底部状态栏 (行数统计 / 选区反馈) ──
+    this.statusBarEl = document.createElement('div')
+    this.statusBarEl.className = 'vt-pivot-statusbar'
+    wrapper.appendChild(this.statusBarEl)
 
     // ── 主体容器（flex row: 冻结区 + 滚动区）──
     this.bodyContainer = document.createElement('div')
@@ -406,6 +419,7 @@ export class PivotTable {
     this.renderer.setColLeaves(colLeaves)
 
     // 3. 构建行树 (重建前捕获展开状态, 重建后恢复; 首次从 localStorage 载入)
+    this.loadPivotWidths()
     if (this.expandedState.size === 0) this.loadExpandedState()
     if (this.treeRoot) this.captureExpandedState(this.treeRoot)
     this.treeRoot = this.processor.buildPivotTree(this.data)
@@ -419,11 +433,13 @@ export class PivotTable {
     // 重置斑马纹计数器
     this.dataRowCounter = 0
 
-    // 冻结区宽度 = 分组列数 × 列宽 (快速查询 120px/列, 树形 Excel 布局 130px/列)
+    // 冻结区宽度 = 分组列数 × 列宽 (用户可拖拽调整, 默认 130/120)
+    this.renderer.rowGroupWidth = this.pivotWidths.rowGroup
+    this.renderer.valueWidth = this.pivotWidths.value
     if (this.frozenCol) {
       const colCount = Math.max(1, this.pivotConfig.rowGroups.length)
-      const perCol = this.pivotConfig.flatMode ? 120 : 130
-      const frozenWidth = `${colCount * perCol}px`
+      // 扁平(快速查询)列宽固定 120; 树形 Excel 布局可拖拽调整
+      const frozenWidth = `${colCount * (this.pivotConfig.flatMode ? 120 : this.pivotWidths.rowGroup)}px`
       this.frozenCol.style.width = frozenWidth
       this.frozenCol.style.flex = `0 0 ${frozenWidth}` // CSS flex-basis 优先于 width, 需同步覆盖
     }
@@ -435,6 +451,7 @@ export class PivotTable {
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
+    this.updateStatusBar()
   }
 
   /** 渲染表头（拆分为冻结区表头 + 滚动区表头） */
@@ -527,6 +544,9 @@ export class PivotTable {
     // ── 滚动区表头（值列）──
     const scrollHeader = this.renderer.renderScrollHeader(colTree, onSort)
     this.scrollHeaderEl.appendChild(scrollHeader)
+
+    // ── 列宽拖拽句柄 (Excel/ag-grid 式: 拖表头右缘调整列宽) ──
+    this.attachColumnResizers()
   }
 
   /** 弹出分组字段值筛选下拉框（type: 'row' | 'col'） */
@@ -844,6 +864,7 @@ export class PivotTable {
     this.selectedCell = { row, col }
     this.selAnchor = null
     this.applySelectionHighlight()
+    this.updateStatusBar()
   }
 
   /** 行创建时应用选中高亮 (增量路径, 支持 anchor..current 矩形) */
@@ -864,6 +885,7 @@ export class PivotTable {
 
   /** 全量刷新选中高亮 (anchor..current 矩形选区) */
   private applySelectionHighlight(): void {
+    this.updateStatusBar()
     const sel = this.selectedCell
     if (!sel) return
     const a = this.selAnchor ?? { row: sel.row, col: sel.col }
@@ -884,19 +906,10 @@ export class PivotTable {
     }
   }
 
-  /** 键盘导航 (方向键 / Shift 扩展 / Enter / Ctrl+C) */
+  /** 键盘导航 (方向键 / Shift 扩展 / Enter / Ctrl+C / Ctrl+A / Home End / PageUp PageDown / Esc) */
   private handlePivotKeydown(e: KeyboardEvent): void {
     const totalRows = this.flatRows.length
     if (totalRows === 0) return
-
-    // 无选中时: 方向键从 (0,0) 起步
-    if (!this.selectedCell) {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        e.preventDefault()
-        this.setSelection(0, 0)
-      }
-      return
-    }
 
     // Ctrl/Cmd + C 复制选区
     if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
@@ -905,14 +918,47 @@ export class PivotTable {
       return
     }
 
+    // Ctrl/Cmd + A 全选 (对标 Excel / ag-grid)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault()
+      this.selectedCell = { row: totalRows - 1, col: this.totalCols - 1 }
+      this.selAnchor = { row: 0, col: 0 }
+      this.applySelectionHighlight()
+      return
+    }
+
+    // 无选中时: 方向键 / 翻页 / Home End 从 (0,0) 起步
+    if (!this.selectedCell) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault()
+        this.setSelection(0, 0)
+      }
+      return
+    }
+
     const s = this.selectedCell
     let nr = s.row
     let nc = s.col
+    const viewportRows = Math.max(1, Math.floor((this.scrollContainer?.clientHeight ?? this.ROW_HEIGHT * 20) / this.ROW_HEIGHT))
     switch (e.key) {
       case 'ArrowUp': nr = Math.max(0, s.row - 1); break
       case 'ArrowDown': nr = Math.min(totalRows - 1, s.row + 1); break
       case 'ArrowLeft': nc = Math.max(0, s.col - 1); break
       case 'ArrowRight': nc = Math.min(this.totalCols - 1, s.col + 1); break
+      case 'PageUp': nr = Math.max(0, s.row - viewportRows); break
+      case 'PageDown': nr = Math.min(totalRows - 1, s.row + viewportRows); break
+      case 'Home':
+        nc = 0
+        if (e.ctrlKey) nr = 0  // Ctrl+Home → 首行首列
+        break
+      case 'End':
+        nc = this.totalCols - 1
+        if (e.ctrlKey) nr = totalRows - 1  // Ctrl+End → 末行末列
+        break
+      case 'Escape':
+        e.preventDefault()
+        this.clearPivotSelection()
+        return
       case 'Enter':
         e.preventDefault()
         // 选中组行: 展开/折叠 (Excel 行为)
@@ -935,6 +981,148 @@ export class PivotTable {
     this.selectedCell = { row: nr, col: nc }
     this.applySelectionHighlight()
     this.scrollToSelection(nr)
+  }
+
+  /** 清除单元格选区 (Esc) */
+  private clearPivotSelection(): void {
+    this.selectedCell = null
+    this.selAnchor = null
+    this.updateStatusBar()
+    if (!this.visibleRowMap) return
+    for (const [, rowEl] of this.visibleRowMap) {
+      rowEl.querySelectorAll<HTMLElement>('.vt-pivot-cell-selected').forEach(el => el.classList.remove('vt-pivot-cell-selected'))
+    }
+    if (this.frozenVisibleRowMap) {
+      for (const [, frozenEl] of this.frozenVisibleRowMap) {
+        frozenEl.querySelectorAll<HTMLElement>('.vt-pivot-cell-selected').forEach(el => el.classList.remove('vt-pivot-cell-selected'))
+      }
+    }
+  }
+
+  /** 从 localStorage 载入用户列宽 */
+  private loadPivotWidths(): void {
+    try {
+      const raw = localStorage.getItem(PivotTable.WIDTH_STORAGE_KEY)
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (typeof saved.rowGroup === 'number' && saved.rowGroup >= 60) this.pivotWidths.rowGroup = saved.rowGroup
+        if (typeof saved.value === 'number' && saved.value >= 60) this.pivotWidths.value = saved.value
+      }
+    } catch { /* 忽略损坏数据 */ }
+  }
+
+  /** 保存用户列宽到 localStorage */
+  private savePivotWidths(): void {
+    try {
+      localStorage.setItem(PivotTable.WIDTH_STORAGE_KEY, JSON.stringify(this.pivotWidths))
+    } catch { /* 隐私模式等场景静默忽略 */ }
+  }
+
+  /** 表头挂拖拽句柄 (Excel/ag-grid 式: 拖列头右缘调整列宽) */
+  private attachColumnResizers(): void {
+    const bind = (cell: HTMLElement, type: 'rowGroup' | 'value'): void => {
+      if (cell.querySelector('.vt-pivot-resizer')) return
+      cell.dataset.origWidth = cell.style.width || ''
+      const resizer = document.createElement('span')
+      resizer.className = 'vt-pivot-resizer'
+      resizer.title = '拖动调整列宽'
+      cell.appendChild(resizer)
+      resizer.addEventListener('click', (e) => e.stopPropagation())
+      resizer.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const startWidth = type === 'value' ? this.pivotWidths.value : this.pivotWidths.rowGroup
+        this.colResizing = { type, startX: e.clientX, startWidth, origW: parseFloat(cell.dataset.origWidth ?? '') || 0 }
+        document.addEventListener('mousemove', this.handleColResizeMove)
+        document.addEventListener('mouseup', this.handleColResizeUp)
+      })
+    }
+    this.frozenHeaderEl?.querySelectorAll<HTMLElement>('.vt-pivot-header-cell').forEach(cell => bind(cell, 'rowGroup'))
+    this.scrollHeaderEl?.querySelectorAll<HTMLElement>('.vt-pivot-header-cell').forEach(cell => bind(cell, 'value'))
+  }
+
+  /** 拖拽移动: 实时更新列宽 (表头按比例, 数据行绝对值, 冻结区总宽) */
+  private handleColResizeMove = (e: MouseEvent): void => {
+    if (!this.colResizing) return
+    const { type, startX, startWidth, origW } = this.colResizing
+    let w = startWidth + (e.clientX - startX)
+    w = Math.max(60, Math.min(600, w))
+    this.pivotWidths[type] = w
+    const wStr = `${w}px`
+
+    // 表头: 原宽 × (新宽/原宽) — 合并格按比例跟随
+    if (type === 'value') {
+      this.scrollHeaderEl?.querySelectorAll<HTMLElement>('.vt-pivot-header-cell').forEach(c => {
+        if (startWidth > 0 && origW > 0) {
+          c.style.width = `${origW * (w / startWidth)}px`
+          c.style.minWidth = c.style.width
+        }
+      })
+    } else {
+      this.frozenHeaderEl?.querySelectorAll<HTMLElement>('.vt-pivot-header-cell').forEach(c => {
+        if (startWidth > 0 && origW > 0) {
+          c.style.width = `${origW * (w / startWidth)}px`
+          c.style.minWidth = c.style.width
+        }
+      })
+    }
+
+    // 冻结区总宽 (行组列)
+    if (type === 'rowGroup' && this.frozenCol) {
+      const colCount = Math.max(1, this.pivotConfig.rowGroups.length)
+      const fw = `${colCount * w}px`
+      this.frozenCol.style.width = fw
+      this.frozenCol.style.flex = `0 0 ${fw}`
+    }
+
+    // 可见数据行: 每单元格绝对值
+    if (type === 'value') {
+      for (const [, rowEl] of this.visibleRowMap) {
+        for (const child of Array.from(rowEl.children)) {
+          if (child instanceof HTMLElement) {
+            child.style.minWidth = wStr
+            child.style.width = wStr
+          }
+        }
+      }
+    } else {
+      for (const [, frozenEl] of this.frozenVisibleRowMap) {
+        for (const child of Array.from(frozenEl.children)) {
+          if (child instanceof HTMLElement) {
+            child.style.minWidth = wStr
+            child.style.width = wStr
+          }
+        }
+      }
+    }
+  }
+
+  /** 拖拽结束: 保存 + 整体重排对齐 */
+  private handleColResizeUp = (): void => {
+    if (!this.colResizing) return
+    this.colResizing = null
+    document.removeEventListener('mousemove', this.handleColResizeMove)
+    document.removeEventListener('mouseup', this.handleColResizeUp)
+    this.savePivotWidths()
+    this.refresh()
+  }
+
+  /** 更新底部状态栏: 共N行 · 已选RxC (选区/键盘移动后) */
+  private updateStatusBar(): void {
+    if (!this.statusBarEl) return
+    const parts: string[] = [`共 ${this.flatRows.length.toLocaleString()} 行`]
+    if (this.flatRows.length > 0 && this.pivotConfig.rowGroups.length > 0) {
+      const groupCount = this.flatRows.filter(r => r.type === 'group').length
+      if (groupCount > 0) parts.push(`${groupCount.toLocaleString()} 个分组`)
+    }
+    const sel = this.selectedCell
+    if (sel) {
+      const a = this.selAnchor ?? sel
+      const rows = Math.abs(a.row - sel.row) + 1
+      const cols = Math.abs(a.col - sel.col) + 1
+      parts.push(`已选 ${rows} 行 × ${cols} 列`)
+    }
+    this.statusBarEl.textContent = parts.join(' · ')
   }
 
   /** 滚动到选中行 */
