@@ -1149,15 +1149,28 @@
 }
 
 .vt-instance .vt-pivot-header-cell {
-  font-weight: 600;
-  color: var(--vt-text-darker);
-  font-size: 14px;
-  background-color: var(--vt-bg-subtle);
-  border-right: 1px solid var(--vt-border-light);
+  font-weight: 700;
+  color: #1f3864;
+  font-size: 13px;
+  background-color: #e9f0f9;
+  border-right: 1px solid #d5e2f0;
+  border-bottom: 1px solid #d5e2f0;
 }
 
 .vt-instance .vt-pivot-header-cell:not(:first-child) {
   text-align: right;
+}
+
+/* 多级列分组: 叶子层表头浅色, 与顶层分组区分 */
+.vt-instance .vt-pivot-header-wrapper .vt-table-row + .vt-table-row .vt-pivot-header-cell {
+  background-color: #f4f8fc;
+  color: #2c4a75;
+}
+
+/* 冻结区表头与滚动区表头同色 */
+.vt-instance .vt-pivot-frozen-header-wrapper .vt-pivot-header-cell {
+  background-color: #e9f0f9;
+  border-bottom: 1px solid #d5e2f0;
 }
 
 .vt-instance .vt-pivot-table .vt-table-row {
@@ -1185,8 +1198,8 @@
 }
 
 .vt-instance .vt-pivot-group-row {
-  background-color: transparent;
-  font-weight: 500;
+  background-color: #f2f6fb;
+  font-weight: 600;
 }
 
 .vt-instance .vt-pivot-group-row:hover {
@@ -1265,6 +1278,11 @@
   background-color: var(--vt-bg);
 }
 
+/* Excel 斑马纹: 偶数数据行浅灰底 */
+.vt-instance .vt-pivot-zebra {
+  background-color: #f5f8fc;
+}
+
 .vt-instance .vt-pivot-data-row:hover {
   background-color: var(--vt-primary-bg);
 }
@@ -1272,8 +1290,9 @@
 /* ========== 14. 透视表小计与总计 ========== */
 
 .vt-instance .vt-pivot-row-subtotal {
-  border-top: 1px solid var(--vt-border-light);
-  border-bottom: 1px solid var(--vt-border-light);
+  background-color: #eef3f9;
+  border-top: 1px solid #c9d8e8;
+  border-bottom: 1px solid #c9d8e8;
 }
 
 .vt-instance .vt-pivot-row-subtotal:hover {
@@ -1288,8 +1307,8 @@
 .vt-instance .vt-pivot-row-grandtotal {
   position: sticky;
   bottom: 0;
-  background-color: var(--vt-bg);
-  border-top: 1px solid var(--vt-border-medium);
+  background-color: #f7f9fc;
+  border-top: 2px solid #b8c9dc;
   border-bottom: 1px solid var(--vt-border-medium);
   z-index: 2;
 }
@@ -2813,4 +2832,173 @@
   max-height: none;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* ========== M2: Excel 字段列表勾选视图 ========== */
+
+.vt-instance .vt-px-checkbox-list {
+  max-height: 168px;
+  overflow-y: auto;
+  border: 1px solid var(--vt-border-light);
+  border-radius: 8px;
+  background: var(--vt-bg);
+  margin: 8px 0 2px;
+  padding: 4px;
+}
+
+.vt-instance .vt-px-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+
+.vt-instance .vt-px-checkbox-item:hover {
+  background: var(--vt-primary-bg);
+}
+
+.vt-instance .vt-px-checkbox-item input[type="checkbox"] {
+  accent-color: var(--vt-primary);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.vt-instance .vt-px-checkbox-name {
+  flex: 1;
+  color: var(--vt-text-darker);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ========== M2: 值字段设置弹层 ========== */
+
+.vt-instance .vt-px-chip-settings {
+  border: none;
+  background: transparent;
+  color: var(--vt-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.vt-instance .vt-px-chip-settings:hover {
+  color: var(--vt-primary);
+  background: var(--vt-primary-bg);
+}
+
+.vt-instance .vt-px-value-settings {
+  z-index: 1000;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--vt-border-medium);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--vt-text-dark);
+}
+
+.vt-instance .vt-px-value-settings-title {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 8px;
+  color: var(--vt-text-darker);
+}
+
+.vt-instance .vt-px-value-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.vt-instance .vt-px-value-settings-row > span {
+  width: 56px;
+  flex-shrink: 0;
+  color: var(--vt-text-secondary);
+}
+
+.vt-instance .vt-px-value-settings-input,
+.vt-instance .vt-px-value-settings-select {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--vt-border-medium);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  background: #fff;
+  color: var(--vt-text-dark);
+}
+
+.vt-instance .vt-px-value-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vt-instance .vt-px-value-settings-ok {
+  background: var(--vt-primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.vt-instance .vt-px-value-settings-ok:hover {
+  opacity: 0.9;
+}
+
+.vt-instance .vt-px-value-settings-cancel {
+  background: transparent;
+  border: 1px solid var(--vt-border-medium);
+  color: var(--vt-text-secondary);
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ========== M3: 透视表右键菜单 ========== */
+
+.vt-instance .vt-pivot-context-menu {
+  z-index: 1000;
+  min-width: 140px;
+  background: #fff;
+  border: 1px solid var(--vt-border-medium);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  font-size: 13px;
+  color: var(--vt-text-dark);
+}
+
+.vt-instance .vt-pivot-context-menu-item {
+  padding: 6px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vt-instance .vt-pivot-context-menu-item:hover {
+  background: var(--vt-primary-bg);
+  color: var(--vt-primary);
+}
+
+/* ========== P1: Excel 级交互 - 单元格选择 ========== */
+
+.vt-instance .vt-pivot-cell-selected {
+  background: rgba(30, 120, 200, 0.14) !important;
+  box-shadow: inset 0 0 0 1.5px rgba(30, 120, 200, 0.85);
+  z-index: 1;
 }

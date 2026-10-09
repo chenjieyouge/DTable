@@ -11,6 +11,9 @@
 // 聚合类型
 export type AggregationType = 'sum' | 'count' | 'avg' | 'max' | 'min'
 
+// 值字段数字格式 (Excel 值字段设置)
+export type ValueFieldFormat = 'auto' | 'int' | 'decimal2' | 'percent'
+
 // 最大分组层级限制
 export const MAX_GROUP_LEVELS = 5
 
@@ -24,6 +27,7 @@ export interface IPivotConfig {
     key: string
     aggregation: AggregationType
     label?: string
+    format?: ValueFieldFormat  // 数字格式 (值字段设置), 默认 'auto'
   }[]
 
   showSubtotals?: boolean     // 是否显示行小计, 默认 true

@@ -60,6 +60,20 @@ export class PivotTable {
   private visibleRowMap = new Map<number, HTMLDivElement>()
   private visibleSet = new Set<number>()
 
+  // 连续数据行计数器 (Excel 斑马纹: 数据行按出现顺序交错, 不被组行/小计行打断)
+  private dataRowCounter = 0
+
+  // 展开状态记忆: 筛选/配置变更重建树时恢复用户展开状态
+  private expandedState = new Map<string, boolean>()
+
+  // Excel 级交互: 当前选中单元格 (row=flatRows 索引, col=全列索引)
+  private selectedCell: { row: number; col: number } | null = null
+  // Shift 扩展选区的锚点
+  private selAnchor: { row: number; col: number } | null = null
+
+  // 展开状态持久化 key (localStorage)
+  private static readonly EXPANDED_STORAGE_KEY = 'dtable.pivot.expanded'
+
   private readonly ROW_HEIGHT = 32 //  暂时写死行高就 32px
   private readonly BUFFER_ROWS =10 //  暂时写死缓存行 10行
 
@@ -220,6 +234,15 @@ export class PivotTable {
 
   /** 设置冻结区和滚动区的滚动同步 */
   private setupScrollSync(): void {
+    // 右键菜单 (组行: 展开/折叠/全展/全收; 值列表头: 排序)
+    if (this.bodyContainer) {
+      this.bodyContainer.addEventListener('contextmenu', (e) => this.showContextMenu(e))
+      // Excel 级键盘导航 (方向键移动 / Shift 扩展 / Enter 折叠 / Ctrl+C 复制)
+      this.bodyContainer.tabIndex = 0
+      this.bodyContainer.style.outline = 'none'
+      this.bodyContainer.addEventListener('keydown', (e) => this.handlePivotKeydown(e))
+    }
+
     if (!this.scrollContainer) return
 
     this.scrollContainer.addEventListener('scroll', () => {
@@ -382,21 +405,27 @@ export class PivotTable {
     // 3. 注入列叶子给渲染器
     this.renderer.setColLeaves(colLeaves)
 
-    // 3. 构建行树
+    // 3. 构建行树 (重建前捕获展开状态, 重建后恢复; 首次从 localStorage 载入)
+    if (this.expandedState.size === 0) this.loadExpandedState()
+    if (this.treeRoot) this.captureExpandedState(this.treeRoot)
     this.treeRoot = this.processor.buildPivotTree(this.data)
+    this.restoreExpandedState(this.treeRoot)
 
     // 4. 展平为虚拟滚动行 (快速查询=扁平不合并, 标准透视=树形层级)
     this.flatRows = this.pivotConfig.flatMode
       ? PivotTreeNode.flattenFlat(this.treeRoot, this.pivotConfig.rowGroups)
       : PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
 
-    // 快速查询: 冻结区宽度 = 勾选字段数 x 120px (每个字段一列, 覆盖默认 220px)
+    // 重置斑马纹计数器
+    this.dataRowCounter = 0
+
+    // 冻结区宽度 = 分组列数 × 列宽 (快速查询 120px/列, 树形 Excel 布局 130px/列)
     if (this.frozenCol) {
-      const flatWidth = this.pivotConfig.flatMode
-        ? `${Math.max(1, this.pivotConfig.rowGroups.length) * 120}px`
-        : ''
-      this.frozenCol.style.width = flatWidth
-      this.frozenCol.style.flex = flatWidth ? `0 0 ${flatWidth}` : '' // CSS flex-basis 优先于 width, 需同步覆盖
+      const colCount = Math.max(1, this.pivotConfig.rowGroups.length)
+      const perCol = this.pivotConfig.flatMode ? 120 : 130
+      const frozenWidth = `${colCount * perCol}px`
+      this.frozenCol.style.width = frozenWidth
+      this.frozenCol.style.flex = `0 0 ${frozenWidth}` // CSS flex-basis 优先于 width, 需同步覆盖
     }
 
     // 5. 渲染表头 (列结构变了需要重建)
@@ -476,18 +505,20 @@ export class PivotTable {
     exportBtn.textContent = '导出 CSV'
     exportBtn.addEventListener('click', () => this.exportPivotCSV())
 
+    const exportXlsBtn = document.createElement('button')
+    exportXlsBtn.className = 'vt-pivot-control-btn vt-pivot-export-btn'
+    exportXlsBtn.textContent = '导出 Excel'
+    exportXlsBtn.title = '导出为 .xls (Excel 可直接打开)'
+    exportXlsBtn.addEventListener('click', () => this.exportPivotXLS())
+
     if (expandAllBtn) buttonGroup.appendChild(expandAllBtn)
     if (collapseAllBtn) buttonGroup.appendChild(collapseAllBtn)
     buttonGroup.appendChild(exportBtn)
+    buttonGroup.appendChild(exportXlsBtn)
     this.headerEl.appendChild(buttonGroup)
 
     // ── 排序回调 ──
-    const onSort = (cellKey: string, direction: 'asc' | 'desc' | null) => {
-      this.pivotConfig.sortBy = direction ? { cellKey, direction } : null
-      this.processor.updateConfig(this.pivotConfig)
-      this.renderer.updateConfig(this.pivotConfig, this.columns)
-      this.refresh()
-    }
+    const onSort = (cellKey: string, direction: 'asc' | 'desc' | null) => this.applySort(cellKey, direction)
 
     // ── 冻结区表头（行分组列名）──
     const frozenHeader = this.renderer.renderFrozenHeader(colTree)
@@ -645,6 +676,324 @@ export class PivotTable {
     return value
   }
 
+  /** 从 localStorage 载入展开状态 (跨会话记忆) */
+  private loadExpandedState(): void {
+    try {
+      const raw = localStorage.getItem(PivotTable.EXPANDED_STORAGE_KEY)
+      if (!raw) return
+      const map = JSON.parse(raw) as Record<string, boolean>
+      for (const key of Object.keys(map)) this.expandedState.set(key, !!map[key])
+    } catch { /* localStorage 不可用/损坏时静默忽略 */ }
+  }
+
+  /** 保存展开状态到 localStorage */
+  private saveExpandedState(): void {
+    try {
+      const obj: Record<string, boolean> = {}
+      this.expandedState.forEach((v, k) => { obj[k] = v })
+      localStorage.setItem(PivotTable.EXPANDED_STORAGE_KEY, JSON.stringify(obj))
+    } catch { /* localStorage 不可用(隐私模式等)时静默忽略 */ }
+  }
+
+  /** 展开状态记忆: 捕获当前树所有节点展开状态 */
+  private captureExpandedState(node: IPivotTreeNode): void {
+    if (node.type === 'group') this.expandedState.set(node.id, !!node.isExpanded)
+    for (const child of node.children) this.captureExpandedState(child)
+  }
+
+  /** 展开状态记忆: 新树按旧状态恢复 (仅在曾显式切换过的节点上生效) */
+  private restoreExpandedState(node: IPivotTreeNode): void {
+    if (node.type === 'group' && this.expandedState.has(node.id)) {
+      node.isExpanded = this.expandedState.get(node.id) ?? node.isExpanded
+    }
+    for (const child of node.children) this.restoreExpandedState(child)
+  }
+
+  /** 应用值排序 (表头点击 / 右键菜单共用) */
+  private applySort(cellKey: string, direction: 'asc' | 'desc' | null): void {
+    this.pivotConfig.sortBy = direction ? { cellKey, direction } : null
+    this.processor.updateConfig(this.pivotConfig)
+    this.renderer.updateConfig(this.pivotConfig, this.columns)
+    this.refresh()
+  }
+
+  /** 右键菜单 (Excel 风格): 组行=展开/折叠, 表头=排序 */
+  private showContextMenu(e: MouseEvent): void {
+    e.preventDefault()
+    document.querySelectorAll('.vt-pivot-context-menu').forEach(el => el.remove())
+
+    const target = e.target as HTMLElement
+    const rowEl = target.closest<HTMLElement>('[data-node-id]')
+    const headerCell = target.closest<HTMLElement>('.vt-pivot-header-cell[data-cell-key]')
+    const menu = document.createElement('div')
+    menu.className = 'vt-pivot-context-menu'
+
+    if (rowEl && rowEl.dataset.type === 'group') {
+      const nodeId = rowEl.dataset.nodeId!
+      const flat = this.flatRows.find(r => r.nodeId === nodeId)
+      // 小计/总计行非真实组节点, 不显示组展开折叠 (仅通用菜单)
+      const isRealGroup = !!flat && flat.rowType !== 'subtotal' && flat.rowType !== 'grandtotal'
+      if (isRealGroup) {
+        const isExpanded = flat!.isExpanded ?? true
+        menu.appendChild(this.contextMenuItem(isExpanded ? '折叠该组' : '展开该组', () => {
+          this.toggleNode(nodeId); menu.remove()
+        }))
+        menu.appendChild(this.contextMenuItem('全部展开', () => { this.expandAll(); menu.remove() }))
+        menu.appendChild(this.contextMenuItem('全部折叠', () => { this.collapseAll(); menu.remove() }))
+      } else {
+        menu.appendChild(this.contextMenuItem('全部展开', () => { this.expandAll(); menu.remove() }))
+        menu.appendChild(this.contextMenuItem('全部折叠', () => { this.collapseAll(); menu.remove() }))
+      }
+    } else if (headerCell) {
+      const cellKey = headerCell.dataset.cellKey!
+      menu.appendChild(this.contextMenuItem('升序排列', () => { this.applySort(cellKey, 'asc'); menu.remove() }))
+      menu.appendChild(this.contextMenuItem('降序排列', () => { this.applySort(cellKey, 'desc'); menu.remove() }))
+      menu.appendChild(this.contextMenuItem('清除排序', () => { this.applySort(cellKey, null); menu.remove() }))
+    } else {
+      menu.appendChild(this.contextMenuItem('全部展开', () => { this.expandAll(); menu.remove() }))
+      menu.appendChild(this.contextMenuItem('全部折叠', () => { this.collapseAll(); menu.remove() }))
+    }
+
+    const rect = { x: e.clientX, y: e.clientY }
+    menu.style.position = 'fixed'
+    menu.style.top = `${rect.y + 4}px`
+    menu.style.left = `${rect.x + 4}px`
+    document.body.appendChild(menu)
+
+    const close = (ev: MouseEvent) => {
+      if (!menu.contains(ev.target as Node)) {
+        menu.remove()
+        document.removeEventListener('mousedown', close)
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', close), 0)
+  }
+
+  private contextMenuItem(label: string, onClick: () => void): HTMLDivElement {
+    const item = document.createElement('div')
+    item.className = 'vt-pivot-context-menu-item'
+    item.textContent = label
+    item.addEventListener('click', onClick)
+    return item
+  }
+
+  /** 计算列叶子的 cellKey (导出共用) */
+  private getLeafCellKey(leaf: IPivotColNode): string {
+    if (leaf.colKey === '__value__' && (!leaf.ancestorColValues?.length)) {
+      return this.pivotConfig.valueFields.find(v => (v.label ?? v.key) === leaf.colValue)?.key ?? String(leaf.colValue)
+    }
+    return [this.pivotConfig.valueFields.find(v => (v.label ?? v.key) === leaf.colValue)?.key, ...(leaf.ancestorColValues ?? [])].filter(Boolean).join('__')
+  }
+
+  /** 导出为 .xls (HTML Table, Excel 兼容, 零依赖) */
+  private exportPivotXLS(): void {
+    if (this.flatRows.length === 0) return
+
+    const colLeaves = this.processor.getColLeaves()
+    const rowGroupTitles = this.pivotConfig.rowGroups
+      .map(k => this.columns.find(c => c.key === k)?.title ?? k)
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    // 表头
+    const headers: string[] = [...rowGroupTitles]
+    for (const leaf of colLeaves) {
+      const vf = this.pivotConfig.valueFields.find(v => (v.label ?? v.key) === leaf.colValue || v.key === leaf.colValue)
+      headers.push(vf
+        ? `${vf.label ?? this.columns.find(c => c.key === vf.key)?.title ?? vf.key}(${vf.aggregation})`
+        : String(leaf.colValue))
+    }
+
+    let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'
+      + '<head><meta charset="UTF-8"></head><body><table border="1">'
+      + `<tr><th>${headers.map(esc).join('</th><th>')}</th></tr>`
+
+    for (const flat of this.flatRows) {
+      const firstCols = this.pivotConfig.rowGroups.map(k => {
+        if (flat.rowType === 'grandtotal') return k === this.pivotConfig.rowGroups[0] ? '总计' : ''
+        if (flat.rowType === 'subtotal') return k === this.pivotConfig.rowGroups[flat.level] ? '小计' : ''
+        return String(flat.data[k] ?? '')
+      })
+      const valueCols = colLeaves.map(leaf => {
+        const val = flat.data[this.getLeafCellKey(leaf)]
+        return val !== undefined && val !== null ? String(val) : ''
+      })
+      html += `<tr><td>${[...firstCols, ...valueCols].map(esc).join('</td><td>')}</td></tr>`
+    }
+
+    html += '</table></body></html>'
+    const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'pivot-export.xls'; a.style.display = 'none'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  /** 全列数 = 冻结行分组列数 + 值列数 */
+  private get totalCols(): number {
+    return this.rowGroupsLen + this.processor.getColLeaves().length
+  }
+
+  private get rowGroupsLen(): number {
+    return this.pivotConfig.rowGroups.length
+  }
+
+  /** 设置选中单元格 (点击 / 键盘导航共用) */
+  private setSelection(row: number, col: number): void {
+    if (row < 0 || col < 0) return
+    this.selectedCell = { row, col }
+    this.selAnchor = null
+    this.applySelectionHighlight()
+  }
+
+  /** 行创建时应用选中高亮 (增量路径, 支持 anchor..current 矩形) */
+  private applySelectionOnRow(rowIdx: number, scrollRowEl: HTMLElement, frozenCellEl: HTMLElement): void {
+    const sel = this.selectedCell
+    if (!sel) return
+    const a = this.selAnchor ?? { row: sel.row, col: sel.col }
+    const r0 = Math.min(a.row, sel.row); const r1 = Math.max(a.row, sel.row)
+    if (rowIdx < r0 || rowIdx > r1) return
+    const c0 = Math.min(a.col, sel.col); const c1 = Math.max(a.col, sel.col)
+    for (let c = c0; c <= c1; c++) {
+      const el = c < this.rowGroupsLen
+        ? frozenCellEl.children[c]
+        : scrollRowEl.children[c - this.rowGroupsLen]
+      if (el instanceof HTMLElement) el.classList.add('vt-pivot-cell-selected')
+    }
+  }
+
+  /** 全量刷新选中高亮 (anchor..current 矩形选区) */
+  private applySelectionHighlight(): void {
+    const sel = this.selectedCell
+    if (!sel) return
+    const a = this.selAnchor ?? { row: sel.row, col: sel.col }
+    const r0 = Math.min(a.row, sel.row); const r1 = Math.max(a.row, sel.row)
+    const c0 = Math.min(a.col, sel.col); const c1 = Math.max(a.col, sel.col)
+    for (const [idx, rowEl] of this.visibleRowMap) {
+      const frozenEl = this.frozenVisibleRowMap.get(idx)
+      const r = Number(idx)
+      for (let c = 0; c < this.totalCols; c++) {
+        const el = c < this.rowGroupsLen
+          ? frozenEl?.children[c]
+          : rowEl.children[c - this.rowGroupsLen]
+        if (el instanceof HTMLElement) {
+          const isSel = r >= r0 && r <= r1 && c >= c0 && c <= c1
+          el.classList.toggle('vt-pivot-cell-selected', isSel)
+        }
+      }
+    }
+  }
+
+  /** 键盘导航 (方向键 / Shift 扩展 / Enter / Ctrl+C) */
+  private handlePivotKeydown(e: KeyboardEvent): void {
+    const totalRows = this.flatRows.length
+    if (totalRows === 0) return
+
+    // 无选中时: 方向键从 (0,0) 起步
+    if (!this.selectedCell) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault()
+        this.setSelection(0, 0)
+      }
+      return
+    }
+
+    // Ctrl/Cmd + C 复制选区
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault()
+      this.copySelection()
+      return
+    }
+
+    const s = this.selectedCell
+    let nr = s.row
+    let nc = s.col
+    switch (e.key) {
+      case 'ArrowUp': nr = Math.max(0, s.row - 1); break
+      case 'ArrowDown': nr = Math.min(totalRows - 1, s.row + 1); break
+      case 'ArrowLeft': nc = Math.max(0, s.col - 1); break
+      case 'ArrowRight': nc = Math.min(this.totalCols - 1, s.col + 1); break
+      case 'Enter':
+        e.preventDefault()
+        // 选中组行: 展开/折叠 (Excel 行为)
+        if (s.col < this.rowGroupsLen) {
+          const flat = this.flatRows[s.row]
+          if (flat?.type === 'group') { this.toggleNode(flat.nodeId); return }
+        }
+        nr = Math.min(totalRows - 1, s.row + 1)
+        break
+      default:
+        return
+    }
+
+    e.preventDefault()
+    if (e.shiftKey) {
+      if (!this.selAnchor) this.selAnchor = { row: s.row, col: s.col }
+    } else {
+      this.selAnchor = null
+    }
+    this.selectedCell = { row: nr, col: nc }
+    this.applySelectionHighlight()
+    this.scrollToSelection(nr)
+  }
+
+  /** 滚动到选中行 */
+  private scrollToSelection(row: number): void {
+    if (!this.scrollContainer) return
+    const top = row * this.ROW_HEIGHT
+    if (top < this.scrollContainer.scrollTop || top >= this.scrollContainer.scrollTop + this.scrollContainer.clientHeight) {
+      this.scrollContainer.scrollTop = Math.max(0, top - this.ROW_HEIGHT * 2)
+    }
+  }
+
+  /** 读取指定行列的单元格文本 (复制用) */
+  private getCellTextAt(row: number, col: number): string {
+    const flat = this.flatRows[row]
+    if (!flat) return ''
+    if (col < this.rowGroupsLen) {
+      const key = this.pivotConfig.rowGroups[col]
+      if (flat.rowType === 'grandtotal') return col === 0 ? '总计' : ''
+      if (flat.rowType === 'subtotal') return col === flat.level ? '小计' : ''
+      return String(flat.data[key] ?? '')
+    }
+    const leaf = this.processor.getColLeaves()[col - this.rowGroupsLen]
+    if (!leaf) return ''
+    const val = flat.data[this.getLeafCellKey(leaf)]
+    return val !== undefined && val !== null ? String(val) : ''
+  }
+
+  /** Ctrl+C 复制选区 (TSV, Excel 粘贴兼容) */
+  private copySelection(): void {
+    const s = this.selectedCell
+    if (!s) return
+    const a = this.selAnchor ?? { row: s.row, col: s.col }
+    const r0 = Math.min(a.row, s.row); const r1 = Math.max(a.row, s.row)
+    const c0 = Math.min(a.col, s.col); const c1 = Math.max(a.col, s.col)
+    const lines: string[] = []
+    for (let r = r0; r <= r1; r++) {
+      const parts: string[] = []
+      for (let c = c0; c <= c1; c++) parts.push(this.getCellTextAt(r, c))
+      lines.push(parts.join('\t'))
+    }
+    const text = lines.join('\n')
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text))
+    } else {
+      this.fallbackCopy(text)
+    }
+  }
+
+  private fallbackCopy(text: string): void {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy') } catch { /* 忽略 */ }
+    document.body.removeChild(ta)
+  }
+
   /** 更新 spacer 高度（冻结区 + 滚动区同步） */
   private updateScrollHeight(): void {
     if (!this.scrollSpacer) return 
@@ -728,14 +1077,44 @@ export class PivotTable {
         frozenCellEl.style.height = `${this.ROW_HEIGHT}px`
         frozenCellEl.style.lineHeight = `${this.ROW_HEIGHT}px`
 
-        // 分组行绑定 展开 / 折叠（两侧都绑定）
-        if (flatRow.type === 'group') {
+        // 挂 dataset 供右键菜单定位
+        scrollRowEl.dataset.nodeId = flatRow.nodeId
+        scrollRowEl.dataset.type = flatRow.type
+        scrollRowEl.dataset.level = String(flatRow.level)
+        frozenCellEl.dataset.nodeId = flatRow.nodeId
+        frozenCellEl.dataset.type = flatRow.type
+        frozenCellEl.dataset.level = String(flatRow.level)
+
+        // Excel 斑马纹: 连续数据行交错 (偶数序数据行加浅灰底)
+        if (flatRow.type === 'data' && flatRow.rowType === 'nomal') {
+          if ((this.dataRowCounter++ & 1) === 1) {
+            scrollRowEl.classList.add('vt-pivot-zebra')
+            frozenCellEl.classList.add('vt-pivot-zebra')
+          }
+        }
+
+        // 分组行绑定 展开 / 折叠（两侧都绑定）; 小计行(rowType=subtotal) 不参与
+        if (flatRow.type === 'group' && flatRow.rowType !== 'subtotal') {
           const nodeId = flatRow.nodeId
           frozenCellEl.style.cursor = 'pointer'
           frozenCellEl.addEventListener('click', () => this.toggleNode(nodeId))
           scrollRowEl.style.cursor = 'pointer'
           scrollRowEl.addEventListener('click', () => this.toggleNode(nodeId))
+        } else {
+          // 数据行/小计/总计: 点击选中单元格 (Excel 级交互)
+          frozenCellEl.style.cursor = 'cell'
+          frozenCellEl.addEventListener('click', () => this.setSelection(i, 0))
+          scrollRowEl.style.cursor = 'cell'
+          scrollRowEl.addEventListener('click', (e) => {
+            const cellEl = (e.target as HTMLElement).closest('.vt-table-cell')
+            const colIdx = cellEl ? Array.prototype.indexOf.call(scrollRowEl.children, cellEl) : 0
+            this.setSelection(i, this.rowGroupsLen + colIdx)
+            this.bodyContainer?.focus()
+          })
         }
+
+        // 创建时应用选中高亮 (若该行被选中)
+        this.applySelectionOnRow(i, scrollRowEl, frozenCellEl)
 
         scrollFragment.appendChild(scrollRowEl)
         frozenFragment.appendChild(frozenCellEl)
@@ -850,6 +1229,7 @@ export class PivotTable {
     
     // 切换展开状态
     targetNode.isExpanded = !targetNode.isExpanded
+    this.expandedState.set(targetNode.id, targetNode.isExpanded)
     
     // 性能优化：懒加载子节点
     if (targetNode.isExpanded && !targetNode.childrenLoaded) {
@@ -865,6 +1245,7 @@ export class PivotTable {
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
+    this.saveExpandedState()
   }
   
   /** 查找节点（用于懒加载） */
@@ -919,16 +1300,22 @@ export class PivotTable {
     this.renderHeader(colTree)
   }
 
-  /** 展开-所有分组节点 */
+  /** 展开-所有分组节点 (含大数据保护) */
   private expandAll(): void {
     if (!this.treeRoot) return 
     
-    // 性能检查：统计总节点数
+    // 性能检查：统计总节点数 + 预计展开行数
     const totalNodes = this.countAllGroupNodes(this.treeRoot)
     const MAX_RECOMMENDED_NODES = 200
+    // 预计展开行数 = 全部数据行 + 每个组行 + 小计行(每个组) + 总计行
+    const estimatedRows = this.data.length + totalNodes * 2 + 1
+    const MAX_EXPANDED_ROWS = 500000
     
-    if (totalNodes > MAX_RECOMMENDED_NODES) {
-      if (!confirm(`检测到 ${totalNodes} 个分组节点，展开所有可能影响性能。\n\n是否继续展开所有节点？\n\n建议：只展开需要的层级以获得更好体验。`)) {
+    if (totalNodes > MAX_RECOMMENDED_NODES || estimatedRows > MAX_EXPANDED_ROWS) {
+      const warn = estimatedRows > MAX_EXPANDED_ROWS
+        ? `全部展开将生成约 ${estimatedRows.toLocaleString()} 行数据（数据行 ${this.data.length.toLocaleString()} 行），可能造成明显卡顿。`
+        : `检测到 ${totalNodes} 个分组节点，展开所有可能影响性能。`
+      if (!confirm(`${warn}\n\n是否继续展开所有节点？\n\n建议：只展开需要的层级以获得更好体验。`)) {
         return
       }
     }
@@ -941,6 +1328,7 @@ export class PivotTable {
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
+    this.saveExpandedState()
   }
 
   /** 折叠-所有分子节点 */
@@ -954,6 +1342,7 @@ export class PivotTable {
     this.updateScrollHeight()
     this.clearVisibleRows()
     this.updateVisibleRows()
+    this.saveExpandedState()
   }
 
   /**

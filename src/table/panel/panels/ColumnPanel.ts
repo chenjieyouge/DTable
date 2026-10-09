@@ -1,7 +1,7 @@
 import type { IPanel } from "@/table/panel/IPanel";
 import type { TableStore } from "@/table/state/createTableStore";
 import type { IColumn } from "@/types";
-import type { IPivotConfig, AggregationType } from "@/types/pivot";
+import type { IPivotConfig, AggregationType, ValueFieldFormat } from "@/types/pivot";
 import { QuickQueryPanel } from "@/table/pivot/QuickQueryPanel";
 
 // 四个区域的名称
@@ -11,6 +11,8 @@ type ZoneName = 'filters' | 'columns' | 'rows' | 'values'
 interface ZoneField {
   key: string
   aggregation?: AggregationType  // 仅 values 区使用
+  label?: string                 // 值字段重命名 (值字段设置)
+  format?: ValueFieldFormat      // 数字格式 (值字段设置)
 }
 
 /**
@@ -43,6 +45,16 @@ export class ColumnPanel implements IPanel {
   private filters: Record<string, import('@/types').ColumnFilterValue> = {}
   private dragState: { key: string; fromZone: ZoneName | 'pool' } | null = null
 
+  // 透视配置持久化 (localStorage)
+  private static readonly CONFIG_STORAGE_KEY = 'dtable.pivot.config'
+  private pivotInputRef: HTMLInputElement | null = null
+
+  /** 数值字段判定: 显式 dataType=number, 或带 sum/avg/count 汇总语义 */
+  private isNumericField(col?: IColumn): boolean {
+    if (!col) return false
+    return col.dataType === 'number' || (col.summaryType !== undefined && col.summaryType !== 'none')
+  }
+
   // 显示小计行开关
   private showSubtotals = true
 
@@ -59,6 +71,7 @@ export class ColumnPanel implements IPanel {
   ) {
     this.allColumnKeys = originalColumns.map(col => col.key)
     this.container = this.render()
+    this.restorePersistedConfig()
   }
 
   private render(): HTMLDivElement {
@@ -85,6 +98,7 @@ export class ColumnPanel implements IPanel {
 
     pivotSwitch.appendChild(pivotInput)
     pivotSwitch.appendChild(pivotSlider)
+    this.pivotInputRef = pivotInput
     pivotToggleRow.appendChild(pivotLable)
     pivotToggleRow.appendChild(pivotSwitch)
     container.appendChild(pivotToggleRow)
@@ -374,6 +388,13 @@ export class ColumnPanel implements IPanel {
     
     poolSection.appendChild(poolHeader)
 
+    // Excel 风格字段列表: 勾选 = 自动分配到对应区域, 取消 = 移出所有区域
+    const checkboxList = document.createElement('div')
+    checkboxList.className = 'vt-px-checkbox-list'
+    checkboxList.title = '勾选字段自动加入透视区域（文本→行, 数值→值）'
+    poolSection.appendChild(checkboxList)
+    this.renderFieldCheckboxList(checkboxList)
+
     const poolSearch = document.createElement('input')
     poolSearch.type = 'text'
     poolSearch.className = 'vt-px-pool-search'
@@ -476,8 +497,8 @@ export class ColumnPanel implements IPanel {
       // 类型标记
       const badge = document.createElement('span')
       badge.className = 'vt-px-field-badge'
-      badge.textContent = col.dataType === 'number' ? 'Σ' : 'A'
-      badge.title = col.dataType === 'number' ? '数值字段' : '文本字段'
+      badge.textContent = this.isNumericField(col) ? 'Σ' : 'A'
+      badge.title = this.isNumericField(col) ? '数值字段' : '文本字段'
 
       item.appendChild(handle)
       item.appendChild(name)
@@ -630,6 +651,17 @@ export class ColumnPanel implements IPanel {
         chip.appendChild(chipHandle)
         chip.appendChild(chipName)
         chip.appendChild(aggSelect)
+
+        // 值字段设置按钮 (弹层: 重命名 / 数字格式 / 聚合方式)
+        const settingsBtn = document.createElement('button')
+        settingsBtn.className = 'vt-px-chip-settings'
+        settingsBtn.textContent = '⚙'
+        settingsBtn.title = '值字段设置'
+        settingsBtn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          this.showValueFieldSettings(field, chip)
+        })
+        chip.appendChild(settingsBtn)
       } else {
         chipName.textContent = col.title
         chip.appendChild(chipHandle)
@@ -710,11 +742,11 @@ export class ColumnPanel implements IPanel {
     const col = this.originalColumns.find(c => c.key === key)
 
     // 行/列区域不允许数值字段
-    if ((toZone === 'rows' || toZone === 'columns') && col?.dataType === 'number') {
+    if ((toZone === 'rows' || toZone === 'columns') && this.isNumericField(col)) {
       return
     }
     // 值区域不允许文本字段（仅允许数值）
-    if (toZone === 'values' && col && col.dataType !== 'number') {
+    if (toZone === 'values' && col && !this.isNumericField(col)) {
       return
     }
 
@@ -728,10 +760,11 @@ export class ColumnPanel implements IPanel {
     if (!alreadyIn) {
       const defaultAgg: AggregationType =
         (col?.summaryType && col.summaryType !== 'none') ? col.summaryType as AggregationType : 'sum'
-      this.zones[toZone].push({
-        key,
-        aggregation: toZone === 'values' ? defaultAgg : undefined,
-      })
+      // 跨区域移动时保留原 label/format (值字段设置不因拖拽丢失)
+      const prev = Object.values(this.zones).flat().find(f => f.key === key)
+      this.zones[toZone].push(prev
+        ? { ...prev, aggregation: toZone === 'values' ? (prev.aggregation ?? defaultAgg) : undefined }
+        : { key, aggregation: toZone === 'values' ? defaultAgg : undefined })
     }
 
     this.refreshAllZones()
@@ -1212,9 +1245,184 @@ export class ColumnPanel implements IPanel {
     this.emitConfig()
   }
 
+  /** Excel 字段列表勾选视图: 勾选态 = 字段已在任一区域 */
+  private renderFieldCheckboxList(container: HTMLDivElement): void {
+    container.innerHTML = ''
+    const usedKeys = new Set([
+      ...this.zones.filters.map(f => f.key),
+      ...this.zones.columns.map(f => f.key),
+      ...this.zones.rows.map(f => f.key),
+      ...this.zones.values.map(f => f.key),
+    ])
+
+    for (const col of this.originalColumns) {
+      const item = document.createElement('label')
+      item.className = 'vt-px-checkbox-item'
+      item.title = `${this.isNumericField(col) ? '数值字段 → 自动加入「值」区域' : '文本字段 → 自动加入「行」区域'}`
+
+      const cb = document.createElement('input')
+      cb.type = 'checkbox'
+      cb.checked = usedKeys.has(col.key)
+      cb.addEventListener('change', () => {
+        if (cb.checked) this.autoAssignField(col.key)
+        else this.removeFieldEverywhere(col.key)
+      })
+
+      const name = document.createElement('span')
+      name.className = 'vt-px-checkbox-name'
+      name.textContent = col.title
+
+      const badge = document.createElement('span')
+      badge.className = 'vt-px-field-badge'
+      badge.textContent = this.isNumericField(col) ? 'Σ' : 'A'
+      badge.title = this.isNumericField(col) ? '数值字段' : '文本字段'
+
+      item.appendChild(cb)
+      item.appendChild(name)
+      item.appendChild(badge)
+      container.appendChild(item)
+    }
+  }
+
+  /** 勾选自动分配: 数值→值, 文本→行 (Excel 字段列表行为) */
+  private autoAssignField(key: string): void {
+    const col = this.originalColumns.find(c => c.key === key)
+    if (!col) return
+    const zone: ZoneName = this.isNumericField(col) ? 'values' : 'rows'
+    if (!this.zones[zone].some(f => f.key === key)) {
+      const defaultAgg: AggregationType =
+        (col.summaryType && col.summaryType !== 'none') ? col.summaryType as AggregationType : 'sum'
+      this.zones[zone].push({ key, aggregation: zone === 'values' ? defaultAgg : undefined })
+    }
+    this.refreshAllZones()
+    this.emitConfig()
+  }
+
+  /** 取消勾选: 从所有区域移除该字段 */
+  private removeFieldEverywhere(key: string): void {
+    for (const z of Object.keys(this.zones) as ZoneName[]) {
+      this.zones[z] = this.zones[z].filter(f => f.key !== key)
+    }
+    this.refreshAllZones()
+    this.emitConfig()
+  }
+
+  /** 值字段设置弹层: 重命名 / 数字格式 / 聚合方式 (对标 Excel 值字段设置) */
+  private showValueFieldSettings(field: ZoneField, anchor: HTMLElement): void {
+    document.querySelectorAll('.vt-px-value-settings').forEach(el => el.remove())
+
+    const col = this.originalColumns.find(c => c.key === field.key)
+    const pop = document.createElement('div')
+    pop.className = 'vt-px-value-settings'
+
+    const title = document.createElement('div')
+    title.className = 'vt-px-value-settings-title'
+    title.textContent = `值字段设置：${col?.title ?? field.key}`
+    pop.appendChild(title)
+
+    // 名称 (重命名, 影响表头「求和项:名称」)
+    const nameRow = document.createElement('div')
+    nameRow.className = 'vt-px-value-settings-row'
+    const nameLabel = document.createElement('span')
+    nameLabel.textContent = '名称'
+    const nameInput = document.createElement('input')
+    nameInput.type = 'text'
+    nameInput.className = 'vt-px-value-settings-input'
+    nameInput.value = field.label ?? col?.title ?? field.key
+    nameRow.appendChild(nameLabel)
+    nameRow.appendChild(nameInput)
+    pop.appendChild(nameRow)
+
+    // 汇总方式
+    const aggRow = document.createElement('div')
+    aggRow.className = 'vt-px-value-settings-row'
+    const aggLabel = document.createElement('span')
+    aggLabel.textContent = '汇总方式'
+    const aggSelect = document.createElement('select')
+    aggSelect.className = 'vt-px-value-settings-select'
+    for (const agg of ['sum', 'count', 'avg', 'max', 'min']) {
+      const opt = document.createElement('option')
+      opt.value = agg
+      opt.textContent = { sum: '求和', count: '计数', avg: '平均值', max: '最大值', min: '最小值' }[agg as AggregationType] ?? agg
+      aggSelect.appendChild(opt)
+    }
+    aggSelect.value = field.aggregation ?? 'sum'
+    aggRow.appendChild(aggLabel)
+    aggRow.appendChild(aggSelect)
+    pop.appendChild(aggRow)
+
+    // 数字格式
+    const fmtRow = document.createElement('div')
+    fmtRow.className = 'vt-px-value-settings-row'
+    const fmtLabel = document.createElement('span')
+    fmtLabel.textContent = '数字格式'
+    const fmtSelect = document.createElement('select')
+    fmtSelect.className = 'vt-px-value-settings-select'
+    const fmtOptions: [ValueFieldFormat | '', string][] = [
+      ['', '自动（整数/千分位）'],
+      ['int', '整数（千分位）'],
+      ['decimal2', '两位小数'],
+      ['percent', '百分比'],
+    ]
+    for (const [v, t] of fmtOptions) {
+      const opt = document.createElement('option')
+      opt.value = v
+      opt.textContent = t
+      fmtSelect.appendChild(opt)
+    }
+    fmtSelect.value = field.format ?? ''
+    fmtRow.appendChild(fmtLabel)
+    fmtRow.appendChild(fmtSelect)
+    pop.appendChild(fmtRow)
+
+    // 操作按钮
+    const btnRow = document.createElement('div')
+    btnRow.className = 'vt-px-value-settings-actions'
+    const okBtn = document.createElement('button')
+    okBtn.className = 'vt-px-value-settings-ok'
+    okBtn.textContent = '确定'
+    okBtn.addEventListener('click', () => {
+      const vf = this.zones.values.find(f => f.key === field.key)
+      if (vf) {
+        vf.label = nameInput.value.trim() || undefined
+        vf.aggregation = aggSelect.value as AggregationType
+        vf.format = (fmtSelect.value || undefined) as ValueFieldFormat | undefined
+      }
+      pop.remove()
+      this.refreshAllZones()
+      this.emitConfig()
+    })
+    const cancelBtn = document.createElement('button')
+    cancelBtn.className = 'vt-px-value-settings-cancel'
+    cancelBtn.textContent = '取消'
+    cancelBtn.addEventListener('click', () => pop.remove())
+    btnRow.appendChild(okBtn)
+    btnRow.appendChild(cancelBtn)
+    pop.appendChild(btnRow)
+
+    // 定位在 anchor 旁
+    const rect = anchor.getBoundingClientRect()
+    pop.style.position = 'fixed'
+    pop.style.top = `${rect.bottom + 4}px`
+    pop.style.left = `${Math.max(4, rect.left - 40)}px`
+    document.body.appendChild(pop)
+
+    const close = (e: MouseEvent) => {
+      if (!pop.contains(e.target as Node)) {
+        pop.remove()
+        document.removeEventListener('mousedown', close)
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', close), 0)
+  }
+
   /** 刷新所有区域和字段池的显示 */
   private refreshAllZones(): void {
     if (!this.pivotConfgSection) return
+
+    // 刷新字段列表勾选视图
+    const ckList = this.pivotConfgSection.querySelector('.vt-px-checkbox-list') as HTMLDivElement
+    if (ckList) this.renderFieldCheckboxList(ckList)
 
     // 刷新字段池
     const poolList = this.pivotConfgSection.querySelector('.vt-px-pool-list') as HTMLDivElement
@@ -1265,25 +1473,63 @@ export class ColumnPanel implements IPanel {
       return {
         key: f.key,
         aggregation: f.aggregation ?? 'sum',
-        label: col?.title,
+        label: f.label ?? col?.title,
+        format: f.format,
       }
     })
 
     if (valueFields.length === 0) return
 
-    this.onPivotConfigChange?.({
+    const config: IPivotConfig = {
       enabled: true,
       rowGroups,
       colGroups: colGroups.length > 0 ? colGroups : undefined,
       valueFields,
       showSubtotals: this.showSubtotals,
       filters: { ...this.filters },
-    } as IPivotConfig)
+    }
+    this.onPivotConfigChange?.(config)
+    // 持久化到 localStorage (跨会话记忆)
+    try {
+      localStorage.setItem(ColumnPanel.CONFIG_STORAGE_KEY, JSON.stringify(config))
+      } catch { /* 隐私模式等场景静默忽略 */ }
   }
 
   public onHide(): void {
     this.unsubscribe?.()
     this.unsubscribe = null
+  }
+
+  /** 从 localStorage 恢复上次透视配置 (跨会话记忆) */
+  private restorePersistedConfig(): void {
+    let saved: IPivotConfig | null = null
+    try {
+      const raw = localStorage.getItem(ColumnPanel.CONFIG_STORAGE_KEY)
+      if (raw) saved = JSON.parse(raw) as IPivotConfig
+    } catch { return }
+
+    if (!saved || !saved.enabled) return
+
+    // 恢复四区域字段 (filters 区为 Excel 筛选器字段列表, 无需持久化)
+    this.zones = {
+      rows: (saved.rowGroups ?? []).map(k => ({ key: k })),
+      columns: (saved.colGroups ?? []).map(k => ({ key: k })),
+      values: (saved.valueFields ?? []).map(f => ({
+        key: f.key,
+        label: f.label,
+        aggregation: f.aggregation,
+        format: f.format,
+      })),
+      filters: [],
+    }
+    this.showSubtotals = saved.showSubtotals ?? true
+    this.filters = saved.filters ? { ...saved.filters } : {}
+
+    // 恢复 Pivot 开关与配置区显示
+    if (this.pivotInputRef) {
+      this.pivotInputRef.checked = true
+      this.pivotInputRef.dispatchEvent(new Event('change', { bubbles: true }))
+    }
   }
 
   /** 快速透视：智能识别维度和度量 */

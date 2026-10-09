@@ -1,4 +1,4 @@
-import type { IPivotConfig, IPivotFlatRow, IPivotColNode } from "@/types/pivot";
+import type { IPivotConfig, IPivotFlatRow, IPivotColNode, AggregationType, ValueFieldFormat } from "@/types/pivot";
 import type { IColumn } from "@/types";
 
 /**
@@ -25,6 +25,21 @@ export class PivotRenderer {
   /** 由 PivotTable.refresh() 在每次重建列树后注入 */
   public setColLeaves(leaves: IPivotColNode[]): void {
     this.colLeaves = leaves
+  }
+
+  /** Excel 风格聚合前缀: sum → 求和项:xxx */
+  private static AGG_PREFIX: Record<AggregationType, string> = {
+    sum: '求和项',
+    count: '计数项',
+    avg: '平均值项',
+    max: '最大值项',
+    min: '最小值项',
+  }
+
+  /** 值字段展示名: 默认「聚合前缀:字段标题」, 与 Excel 值列命名一致 */
+  private getValueFieldLabel(vf: { key: string; aggregation: AggregationType; label?: string }): string {
+    const title = vf.label ?? this.columns.find(c => c.key === vf.key)?.title ?? vf.key
+    return `${PivotRenderer.AGG_PREFIX[vf.aggregation]}:${title}`
   }
 
   // ─────────────────────────────────────────────
@@ -62,10 +77,11 @@ export class PivotRenderer {
       for (const leaf of this.colLeaves) {
         const vfKey = String(leaf.colValue)
         const vf = this.config.valueFields.find(v => (v.label ?? v.key) === vfKey || v.key === vfKey)
-        const title = vf ? `${vf.label ?? this.columns.find(c => c.key === vf.key)?.title ?? vf.key}(${vf.aggregation})` : vfKey
+        const title = vf ? this.getValueFieldLabel(vf) : vfKey
         const cellKey = vf?.key ?? vfKey
         const isSorted = currentSort?.cellKey === cellKey
         const cell = this.createSortableHeaderCell(title, 1, isSorted ? currentSort!.direction : null)
+        cell.dataset.cellKey = cellKey
         if (onSort) {
           cell.style.cursor = 'pointer'
           cell.addEventListener('click', () => {
@@ -89,7 +105,10 @@ export class PivotRenderer {
         if (isLeafRow && onSort) {
           const cellKey = this.getCellKey(node)
           const isSorted = currentSort?.cellKey === cellKey
-          const cell = this.createSortableHeaderCell(String(node.colValue), node.leafCount, isSorted ? currentSort!.direction : null)
+          const leafVf = this.config.valueFields.find(v => (v.label ?? v.key) === node.colValue || v.key === node.colValue)
+          const leafLabel = leafVf ? this.getValueFieldLabel(leafVf) : String(node.colValue)
+          const cell = this.createSortableHeaderCell(leafLabel, node.leafCount, isSorted ? currentSort!.direction : null)
+          cell.dataset.cellKey = cellKey
           cell.style.textAlign = 'center'
           cell.style.cursor = 'pointer'
           cell.addEventListener('click', () => {
@@ -112,6 +131,7 @@ export class PivotRenderer {
   /** 带排序图标的表头单元格 */
   private createSortableHeaderCell(text: string, leafCount: number, direction: 'asc' | 'desc' | null): HTMLDivElement {
     const cell = this.createHeaderCell('', leafCount)
+    cell.dataset.sortable = 'true'
     const label = document.createElement('span')
     label.textContent = text
     const icon = document.createElement('span')
@@ -338,28 +358,43 @@ export class PivotRenderer {
     return this.colLeaves
   }
 
+  /** 根据列叶子反查值字段配置 */
+  private findValueField(leaf: IPivotColNode): { key: string; aggregation: AggregationType; label?: string; format?: ValueFieldFormat } | undefined {
+    const vfKey = String(leaf.colValue)
+    return this.config.valueFields.find(v => (v.label ?? v.key) === vfKey || v.key === vfKey)
+  }
+
   /**
    * 数字格式化：千分位分隔符 + 最多 2 位小数（去掉末尾零）
    * - 整数: 1,234,567
    * - 小数: 1,234.56
    * - 非数字: 原样返回
    */
-  private formatValue(value: any): string {
+  private formatValue(value: any, format: ValueFieldFormat = 'auto'): string {
     if (value == null || value === '') return ''
     const num = typeof value === 'number' ? value : Number(value)
     if (isNaN(num)) return String(value)
-    if (Number.isInteger(num)) {
-      return num.toLocaleString('en-US')
+    switch (format) {
+      case 'int':
+        return Math.round(num).toLocaleString('en-US')
+      case 'decimal2':
+        return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      case 'percent':
+        return `${(num * 100).toFixed(1)}%`
+      default:
+        if (Number.isInteger(num)) {
+          return num.toLocaleString('en-US')
+        }
+        // 小数：最多 2 位，去掉末尾零
+        const fixed = parseFloat(num.toFixed(2))
+        return fixed.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
     }
-    // 小数：最多 2 位，去掉末尾零
-    const fixed = parseFloat(num.toFixed(2))
-    return fixed.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
   }
 
-  private createValueCell(value: any, extraClass?: string): HTMLDivElement {
+  private createValueCell(value: any, extraClass?: string, format?: ValueFieldFormat): HTMLDivElement {
     const cell = document.createElement('div')
     cell.className = `vt-table-cell${extraClass ? ' ' + extraClass : ''}`
-    cell.textContent = this.formatValue(value)
+    cell.textContent = this.formatValue(value, format)
     cell.style.textAlign = 'right'
     cell.style.paddingRight = '12px'
     // 固定宽度120px，确保和表头对齐
@@ -399,15 +434,20 @@ export class PivotRenderer {
     const hasColGroups = !!(this.config.colGroups?.length) && colTree && colTree.children.length > 0
 
     if (!hasColGroups) {
+      // Excel 布局: 每个行分组一列表头 (与 body 冻结区列对齐)
       const row = this.createHeaderRow()
-      const cell = this.createFrozenHeaderCell(rowGroupLabel)
-      row.appendChild(cell)
+      for (const key of this.config.rowGroups) {
+        const col = this.columns.find(c => c.key === key)
+        const cell = this.createFrozenHeaderCell(col?.title ?? key, 130)
+        row.appendChild(cell)
+      }
       wrapper.appendChild(row)
     } else {
       const depth = this.getColTreeDepth(colTree)
+      const frozenCellWidth = 130 * this.config.rowGroups.length
       for (let d = 0; d < depth; d++) {
         const row = this.createHeaderRow()
-        const cell = this.createFrozenHeaderCell(d === 0 ? rowGroupLabel : '')
+        const cell = this.createFrozenHeaderCell(d === 0 ? rowGroupLabel : '', frozenCellWidth)
         row.appendChild(cell)
         wrapper.appendChild(row)
       }
@@ -415,14 +455,14 @@ export class PivotRenderer {
     return wrapper
   }
   
-  /** 创建冻结区表头单元格（固定220px宽度） */
-  private createFrozenHeaderCell(text: string): HTMLDivElement {
+  /** 创建冻结区表头单元格（默认按分组列数自适应宽度） */
+  private createFrozenHeaderCell(text: string, width = 130): HTMLDivElement {
     const cell = document.createElement('div')
     cell.className = 'vt-table-cell vt-pivot-header-cell'
     cell.textContent = text
     cell.style.fontWeight = 'bold'
-    cell.style.minWidth = '220px'
-    cell.style.width = '220px'
+    cell.style.minWidth = `${width}px`
+    cell.style.width = `${width}px`
     cell.style.flex = 'none'
     return cell
   }
@@ -443,10 +483,11 @@ export class PivotRenderer {
       for (const leaf of this.colLeaves) {
         const vfKey = String(leaf.colValue)
         const vf = this.config.valueFields.find(v => (v.label ?? v.key) === vfKey || v.key === vfKey)
-        const title = vf ? `${vf.label ?? this.columns.find(c => c.key === vf.key)?.title ?? vf.key}(${vf.aggregation})` : vfKey
+        const title = vf ? this.getValueFieldLabel(vf) : vfKey
         const cellKey = vf?.key ?? vfKey
         const isSorted = currentSort?.cellKey === cellKey
         const cell = this.createSortableHeaderCell(title, 1, isSorted ? currentSort!.direction : null)
+        cell.dataset.cellKey = cellKey
         if (onSort) {
           cell.style.cursor = 'pointer'
           cell.addEventListener('click', () => {
@@ -469,7 +510,10 @@ export class PivotRenderer {
         if (isLeafRow && onSort) {
           const cellKey = this.getCellKey(node)
           const isSorted = currentSort?.cellKey === cellKey
-          const cell = this.createSortableHeaderCell(String(node.colValue), node.leafCount, isSorted ? currentSort!.direction : null)
+          const leafVf = this.config.valueFields.find(v => (v.label ?? v.key) === node.colValue || v.key === node.colValue)
+          const leafLabel = leafVf ? this.getValueFieldLabel(leafVf) : String(node.colValue)
+          const cell = this.createSortableHeaderCell(leafLabel, node.leafCount, isSorted ? currentSort!.direction : null)
+          cell.dataset.cellKey = cellKey
           cell.style.textAlign = 'center'
           cell.style.cursor = 'pointer'
           cell.addEventListener('click', () => {
@@ -525,58 +569,69 @@ export class PivotRenderer {
       return row
     }
 
-    const cell = document.createElement('div')
-    cell.className = 'vt-table-cell vt-pivot-frozen-cell'
-
-    // 添加行类型样式（与滚动区行背景色保持一致）
-    if (flatRow.rowType === 'subtotal') cell.classList.add('vt-pivot-row-subtotal')
-    else if (flatRow.rowType === 'grandtotal') cell.classList.add('vt-pivot-row-grandtotal')
+    // Excel 树形模式: 每个 rowGroup 一列, 对标 Excel 透视表左侧多列层级
+    //  - 组行:   本层列显示组值 + 展开图标, 深层列留空 (Excel 父行行为)
+    //  - 数据行: 显示完整路径值 (每层一值, 对齐表头各分组列)
+    const row = document.createElement('div')
+    row.className = 'vt-table-row vt-pivot-frozen-row'
+    if (flatRow.rowType === 'subtotal') row.classList.add('vt-pivot-row-subtotal')
+    else if (flatRow.rowType === 'grandtotal') row.classList.add('vt-pivot-row-grandtotal')
     if (flatRow.type === 'group') {
-      cell.classList.add('vt-pivot-group-row')
-      cell.classList.add(`vt-pivot-group-row--l${Math.min(flatRow.level, 2)}`)
+      row.classList.add('vt-pivot-group-row')
+      row.classList.add(`vt-pivot-group-row--l${Math.min(flatRow.level, 2)}`)
     }
 
-    if (flatRow.rowType === 'subtotal') {
-      const indent = (flatRow.level + 1) * 20
-      cell.style.paddingLeft = `${indent + 8}px`
-      cell.textContent = '小计'
-      cell.style.color = '#374151'
-      cell.style.fontWeight = '600'
-    } else if (flatRow.rowType === 'grandtotal') {
+    const groupKeys = this.config.rowGroups
+    groupKeys.forEach((key, colIdx) => {
+      const cell = document.createElement('div')
+      cell.className = 'vt-table-cell vt-pivot-frozen-cell'
+      cell.style.minWidth = '130px'
+      cell.style.width = '130px'
+      cell.style.flex = 'none'
       cell.style.paddingLeft = '12px'
-      cell.textContent = '总计'
-      cell.style.fontWeight = '700'
-      cell.style.color = '#1f2937'
-    } else if (flatRow.type === 'group') {
-      const indent = flatRow.level * 20
-      cell.style.paddingLeft = `${indent + 8}px`
-      cell.classList.add('vt-pivot-group-cell')
+      cell.style.overflow = 'hidden'
+      cell.style.textOverflow = 'ellipsis'
+      cell.style.whiteSpace = 'nowrap'
 
-      const expandIcon = document.createElement('span')
-      expandIcon.className = 'vt-pivot-expand-icon'
-      expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
-      cell.appendChild(expandIcon)
-
-      const groupLabel = document.createElement('span')
-      groupLabel.className = 'vt-pivot-group-label'
-      const currentGroupKey = this.config.rowGroups[flatRow.level] ?? this.config.rowGroups[0]
-      groupLabel.textContent = String(flatRow.data[currentGroupKey] ?? '(空)')
-      cell.appendChild(groupLabel)
-
-      if (flatRow.rowCount) {
-        const badge = document.createElement('span')
-        badge.className = 'vt-pivot-count-badge'
-        badge.textContent = `(${flatRow.rowCount})`
-        cell.appendChild(badge)
+      if (flatRow.rowType === 'subtotal') {
+        if (colIdx === 0) {
+          cell.textContent = '小计'
+          cell.style.fontWeight = '600'
+          cell.style.color = '#374151'
+        }
+      } else if (flatRow.rowType === 'grandtotal') {
+        if (colIdx === 0) {
+          cell.textContent = '总计'
+          cell.style.fontWeight = '700'
+          cell.style.color = '#1f2937'
+        }
+      } else if (flatRow.type === 'group') {
+        if (colIdx === flatRow.level) {
+          cell.classList.add('vt-pivot-group-cell')
+          cell.style.paddingLeft = '8px'
+          const expandIcon = document.createElement('span')
+          expandIcon.className = 'vt-pivot-expand-icon'
+          expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
+          cell.appendChild(expandIcon)
+          const groupLabel = document.createElement('span')
+          groupLabel.className = 'vt-pivot-group-label'
+          groupLabel.textContent = String(flatRow.data[key] ?? '(空)')
+          cell.appendChild(groupLabel)
+          if (flatRow.rowCount) {
+            const badge = document.createElement('span')
+            badge.className = 'vt-pivot-count-badge'
+            badge.textContent = `(${flatRow.rowCount})`
+            cell.appendChild(badge)
+          }
+        }
+      } else {
+        // 数据行: 完整路径值, 与表头各分组列一一对应
+        cell.textContent = String(flatRow.data[key] ?? '')
       }
-    } else {
-      const indent = flatRow.level * 20
-      cell.style.paddingLeft = `${indent + 28}px`
-      const firstKey = Object.keys(flatRow.data)[0]
-      cell.textContent = String(flatRow.data[firstKey] ?? '')
-    }
+      row.appendChild(cell)
+    })
 
-    return cell
+    return row
   }
 
   /** 渲染滚动区行（仅值列） */
@@ -596,7 +651,8 @@ export class PivotRenderer {
       const extraClass = (flatRow.rowType === 'subtotal' || flatRow.rowType === 'grandtotal')
         ? 'vt-pivot-total-value-cell'
         : (flatRow.type === 'group' ? 'vt-pivot-agg-cell' : undefined)
-      const cell = this.createValueCell(flatRow.data[cellKey], extraClass)
+      const vf = this.findValueField(leaf)
+      const cell = this.createValueCell(flatRow.data[cellKey], extraClass, vf?.format)
       if (flatRow.rowType === 'grandtotal') cell.style.fontWeight = '700'
       else if (flatRow.rowType === 'subtotal') cell.style.fontWeight = '600'
       row.appendChild(cell)
