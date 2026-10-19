@@ -5,6 +5,20 @@ import { ColumnVirtualizer } from "@/scroll/ColumnVirtualizer";
 import { IConfig, IPageInfo } from "@/types";
 import { calculatePageRange } from "@/utils/pageUtils";
 import type { RowSelectionManager } from "@/table/interaction/RowSelectionManager";
+import { CellRangeManager } from "@/table/interaction/CellRangeManager";
+import type { CellPos } from "@/table/interaction/CellRangeManager";
+import { TableContextMenu } from "@/table/interaction/TableContextMenu";
+import type { TableContextMenuItem } from "@/table/interaction/TableContextMenu";
+
+/** 右键菜单触发的列动作 (由 VirtualTable 注入) */
+export interface RangeActions {
+  sort: (key: string, dir: 'asc' | 'desc' | null) => void
+  pin: (key: string) => void
+  unpin: (key: string) => void
+  autoSize: (key: string) => void
+  hide: (key: string) => void
+  resetColumns: () => void
+}
 
 /** 行节点池: 滚动离开视口的行不销毁, 回收入池复用 */
 class RowPool {
@@ -35,7 +49,7 @@ class RowPool {
   release(renderer: DOMRenderer, row: HTMLDivElement): void {
     // 清理行内数据内容 (结构保留: checkbox/冻结列/scroll-body)
     renderer.destroyRowRenderers(row)
-    row.classList.remove('vt-row-selected', 'vt-row-group', 'vt-skeleton')
+    row.classList.remove('vt-row-selected', 'vt-row-group', 'vt-skeleton', 'vt-row-even', 'vt-row-odd')
     const cells = row.querySelectorAll<HTMLDivElement>('.vt-table-cell:not(.vt-checkbox-cell)')
     cells.forEach((cell) => {
       cell.innerHTML = ''
@@ -115,6 +129,12 @@ export class VirtualViewport {
   private onSelectAllClick?: () => void
   private onGroupToggle?: (rowIndex: number) => void
 
+  // P3 范围选择
+  private rangeManager?: CellRangeManager
+  private rangeActions?: RangeActions
+  private rangeDragging = false
+  private rangeEnabled = false
+
   private visibleRows = new Set<number>() // 当前可见行下标集合
   private rowElementMap = new Map<number, HTMLDivElement>() // 行下标 -> 行 DOM 映射
   private pool: RowPool
@@ -171,6 +191,30 @@ export class VirtualViewport {
       this.bindRowClickEvents()
     }
     this.bindCellEvents()
+
+    // P3 范围选择 + 右键菜单
+    if (this.config.enableRangeSelection) {
+      this.rangeEnabled = true
+      this.rangeManager = new CellRangeManager()
+      this.bindRangeEvents()
+    }
+  }
+
+  /** VirtualTable 注入列动作 */
+  public setRangeActions(actions: RangeActions): void {
+    this.rangeActions = actions
+  }
+
+  /** mount 后注入表头引用, 绑定表头右键 */
+  public setHeaderRow(headerRow: HTMLDivElement): void {
+    this.headerRow = headerRow
+    headerRow.addEventListener('contextmenu', (e: MouseEvent) => {
+      const cell = (e.target as HTMLElement).closest<HTMLElement>('.vt-header-cell')
+      if (!cell || !cell.dataset.columnKey) return
+      e.preventDefault()
+      e.stopPropagation() // 阻止冒泡到 scrollContainer 的 body 菜单
+      this.showHeaderContextMenu(e, cell.dataset.columnKey)
+    })
   }
 
   // 允许在外部 totalRows 变化后, 替换 scroller
@@ -232,6 +276,7 @@ export class VirtualViewport {
 
   /** 绑定 checkbox 事件委托 (只绑一次) */
   private bindSelectionEvents(): void {
+    // 复选框: 点选 toggle + 全选
     this.scrollContainer.addEventListener('click', (e: MouseEvent) => {
       const target = e.target as HTMLElement
       const cb = target.closest<HTMLInputElement>('input.vt-checkbox')
@@ -242,6 +287,27 @@ export class VirtualViewport {
       } else {
         const idx = parseInt(cb.dataset.rowIndex ?? '-1', 10)
         if (idx >= 0) this.onCheckboxClick?.(idx)
+      }
+    })
+
+    // 点击行体: 单选整行 / Shift 批量 (对标 ag-grid Row Selection)
+    this.scrollContainer.addEventListener('click', (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!this.selectionManager) return
+      if (this.rangeEnabled && this.rangeManager) return // 范围选择优先
+      if (target.closest('.vt-checkbox-cell')) return // 复选框走上面
+      if (target.closest('.vt-group-toggle')) return   // 折叠走组头
+      if (target.closest('.vt-col-filter-btn, .vt-col-menu-btn')) return // 弹窗按钮
+      const rowEl = target.closest<HTMLDivElement>('.vt-virtual-row')
+      if (!rowEl) return
+      if (rowEl.classList.contains('vt-row-group')) return // 分组行不选
+      const rowIndex = parseInt(rowEl.dataset.rowIndex ?? '-1', 10)
+      if (rowIndex < 0) return
+      e.stopPropagation()
+      if (e.shiftKey) {
+        this.selectionManager.rangeFromAnchor(rowIndex)
+      } else {
+        this.selectionManager.selectSingle(rowIndex)
       }
     })
   }
@@ -379,6 +445,11 @@ export class VirtualViewport {
       this.renderer.applyScrollX(rowEl, colRange.translateX)
     }
 
+    // 选区高亮 (新行 + 列范围变化后)
+    if (this.rangeManager) {
+      for (const [idx, rowEl] of this.rowElementMap) this.applyRangeOnRow(rowEl, idx)
+    }
+
     // 清理离开视口的旧行, 回收入池
     for (const rowIndex of this.visibleRows) {
       if (!newVisibleSet.has(rowIndex)) {
@@ -398,6 +469,9 @@ export class VirtualViewport {
     const top = this.scroller.getRowOffset(rowIndex) - this.scroller.getRowOffset(startRow)
     this.renderer.setRowTop(rowEl, top)
     this.renderer.setRowHeight(rowEl, this.scroller.getRowHeight(rowIndex))
+    // 斑马纹: 按行号奇偶 (与 DOM 顺序无关, 行池复用不串)
+    rowEl.classList.toggle('vt-row-even', rowIndex % 2 === 0)
+    rowEl.classList.toggle('vt-row-odd', rowIndex % 2 !== 0)
   }
 
   /** 计算 [startRow, endRow] 的 rowSpan/colSpan 合并计划 */
@@ -679,6 +753,252 @@ export class VirtualViewport {
     this.lastColEnd = -1
     this.rebuildColumnVirtualizer()
     this.updateVisibleRows()
+  }
+
+  // =====================================================
+   // P3 · 范围选择 + 右键菜单
+   // =====================================================
+
+  private bindRangeEvents(): void {
+    const rm = this.rangeManager!
+    rm.setOnChanged(() => this.refreshRangeHighlight())
+
+    // 鼠标按下: 开始选区
+    this.scrollContainer.addEventListener('mousedown', (e: MouseEvent) => {
+      if (e.button !== 0) return
+      const target = e.target as HTMLElement
+      if (target.closest('.vt-checkbox-cell, .vt-group-toggle, .vt-col-filter-btn, .vt-col-menu-btn, .vt-col-resize-handle')) return
+      const pos = this.posFromElement(target)
+      if (!pos) return
+      e.preventDefault()
+      if (e.shiftKey) rm.extendTo(pos.row, pos.col)
+      else rm.start(pos.row, pos.col)
+      this.rangeDragging = true
+    })
+
+    // 拖拽扩展 (document)
+    document.addEventListener('mousemove', (e: MouseEvent) => {
+      if (!this.rangeDragging) return
+      const pos = this.posAtPoint(e.clientX, e.clientY) ?? this.posFromElement(e.target as HTMLElement)
+      if (pos) rm.extendTo(pos.row, pos.col)
+    })
+    document.addEventListener('mouseup', () => { this.rangeDragging = false })
+
+    // 表体右键
+    this.scrollContainer.addEventListener('contextmenu', (e: MouseEvent) => {
+      e.preventDefault()
+      const pos = this.posFromElement(e.target as HTMLElement)
+      if (pos) {
+        if (e.shiftKey) rm.extendTo(pos.row, pos.col)
+        else rm.start(pos.row, pos.col)
+      }
+      this.showBodyContextMenu(e)
+    })
+
+    // 表头右键在 setHeaderRow 中绑定 (headerRow 构造时不可用)
+
+    // 键盘 (document, 作用域内)
+    document.addEventListener('keydown', (e: KeyboardEvent) => this.handleRangeKeydown(e))
+  }
+
+  private posFromElement(el: HTMLElement): CellPos | null {
+    const cell = el.closest<HTMLElement>('.vt-table-cell:not(.vt-checkbox-cell)')
+    const rowEl = el.closest<HTMLElement>('.vt-virtual-row')
+    if (!cell || !rowEl) return null
+    const row = parseInt(rowEl.dataset.rowIndex ?? '', 10)
+    const col = this.config.columns.findIndex(c => c.key === cell.dataset.columnKey)
+    if (isNaN(row) || col < 0) return null
+    return { row, col }
+  }
+
+  private posAtPoint(x: number, y: number): CellPos | null {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null
+    return el ? this.posFromElement(el) : null
+  }
+
+  /** 刷新全部可见行的选区高亮 */
+  public refreshRangeHighlight(): void {
+    for (const [idx, rowEl] of this.rowElementMap) {
+      this.applyRangeOnRow(rowEl, idx)
+    }
+  }
+
+  private applyRangeOnRow(rowEl: HTMLDivElement, rowIndex: number): void {
+    const rm = this.rangeManager
+    if (!rm) return
+    const b = rm.getBounds()
+    const cells = Array.from(rowEl.querySelectorAll<HTMLElement>('.vt-table-cell:not(.vt-checkbox-cell)'))
+    for (const cell of cells) {
+      const col = this.config.columns.findIndex(c => c.key === cell.dataset.columnKey)
+      if (col < 0) continue
+      const within = rm.isWithin(rowIndex, col)
+      const active = within && rm.isActive(rowIndex, col)
+      cell.classList.toggle('vt-cell-range', within && !active)
+      cell.classList.toggle('vt-cell-range-active', active)
+      cell.classList.remove('vt-range-edge-top', 'vt-range-edge-bottom', 'vt-range-edge-left', 'vt-range-edge-right')
+      if (b && within) {
+        if (rowIndex === b.r0) cell.classList.add('vt-range-edge-top')
+        if (rowIndex === b.r1) cell.classList.add('vt-range-edge-bottom')
+        if (col === b.c0) cell.classList.add('vt-range-edge-left')
+        if (col === b.c1) cell.classList.add('vt-range-edge-right')
+      }
+    }
+  }
+
+  private handleRangeKeydown(e: KeyboardEvent): void {
+    if (!this.rangeEnabled || !this.rangeManager) return
+    const target = e.target as HTMLElement
+    const withinTable = !!target.closest &&
+      (this.scrollContainer.contains(target) || !!this.headerRow?.contains(target))
+    if (!withinTable) return
+    const rm = this.rangeManager
+    const totalRows = this.config.totalRows
+    const lastCol = this.config.columns.length - 1
+
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      if (!rm.hasSelection()) return
+      e.preventDefault()
+      this.copyRange(false)
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault()
+      rm.selectAll(Math.max(0, totalRows - 1), lastCol)
+      return
+    }
+
+    const cur = rm.getCurrent()
+    if (!cur) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault()
+        rm.start(0, 0)
+      }
+      return
+    }
+    let nr = cur.row
+    let nc = cur.col
+    const vrows = Math.max(1, Math.floor((this.scrollContainer.clientHeight || 400) / (this.scroller.getRowHeight(0) || 36)))
+    switch (e.key) {
+      case 'ArrowUp': nr = Math.max(0, nr - 1); break
+      case 'ArrowDown': nr = Math.min(totalRows - 1, nr + 1); break
+      case 'ArrowLeft': nc = Math.max(0, nc - 1); break
+      case 'ArrowRight': nc = Math.min(lastCol, nc + 1); break
+      case 'PageUp': nr = Math.max(0, nr - vrows); break
+      case 'PageDown': nr = Math.min(totalRows - 1, nr + vrows); break
+      case 'Home': nc = 0; if (e.ctrlKey) nr = 0; break
+      case 'End': nc = lastCol; if (e.ctrlKey) nr = totalRows - 1; break
+      case 'Escape': e.preventDefault(); rm.clear(); return
+      default: return
+    }
+    e.preventDefault()
+    rm.moveActive(nr, nc, e.shiftKey)
+    this.scrollCellIntoView(nr, nc)
+  }
+
+  private scrollCellIntoView(row: number, col: number): void {
+    const rowH = this.scroller.getRowHeight(row)
+    const top = this.scroller.getRowOffset(row)
+    const fixedTop = this.config.headerHeight + (this.config.showSummary ? this.config.summaryHeight : 0)
+    const viewTop = this.scrollContainer.scrollTop - fixedTop
+    const viewBottom = viewTop + this.scrollContainer.clientHeight
+    if (top < viewTop) this.scrollContainer.scrollTop += top - viewTop
+    else if (top + rowH > viewBottom) this.scrollContainer.scrollTop += (top + rowH) - viewBottom
+  }
+
+  // ===== TSV / 复制 =====
+  public buildRangeTSV(includeHeader: boolean): string {
+    const rm = this.rangeManager
+    const b = rm?.getBounds()
+    if (!b || !rm) return ''
+    const cols = this.config.columns
+    const selCols = cols.slice(b.c0, b.c1 + 1)
+    const lines: string[] = []
+    if (includeHeader) lines.push(selCols.map(c => c.title ?? c.key).join('\t'))
+    for (let r = b.r0; r <= b.r1; r++) {
+      const rowData = this.dataStrategy.getRow(r)
+      const parts: string[] = []
+      for (const c of selCols) parts.push(this.formatCellValue(rowData ? rowData[c.key] : undefined))
+      lines.push(parts.join('\t'))
+    }
+    return lines.join('\n')
+  }
+
+  private formatCellValue(raw: any): string {
+    if (raw === null || raw === undefined) return ''
+    if (typeof raw === 'object') return ''
+    return String(raw)
+  }
+
+  public copyRange(includeHeader: boolean): void {
+    const text = this.buildRangeTSV(includeHeader)
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text))
+    } else this.fallbackCopy(text)
+  }
+
+  private copySingleCell(pos: CellPos | null): void {
+    if (!pos) return
+    const rowData = this.dataStrategy.getRow(pos.row)
+    const key = this.config.columns[pos.col].key
+    const text = this.formatCellValue(rowData ? rowData[key] : undefined)
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text))
+    } else this.fallbackCopy(text)
+  }
+
+  private fallbackCopy(text: string): void {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy') } catch { /* ignore */ }
+    document.body.removeChild(ta)
+  }
+
+  // ===== 右键菜单 =====
+  private showHeaderContextMenu(e: MouseEvent, key: string): void {
+    const idx = this.config.columns.findIndex(c => c.key === key)
+    const isFrozen = idx < this.config.frozenColumns
+    const a = this.rangeActions
+    const items: TableContextMenuItem[] = [
+      { label: '升序', onClick: () => a?.sort(key, 'asc') },
+      { label: '降序', onClick: () => a?.sort(key, 'desc') },
+      { label: '清除排序', onClick: () => a?.sort(key, null) },
+      { divider: true },
+      { label: isFrozen ? '取消固定' : '固定到左侧', onClick: () => isFrozen ? a?.unpin(key) : a?.pin(key) },
+      { label: '列宽自适应', onClick: () => a?.autoSize(key) },
+      { label: '隐藏列', onClick: () => a?.hide(key) },
+      { label: '重置列', onClick: () => a?.resetColumns() },
+    ]
+    TableContextMenu.show(e.clientX, e.clientY, items)
+  }
+
+  private showBodyContextMenu(e: MouseEvent): void {
+    const pos = this.posFromElement(e.target as HTMLElement)
+    const key = pos ? this.config.columns[pos.col].key : undefined
+    const isFrozen = !!pos && pos.col < this.config.frozenColumns
+    const a = this.rangeActions
+    const items: TableContextMenuItem[] = [
+      { label: '复制', onClick: () => this.copyRange(false) },
+      { label: '复制(含表头)', onClick: () => this.copyRange(true) },
+      { label: '复制单元格值', onClick: () => this.copySingleCell(pos) },
+      { divider: true },
+      {
+        label: isFrozen ? '取消固定该列' : '固定该列到左侧',
+        disabled: !key,
+        onClick: () => key ? (isFrozen ? a?.unpin(key) : a?.pin(key)) : undefined,
+      },
+      { label: '列宽自适应', disabled: !key, onClick: () => key && a?.autoSize(key) },
+      { label: '隐藏该列', disabled: !key, onClick: () => key && a?.hide(key) },
+      { divider: true },
+      {
+        label: '全选',
+        onClick: () => this.rangeManager?.selectAll(Math.max(0, this.config.totalRows - 1), this.config.columns.length - 1),
+      },
+    ]
+    TableContextMenu.show(e.clientX, e.clientY, items)
   }
 
   // 销毁

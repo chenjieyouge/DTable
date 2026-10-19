@@ -66,6 +66,10 @@ export class PivotTable {
   // 展开状态记忆: 筛选/配置变更重建树时恢复用户展开状态
   private expandedState = new Map<string, boolean>()
 
+  // 钻取状态 (Power BI Drill): 根→当前钻取节点的 id 链
+  private drillPath: string[] = []
+  private drillBarEl: HTMLDivElement | null = null
+
   // Excel 级交互: 当前选中单元格 (row=flatRows 索引, col=全列索引)
   private selectedCell: { row: number; col: number } | null = null
   // Shift 扩展选区的锚点
@@ -171,6 +175,12 @@ export class PivotTable {
     this.breadcrumbEl = document.createElement('div')
     this.breadcrumbEl.className = 'vt-pivot-breadcrumb-wrapper'
     wrapper.appendChild(this.breadcrumbEl)
+
+    // ── 钻取导航条 (双击分组行钻取后出现) ──
+    this.drillBarEl = document.createElement('div')
+    this.drillBarEl.className = 'vt-pivot-drillbar'
+    this.drillBarEl.style.display = 'none'
+    wrapper.appendChild(this.drillBarEl)
 
     // ── 底部状态栏 (行数统计 / 选区反馈) ──
     this.statusBarEl = document.createElement('div')
@@ -429,6 +439,9 @@ export class PivotTable {
     this.flatRows = this.pivotConfig.flatMode
       ? PivotTreeNode.flattenFlat(this.treeRoot, this.pivotConfig.rowGroups)
       : PivotTreeNode.flattenTree(this.treeRoot, this.pivotConfig.showSubtotals ?? true)
+
+    // 条件格式区间 (渲染行前)
+    this.renderer.prepareConditionalFormat(this.flatRows, this.pivotConfig.conditionalFormat ?? 'none')
 
     // 重置斑马纹计数器
     this.dataRowCounter = 0
@@ -1288,6 +1301,8 @@ export class PivotTable {
           frozenCellEl.addEventListener('click', () => this.toggleNode(nodeId))
           scrollRowEl.style.cursor = 'pointer'
           scrollRowEl.addEventListener('click', () => this.toggleNode(nodeId))
+          // 双击钻取 (Power BI Drill Down)
+          frozenCellEl.addEventListener('dblclick', (e) => { e.stopPropagation(); this.drillInto(nodeId) })
         } else {
           // 数据行/小计/总计: 点击选中单元格 (Excel 级交互)
           frozenCellEl.style.cursor = 'cell'
@@ -1400,10 +1415,114 @@ export class PivotTable {
   }
  
 
+  // ═════════════════════════════════════════════════════
+  //  钻取 Drill Up/Down (Power BI 风格)
+  // ═════════════════════════════════════════════════════
+
+  /** 双击分组行 → 钻取到下一层 (隐藏同级, 只展开本分支) */
+  private drillInto(nodeId: string): void {
+    if (!this.treeRoot) return
+    const target = this.findNodeById(this.treeRoot, nodeId)
+    if (!target || target.type !== 'group') return
+    // 已到最末行分组层, 不能再向下
+    if (target.level >= this.pivotConfig.rowGroups.length - 1) return
+    if (this.drillPath[this.drillPath.length - 1] === nodeId) return
+    this.drillPath.push(nodeId)
+    this.applyDrill()
+  }
+
+  /** 钻取到路径中的某一层 (index 为该层在 drillPath 中的位置, -1 回顶层) */
+  private drillUpTo(index: number): void {
+    if (this.drillPath.length === 0) return
+    if (index < 0) {
+      this.restorePreDrill()
+      return
+    }
+    this.drillPath = this.drillPath.slice(0, index + 1)
+    this.applyDrill()
+  }
+
+  /** 应用当前钻取路径: 只展平本分支 */
+  private applyDrill(): void {
+    if (!this.treeRoot) return
+    this.flatRows = PivotTreeNode.flattenDrill(
+      this.treeRoot,
+      this.drillPath,
+      this.pivotConfig.showSubtotals ?? true
+    )
+    this.renderer.prepareConditionalFormat(this.flatRows, this.pivotConfig.conditionalFormat ?? 'none')
+    this.dataRowCounter = 0
+    this.updateScrollHeight()
+    this.clearVisibleRows()
+    this.updateVisibleRows()
+    this.renderDrillBar()
+  }
+
+  /** 退出钻取, 恢复正常层级视图 */
+  private restorePreDrill(): void {
+    if (!this.treeRoot) return
+    this.drillPath = []
+    this.flatRows = PivotTreeNode.flattenTree(
+      this.treeRoot,
+      this.pivotConfig.showSubtotals ?? true
+    )
+    this.renderer.prepareConditionalFormat(this.flatRows, this.pivotConfig.conditionalFormat ?? 'none')
+    this.dataRowCounter = 0
+    this.updateScrollHeight()
+    this.clearVisibleRows()
+    this.updateVisibleRows()
+    if (this.drillBarEl) this.drillBarEl.style.display = 'none'
+  }
+
+  /** 钻取后重新展平 + 渲染 (不改动持久化 expandedState) */
+  private rebuildAfterDrill(): void {
+    if (!this.treeRoot) return
+    this.flatRows = PivotTreeNode.flattenTree(
+      this.treeRoot,
+      this.pivotConfig.showSubtotals ?? true
+    )
+    this.renderer.prepareConditionalFormat(this.flatRows, this.pivotConfig.conditionalFormat ?? 'none')
+    this.dataRowCounter = 0
+    this.updateScrollHeight()
+    this.clearVisibleRows()
+    this.updateVisibleRows()
+  }
+
+  /** 钻取导航条: 路径标签(可点击回退) + 向上钻取 */
+  private renderDrillBar(): void {
+    if (!this.drillBarEl || !this.treeRoot) return
+    if (this.drillPath.length === 0) { this.drillBarEl.style.display = 'none'; return }
+    this.drillBarEl.innerHTML = ''
+    this.drillBarEl.style.display = 'flex'
+    const hint = document.createElement('span')
+    hint.className = 'vt-pivot-drillbar-hint'
+    hint.textContent = '钻取: '
+    this.drillBarEl.appendChild(hint)
+    this.drillPath.forEach((id, i) => {
+      const n = this.findNodeById(this.treeRoot!, id)
+      const label = n ? String(n.groupValue ?? '(空)') : '?'
+      const crumb = document.createElement('span')
+      crumb.className = 'vt-pivot-drillbar-crumb'
+      crumb.textContent = label
+      crumb.addEventListener('click', () => this.drillUpTo(i))
+      this.drillBarEl!.appendChild(crumb)
+      const sep = document.createElement('span')
+      sep.className = 'vt-pivot-drillbar-sep'
+      sep.textContent = ' › '
+      this.drillBarEl!.appendChild(sep)
+    })
+    const upBtn = document.createElement('button')
+    upBtn.type = 'button'
+    upBtn.className = 'vt-pivot-drillbar-up'
+    upBtn.textContent = '↑ 向上钻取'
+    upBtn.addEventListener('click', () => this.drillUpTo(this.drillPath.length - 2))
+    this.drillBarEl.appendChild(upBtn)
+  }
+
   /**
    * 切换节点 展开/折叠
-   * 
-   * 流程: 
+   *
+   * 流程:
    * 1. 在树中找到目标节点, 切换 isExpanded
    * 2. 重新展平树结构 (不需要重建树)
    * 3. 更新滚动高度 + 重新渲染可视区
@@ -1672,6 +1791,9 @@ export class PivotTable {
 
   /** 更新透视配置 (由外部 PivotPanel 调用) */
   public updateConfig(config: IPivotConfig, columns: IColumn[]): void {
+    // 字段/配置变化 → 退出钻取
+    this.drillPath = []
+    if (this.drillBarEl) this.drillBarEl.style.display = 'none'
     this.pivotConfig = config
     this.columns = columns
     this.processor.updateConfig(config)

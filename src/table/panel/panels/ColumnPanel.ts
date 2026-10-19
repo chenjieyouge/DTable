@@ -58,6 +58,14 @@ export class ColumnPanel implements IPanel {
   // 显示小计行开关
   private showSubtotals = true
 
+  // 条件格式 (Power BI 色阶/数据条)
+  private conditionalFormat: 'none' | 'colorScale' | 'dataBar' = 'none'
+
+  // 列总计
+  private showColGrandTotal = true
+  // 布局: 标准 / 大纲 / 紧凑(扁平)
+  private layoutMode: 'standard' | 'outline' | 'compact' = 'standard'
+
   // 防抖定时器
   private emitConfigTimer: number | null = null
 
@@ -490,7 +498,78 @@ export class ColumnPanel implements IPanel {
     subtotalRow.appendChild(document.createTextNode(' 显示小计行'))
     this.pivotConfgSection.appendChild(subtotalRow)
 
-    // ── 5. 初始触发 ────────────────────────────────────────
+    // ── 列总计开关 ───────────────────────────────────────
+    const totalRow = document.createElement('label')
+    totalRow.className = 'vt-px-subtotal-row'
+    const totalCb = document.createElement('input')
+    totalCb.type = 'checkbox'
+    totalCb.checked = this.showColGrandTotal
+    totalCb.addEventListener('change', () => {
+      this.showColGrandTotal = totalCb.checked
+      this.emitConfig()
+    })
+    totalRow.appendChild(totalCb)
+    totalRow.appendChild(document.createTextNode(' 显示列总计'))
+    this.pivotConfgSection.appendChild(totalRow)
+
+    // ── 布局预设 ─────────────────────────────────────────
+    const layoutLabel = document.createElement('div')
+    layoutLabel.className = 'vt-px-cf-label'
+    layoutLabel.textContent = '布局预设'
+    this.pivotConfgSection.appendChild(layoutLabel)
+    const layoutSeg = document.createElement('div')
+    layoutSeg.className = 'vt-px-segment'
+    const layouts: { val: 'standard' | 'outline' | 'compact'; text: string }[] = [
+      { val: 'standard', text: '标准' },
+      { val: 'outline', text: '大纲' },
+      { val: 'compact', text: '紧凑' },
+    ]
+    for (const lo of layouts) {
+      const lb = document.createElement('button')
+      lb.type = 'button'
+      lb.className = 'vt-px-seg-btn' + (this.layoutMode === lo.val ? ' vt-active' : '')
+      lb.textContent = lo.text
+      lb.addEventListener('click', () => {
+        this.layoutMode = lo.val
+        layoutSeg.querySelectorAll('.vt-px-seg-btn').forEach(b => b.classList.remove('vt-active'))
+        lb.classList.add('vt-active')
+        // 同步小计 checkbox
+        this.showSubtotals = lo.val === 'standard'
+        subtotalCb.checked = this.showSubtotals
+        this.emitConfig()
+      })
+      layoutSeg.appendChild(lb)
+    }
+    this.pivotConfgSection.appendChild(layoutSeg)
+
+    // ── 5. 条件格式 (Power BI 色阶/数据条) ─────────────────
+    const cfLabel = document.createElement('div')
+    cfLabel.className = 'vt-px-cf-label'
+    cfLabel.textContent = '条件格式'
+    this.pivotConfgSection.appendChild(cfLabel)
+    const cfSeg = document.createElement('div')
+    cfSeg.className = 'vt-px-segment'
+    const cfOptions: { val: 'none' | 'colorScale' | 'dataBar'; text: string }[] = [
+      { val: 'none', text: '无' },
+      { val: 'colorScale', text: '色阶' },
+      { val: 'dataBar', text: '数据条' },
+    ]
+    for (const opt of cfOptions) {
+      const segBtn = document.createElement('button')
+      segBtn.type = 'button'
+      segBtn.className = 'vt-px-seg-btn' + (this.conditionalFormat === opt.val ? ' vt-active' : '')
+      segBtn.textContent = opt.text
+      segBtn.addEventListener('click', () => {
+        this.conditionalFormat = opt.val
+        cfSeg.querySelectorAll('.vt-px-seg-btn').forEach(b => b.classList.remove('vt-active'))
+        segBtn.classList.add('vt-active')
+        this.emitConfig()
+      })
+      cfSeg.appendChild(segBtn)
+    }
+    this.pivotConfgSection.appendChild(cfSeg)
+
+    // ── 6. 初始触发 ────────────────────────────────────────
     this.emitConfig()
   }
 
@@ -1518,12 +1597,16 @@ export class ColumnPanel implements IPanel {
 
     if (valueFields.length === 0) return
 
+    const isCompact = this.layoutMode === 'compact'
     const config: IPivotConfig = {
       enabled: true,
       rowGroups,
       colGroups: colGroups.length > 0 ? colGroups : undefined,
       valueFields,
-      showSubtotals: this.showSubtotals,
+      showSubtotals: isCompact ? false : this.showSubtotals,
+      showColGrandTotal: this.showColGrandTotal,
+      flatMode: isCompact ? true : undefined,
+      conditionalFormat: this.conditionalFormat,
       filters: { ...this.filters },
     }
     this.onPivotConfigChange?.(config)
@@ -1561,6 +1644,9 @@ export class ColumnPanel implements IPanel {
       filters: [],
     }
     this.showSubtotals = saved.showSubtotals ?? true
+    this.conditionalFormat = saved.conditionalFormat ?? 'none'
+    this.showColGrandTotal = saved.showColGrandTotal ?? true
+    this.layoutMode = saved.flatMode ? 'compact' : (saved.showSubtotals === false ? 'outline' : 'standard')
     this.filters = saved.filters ? { ...saved.filters } : {}
 
     // 恢复 Pivot 开关与配置区显示

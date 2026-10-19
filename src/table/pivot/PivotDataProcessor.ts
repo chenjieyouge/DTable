@@ -122,6 +122,36 @@ export class PivotDataProcessor {
       // 有分组列: 递归构建列树
       root.children = this.buildColSubTree(colFilteredData, colGroups, 0, 'col-root', maxLeaf)
       root.leafCount = root.children.reduce((sum, c) => sum + c.leafCount, 0)
+
+      // 列总计 (跨列分组的最右侧总计列)
+      if (this.config.showColGrandTotal ?? true) {
+        const depth = colGroups.length
+        let totalLayer: IPivotColNode[] = this.config.valueFields.map((vf, i) => ({
+          id: `col-total-leaf-${i}`,
+          level: depth,
+          colValue: vf.label ?? vf.key,
+          colKey: '__total__',
+          children: [],
+          isLeaf: true,
+          leafCount: 1,
+          isTotal: true,
+        }))
+        for (let d = depth - 1; d >= 0; d--) {
+          const lc = totalLayer.reduce((sum, c) => sum + c.leafCount, 0)
+          totalLayer = [{
+            id: `col-total-${d}`,
+            level: d,
+            colValue: '总计',
+            colKey: '__total__',
+            children: totalLayer,
+            isLeaf: false,
+            leafCount: lc,
+            isTotal: true,
+          }]
+        }
+        root.children.push(totalLayer[0])
+        root.leafCount = root.children.reduce((sum, c) => sum + c.leafCount, 0)
+      }
     }
 
     this.colTree = root
@@ -513,10 +543,12 @@ export class PivotDataProcessor {
         ) ?? this.config.valueFields.find(v => v.key === leaf.colValue)
         if (!vf) continue
 
-        const ancestors = leaf.ancestorColValues ?? []
-        const filteredRows = rows.filter(row =>
-          ancestors.every((val, i) => String(row[colGroups[i]] ?? '') === val)
-        )
+        // 列总计: 不做列过滤, 聚合该分组的全部行
+        const filteredRows = leaf.isTotal
+          ? rows
+          : rows.filter(row =>
+              (leaf.ancestorColValues ?? []).every((val, i) => String(row[colGroups[i]] ?? '') === val)
+            )
 
         const cellKey = this.buildCellKey(leaf)
         aggregatedData[cellKey] = this.aggregate(filteredRows, vf.key, vf.aggregation)
@@ -563,6 +595,13 @@ export class PivotDataProcessor {
    * 规则: valueField.key + '__' + 各列分组值 (从根到叶, 不含 __value__ 层)
    */
   public buildCellKey(leaf: IPivotColNode): string {
+    // 列总计叶子: 'vf.key__total__'
+    if (leaf.isTotal) {
+      const vf = this.config.valueFields.find(
+        v => (v.label ?? v.key) === leaf.colValue
+      ) ?? this.config.valueFields.find(v => v.key === leaf.colValue)
+      return `${vf?.key ?? leaf.colValue}__total__`
+    }
     // 无列分组时: colLeaves 直接是 valueField 叶子, key 就是 vf.key
     if (!this.config.colGroups?.length) {
       const vf = this.config.valueFields.find(

@@ -26,8 +26,12 @@ export interface MountParams {
   getClientFilterOptions: (key: string) => string[]
   loadSummaryData: (summaryRow: HTMLDivElement) => void 
   togglePanel: (panelId: string) => void 
-  onPivotModeToggle?: (enabled: boolean) => void 
-  onPivotConfigChange?: (config: any) => void 
+  onPivotModeToggle?: (enabled: boolean) => void
+  onPivotConfigChange?: (config: any) => void
+  // 顶部工具条
+  onQuickFilter?: (text: string) => void
+  onToggleTheme?: () => void
+  getInitialQuickFilter?: () => string
 }
 
 /** 挂载后的布局: 主布局 + 侧边布局 */
@@ -96,7 +100,10 @@ export class MountHelper {
       config,
       renderer,
       headerSortBinder,
-      ...shellCallbacks.getCallbacks()
+      ...shellCallbacks.getCallbacks(),
+      onQuickFilter: params.onQuickFilter,
+      onToggleTheme: params.onToggleTheme,
+      getInitialQuickFilter: params.getInitialQuickFilter,
     }
 
     // 判断是否启用右侧面板, 选择不同的布局方式

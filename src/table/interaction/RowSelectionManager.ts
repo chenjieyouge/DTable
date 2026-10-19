@@ -5,6 +5,7 @@
  */
 export class RowSelectionManager {
   private selected = new Set<number>()
+  private anchor: number | null = null // 行点击/Shift 批量选择的锚点
   private onChange: ((indices: Set<number>) => void) | null = null
 
   public setOnChange(fn: (indices: Set<number>) => void) {
@@ -17,6 +18,33 @@ export class RowSelectionManager {
     } else {
       this.selected.add(index)
     }
+    this.anchor = index
+    this.notify()
+  }
+
+  /** 单选: 清除其它, 只保留该行 (点击行体) */
+  public selectSingle(index: number): void {
+    this.selected.clear()
+    this.selected.add(index)
+    this.anchor = index
+    this.notify()
+  }
+
+  /** 从锚点到目标行批量选中 (Shift+点击); 无锚点则退化为单选 */
+  public rangeFromAnchor(to: number): void {
+    if (this.anchor === null) {
+      this.selectSingle(to)
+      return
+    }
+    this.selectRange(this.anchor, to)
+  }
+
+  /** 选中区间 [from, to] (含端点) */
+  public selectRange(from: number, to: number): void {
+    const lo = Math.min(from, to)
+    const hi = Math.max(from, to)
+    this.selected.clear()
+    for (let i = lo; i <= hi; i++) this.selected.add(i)
     this.notify()
   }
 
@@ -24,6 +52,7 @@ export class RowSelectionManager {
     for (let i = 0; i < totalRows; i++) {
       this.selected.add(i)
     }
+    if (totalRows > 0) this.anchor = 0
     this.notify()
   }
 

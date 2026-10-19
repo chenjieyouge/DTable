@@ -1,5 +1,6 @@
 import type { IPivotConfig, IPivotFlatRow, IPivotColNode, AggregationType, ValueFieldFormat } from "@/types/pivot";
 import type { IColumn } from "@/types";
+import { ConditionalColor } from "./conditionalColor";
 
 /**
  * 透视表渲染器 (Excel 风格: 多行表头 + 行列交叉单元格)
@@ -34,6 +35,54 @@ export class PivotRenderer {
   }
 
   /** Excel 风格聚合前缀: sum → 求和项:xxx */
+  // 条件格式状态
+  private cfMode: 'none' | 'colorScale' | 'dataBar' = 'none'
+  private cfRanges = new Map<string, { min: number; max: number; absMax: number }>()
+
+  /**
+   * 渲染行前计算每个值字段的数值区间 (只统计数据行, 不含小计/总计)
+   */
+  public prepareConditionalFormat(flatRows: IPivotFlatRow[], mode: 'none' | 'colorScale' | 'dataBar'): void {
+    this.cfMode = mode
+    this.cfRanges.clear()
+    if (mode === 'none') return
+    const acc = new Map<string, { min: number; max: number; absMax: number }>()
+    for (const fr of flatRows) {
+      if (fr.type !== 'data' || fr.rowType === 'subtotal' || fr.rowType === 'grandtotal') continue
+      for (const leaf of this.colLeaves) {
+        if (leaf.isTotal) continue
+        const vf = this.findValueField(leaf)
+        if (!vf) continue
+        const raw = Number(fr.data[this.getCellKey(leaf)])
+        if (raw === null || isNaN(raw)) continue
+        let r = acc.get(vf.key)
+        if (!r) { r = { min: raw, max: raw, absMax: Math.abs(raw) }; acc.set(vf.key, r) }
+        if (raw < r.min) r.min = raw
+        if (raw > r.max) r.max = raw
+        if (Math.abs(raw) > r.absMax) r.absMax = Math.abs(raw)
+      }
+    }
+    this.cfRanges = acc
+  }
+
+  /** 给值单元格应用条件格式 */
+  private applyConditionalFormat(cell: HTMLDivElement, vfKey: string, rawValue: any): void {
+    if (this.cfMode === 'none') return
+    const range = this.cfRanges.get(vfKey)
+    if (!range) return
+    const v = Number(rawValue)
+    if (isNaN(v)) return
+    if (this.cfMode === 'colorScale') {
+      const span = range.max - range.min
+      const t = span > 0 ? (v - range.min) / span : 0.5
+      cell.style.backgroundColor = ConditionalColor.scale(t)
+      cell.style.color = '#1d2129'
+    } else if (this.cfMode === 'dataBar') {
+      const pct = range.absMax > 0 ? Math.max(0, Math.round((Math.abs(v) / range.absMax) * 100)) : 0
+      cell.style.background = `linear-gradient(90deg, rgba(22,119,255,0.28) ${pct}%, transparent ${pct}%)`
+    }
+  }
+
   private static AGG_PREFIX: Record<AggregationType, string> = {
     sum: '求和项',
     count: '计数项',
@@ -116,6 +165,7 @@ export class PivotRenderer {
           const cell = this.createSortableHeaderCell(leafLabel, node.leafCount, isSorted ? currentSort!.direction : null)
           cell.dataset.cellKey = cellKey
           cell.style.textAlign = 'center'
+          if (node.isTotal) cell.classList.add('vt-pivot-total-header-cell')
           cell.style.cursor = 'pointer'
           cell.addEventListener('click', () => {
             const next = !isSorted ? 'desc' : currentSort!.direction === 'desc' ? 'asc' : null
@@ -125,6 +175,7 @@ export class PivotRenderer {
         } else {
           const cell = this.createHeaderCell(String(node.colValue), node.leafCount)
           cell.style.textAlign = 'center'
+          if (node.isTotal) cell.classList.add('vt-pivot-total-header-cell')
           row.appendChild(cell)
         }
       }
@@ -344,6 +395,11 @@ export class PivotRenderer {
    * Renderer 独立计算, 不依赖 DataProcessor 实例
    */
   public getCellKey(leaf: IPivotColNode): string {
+    // 列总计叶子: 'vf.key__total__'
+    if (leaf.isTotal) {
+      const vf = this.config.valueFields.find(v => (v.label ?? v.key) === leaf.colValue || v.key === leaf.colValue)
+      return `${vf?.key ?? leaf.colValue}__total__`
+    }
     // 无列分组: colKey === '__value__' 且无 ancestorColValues
     if (leaf.colKey === '__value__') {
       const ancestors = leaf.ancestorColValues
@@ -521,6 +577,7 @@ export class PivotRenderer {
           const cell = this.createSortableHeaderCell(leafLabel, node.leafCount, isSorted ? currentSort!.direction : null)
           cell.dataset.cellKey = cellKey
           cell.style.textAlign = 'center'
+          if (node.isTotal) cell.classList.add('vt-pivot-total-header-cell')
           cell.style.cursor = 'pointer'
           cell.addEventListener('click', () => {
             const next = !isSorted ? 'desc' : currentSort!.direction === 'desc' ? 'asc' : null
@@ -530,6 +587,7 @@ export class PivotRenderer {
         } else {
           const cell = this.createHeaderCell(String(node.colValue), node.leafCount)
           cell.style.textAlign = 'center'
+          if (node.isTotal) cell.classList.add('vt-pivot-total-header-cell')
           row.appendChild(cell)
         }
       }
@@ -661,6 +719,10 @@ export class PivotRenderer {
       const cell = this.createValueCell(flatRow.data[cellKey], extraClass, vf?.format)
       if (flatRow.rowType === 'grandtotal') cell.style.fontWeight = '700'
       else if (flatRow.rowType === 'subtotal') cell.style.fontWeight = '600'
+      // 条件格式: 仅数据行
+      if (vf && !leaf.isTotal && flatRow.type === 'data' && flatRow.rowType !== 'subtotal' && flatRow.rowType !== 'grandtotal') {
+        this.applyConditionalFormat(cell, vf.key, flatRow.data[cellKey])
+      }
       row.appendChild(cell)
     }
 

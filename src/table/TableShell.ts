@@ -13,6 +13,7 @@ import { TableResizeBinder } from "@/table/interaction/TableResizeBinder";
 import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
 import type { PlaceholderDecision } from "@/table/viewport/emptyState";
 import { bindTooltip } from "@/table/interaction/Tooltip";
+import { TableToolbar } from "@/table/toolbar/TableToolbar";
 
 
 // 全局弹窗管理器, 弹窗之间互斥出现
@@ -36,8 +37,11 @@ class PopupManager {
 }
 
 export interface ITableShell {
+  portalContainer: HTMLDivElement
   scrollContainer: HTMLDivElement
   virtualContent: HTMLDivElement
+  /** 切换主题 class (浅色/暗色) */
+  setThemeClass: (theme: 'light' | 'dark') => void
   summaryRow?: HTMLDivElement
   headerRow: HTMLDivElement // 缓存表头引用
   placeholderEl: HTMLDivElement // 数据区占位层 (加载态/空态共用, 只盖数据区, 保留表头)
@@ -80,6 +84,10 @@ export function mountTableShell(params: {
   onHideAllColumns?: () => void 
   onResetColumns?: () => void 
   onToggleSidePanel?: (panelId: string) => void
+  // 顶部工具条
+  onQuickFilter?: (text: string) => void
+  onToggleTheme?: () => void
+  getInitialQuickFilter?: () => string
 
 }): ITableShell {
 
@@ -123,6 +131,10 @@ export function mountTableShell(params: {
   const portalContainer = document.createElement('div')
   portalContainer.className = 'vt-portal-container'
   portalContainer.style.position = 'relative'
+  portalContainer.style.display = 'flex'
+  portalContainer.style.flexDirection = 'column'
+  // 主题 class (默认浅色, 暗色由 VirtualTable 切换)
+  portalContainer.classList.add(config.theme === 'dark' ? 'vt-theme-dark' : 'vt-theme-light')
 
   if (config.tableHeight === 'auto') {
     const min = config.minTableHeight ?? 200
@@ -143,9 +155,26 @@ export function mountTableShell(params: {
   const scrollContainer = document.createElement('div')
   scrollContainer.className = 'vt-table-container'
   scrollContainer.style.width = '100%'
-  scrollContainer.style.height = '100%'
   applyContainerStyles(scrollContainer, config)
-  // 4. 挂载关系: userContainer -> portalContainer -> scrollContainer
+
+  // 顶部工具条 (快速筛选 + 主题切换)
+  let toolbar: TableToolbar | null = null
+  if (config.showToolbar !== false && (params.onQuickFilter || params.onToggleTheme)) {
+    toolbar = new TableToolbar({
+      onQuickFilter: (text: string) => params.onQuickFilter?.(text),
+      onToggleTheme: () => params.onToggleTheme?.(),
+    }, params.getInitialQuickFilter?.() ?? '', config.theme ?? 'light')
+    toolbar.el.style.flex = '0 0 auto'
+    portalContainer.appendChild(toolbar.el)
+  }
+  // 有工具条时滚动区 flex 撑满; 否则保持 100% 高
+  if (toolbar) {
+    scrollContainer.style.flex = '1 1 auto'
+    scrollContainer.style.minHeight = '0'
+  } else {
+    scrollContainer.style.height = '100%'
+  }
+  // 4. 挂载关系: userContainer -> portalContainer -> [toolbar] + scrollContainer
   portalContainer.appendChild(scrollContainer)
   containerEl.appendChild(portalContainer)
 
@@ -155,7 +184,8 @@ export function mountTableShell(params: {
   placeholderEl.className = 'vt-placeholder'
   placeholderEl.style.display = 'none'
   // 覆盖起点 = 表头 + 总结行高度, 用 css 变量传给样式表
-  const placeholderTop = config.headerHeight + (config.showSummary ? config.summaryHeight : 0)
+  const placeholderTop = (toolbar ? TableToolbar.HEIGHT : 0)
+    + config.headerHeight + (config.showSummary ? config.summaryHeight : 0)
   portalContainer.style.setProperty('--vt-placeholder-top', `${placeholderTop}px`)
   portalContainer.appendChild(placeholderEl)
 
@@ -186,6 +216,7 @@ export function mountTableShell(params: {
 
   // 2. 表格包裹层 wrapper -> header
   const tableWrapper = createTableWrapper(config)
+  if (config.stripeRows !== false) tableWrapper.classList.add('vt-stripe')
 
   // 冻结列边界阴影: 只在横向滚动之后出现 —— 没滚动时画一条阴影线是噪音。
   // 2px 容差, 避免亚像素滚动距离导致阴影忽闪
@@ -296,11 +327,19 @@ export function mountTableShell(params: {
   const sortIndicatorView = new SortIndicatorView(scrollContainer)
 
   return {
+    portalContainer,
     scrollContainer,
     virtualContent,
     summaryRow,
     headerRow,  // 对外暴露 headerRow 引用
     placeholderEl,
+    setThemeClass(theme: 'light' | 'dark') {
+      // 主题根上移到实例根, 让状态栏/侧栏也跟着换色
+      const root = portalContainer.closest<HTMLElement>('.vt-instance') ?? portalContainer
+      root.classList.remove('vt-theme-light', 'vt-theme-dark')
+      root.classList.add(theme === 'dark' ? 'vt-theme-dark' : 'vt-theme-light')
+      toolbar?.setThemeIcon(theme)
+    },
 
     setPlaceholder(decision: PlaceholderDecision) {
       renderPlaceholder(placeholderEl, decision)
@@ -372,6 +411,7 @@ export function mountTableShell(params: {
       filterBinder.unbind()  // 释放列值筛选
       tableResizeBinder.unbind() // 释放整表宽度拖拽事件
       menuBinder.unbind() // 解绑列菜单
+      toolbar?.destroy() // 销毁工具条
     }
   }
 }

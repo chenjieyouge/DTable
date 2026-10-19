@@ -81,7 +81,7 @@ export class ColumnFilterBinder {
     })
   }
 
-  // UI-set类型: 多选框列表
+  // UI-set类型: 多选框列表 (ag-grid 风格: 搜索 + 全选/清空 + 确定/取消)
   private async renderSetFilter(
     key: string,
     current: ColumnFilterValue | undefined,
@@ -90,8 +90,40 @@ export class ColumnFilterBinder {
   ) {
     // 获取下拉框可选值 (client 从 DataManager 推导; server 从接口中拉取)
     const options = await getFilterOptions(key)
-    const selected = new Set(current?.kind === 'set' ? current.values : []) // 选中的值
+    // 打开弹窗时若该列尚无筛选, 默认全选; 否则按已选回填
+    const hasExisting = current?.kind === 'set'
+    const selected = new Set(hasExisting ? current.values : options)
     const checkboxes: HTMLInputElement[] = []
+    const optionLabels: HTMLLabelElement[] = []
+
+    // 顶部搜索框 (过滤选项)
+    const searchWrap = document.createElement('div')
+    searchWrap.className = 'vt-filter-search'
+    const searchInput = document.createElement('input')
+    searchInput.type = 'text'
+    searchInput.className = 'vt-filter-search-input'
+    searchInput.placeholder = '搜索选项...'
+    searchWrap.appendChild(searchInput)
+    this.popEl!.appendChild(searchWrap)
+
+    // 全选/清空 快捷行
+    const quickRow = document.createElement('div')
+    quickRow.className = 'vt-filter-quick-row'
+    const btnSelectAll = document.createElement('button')
+    btnSelectAll.type = 'button'
+    btnSelectAll.textContent = '全选'
+    btnSelectAll.className = 'vt-filter-mini-btn'
+    const btnClearAll = document.createElement('button')
+    btnClearAll.type = 'button'
+    btnClearAll.textContent = '清空'
+    btnClearAll.className = 'vt-filter-mini-btn'
+    quickRow.appendChild(btnSelectAll)
+    quickRow.appendChild(btnClearAll)
+    this.popEl!.appendChild(quickRow)
+
+    // 选项列表容器 (可滚动)
+    const listBox = document.createElement('div')
+    listBox.className = 'vt-filter-list'
     // 渲染下拉框的每行元素
     options.forEach(val => {
       const label = document.createElement('label')
@@ -102,12 +134,34 @@ export class ColumnFilterBinder {
       checkbox.value = val
       checkbox.checked = selected.has(val)
       checkboxes.push(checkbox)
-      // 挂载: popEl -> lable -> checkbox
+      optionLabels.push(label)
+      // 挂载: listBox -> label -> checkbox
       label.appendChild(checkbox)
       label.appendChild(document.createTextNode(val))
-      this.popEl!.appendChild(label)
+      listBox.appendChild(label)
     })
-    // 添加通用的底部 "确认, 清空" 按钮
+    this.popEl!.appendChild(listBox)
+
+    // 搜索过滤选项
+    searchInput.addEventListener('input', () => {
+      const kw = searchInput.value.trim().toLowerCase()
+      optionLabels.forEach((label, i) => {
+        label.style.display = !kw || checkboxes[i].value.toLowerCase().includes(kw) ? '' : 'none'
+      })
+    })
+    // 全选/清空 (只作用于当前可见选项)
+    btnSelectAll.addEventListener('click', () => {
+      optionLabels.forEach((label, i) => {
+        if (label.style.display !== 'none') checkboxes[i].checked = true
+      })
+    })
+    btnClearAll.addEventListener('click', () => {
+      optionLabels.forEach((label, i) => {
+        if (label.style.display !== 'none') checkboxes[i].checked = false
+      })
+    })
+
+    // 添加通用的底部 "确认, 取消" 按钮
     this.appendFooter(
       // ok 回调
       () => {
@@ -120,9 +174,8 @@ export class ColumnFilterBinder {
         }
         this.closePopup()
       },
-      // clear 回调
+      // 取消回调: 不应用改动直接关闭
       () => {
-        onFilterChange(key, null)
         this.closePopup()
       }
     )
@@ -274,7 +327,7 @@ export class ColumnFilterBinder {
     // 清空按钮
     const btnClear = document.createElement('button')
     btnClear.className = 'vt-filter-btn-clear'
-    btnClear.textContent = '清空'
+    btnClear.textContent = '取消'
     btnClear.onclick = onClear
 
     // 页脚

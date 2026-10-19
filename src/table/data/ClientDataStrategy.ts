@@ -246,12 +246,15 @@ export class ClientDataStrategy implements DataStrategy {
   /** 应用筛选条件 */
   private applyFilters(data: Record<string, any>[], query: ITableQuery): Record<string, any>[] {
     let result = [...data]
-    // 全局筛选
+    // 全局快速筛选 (Quick Filter): 拆词, 每个词都要在该行任意列值中出现 (AND)
     if (query.filterText) {
-      const text = query.filterText.toLowerCase()
-      result = result.filter(row => {
-        return Object.values(row).some(val => String(val).toLowerCase().includes(text))
-      })
+      const parts = query.filterText.toLowerCase().split(/\s+/).filter(Boolean)
+      if (parts.length > 0) {
+        result = result.filter(row => {
+          const aggregate = Object.values(row).map(v => String(v ?? '').toLowerCase()).join(' ')
+          return parts.every(p => aggregate.includes(p))
+        })
+      }
     }
 
     // 列筛选 

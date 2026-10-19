@@ -32,6 +32,7 @@ export interface IPivotConfig {
 
   showSubtotals?: boolean     // 是否显示行小计, 默认 true
   showColSubtotals?: boolean  // 是否显示列小计, 默认 false
+  showColGrandTotal?: boolean // 是否显示列总计 (跨列分组, 最右侧), 默认 true
   colMaxLeafCols?: number     // 限制最大叶子列数, 默认 50
 
   /**
@@ -51,6 +52,14 @@ export interface IPivotConfig {
 
   // 组内排序: 按某个聚合值字段升/降序
   sortBy?: { cellKey: string; direction: 'asc' | 'desc' } | null
+
+  /**
+   * 条件格式 (Power BI 特色):
+   *   none      不启用
+   *   colorScale 色阶 (红→黄→绿, 按值在该度量区间的位置)
+   *   dataBar    数据条 (按值占比填充横向条)
+   */
+  conditionalFormat?: 'none' | 'colorScale' | 'dataBar'
 }
 
 // 树节点类型: 分组行 or 数据行
@@ -112,6 +121,7 @@ export interface IPivotColNode {
   children: IPivotColNode[]
   isLeaf: boolean       // 是否为叶子 (__value__ 层的节点)
   leafCount: number     // 子树中叶子节点数量, 用于渲染表头 colspan 比例
+  isTotal?: boolean     // 列总计节点标记 (跨列分组, 不参与条件格式)
   ancestorColValues?: string[]  // 仅叶子节点有值: 从根到本节点的列分组值路径
 }
 

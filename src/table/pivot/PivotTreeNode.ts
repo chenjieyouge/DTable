@@ -263,6 +263,55 @@ export class PivotTreeNode {
    * @param nodeId 要切换的节点ID
    * @returns 是否找到并切换成功
    */
+  /**
+   * 钻取展平 (Power BI Drill Down): 只输出 drillPath 经过的分支
+   * (路径祖先组行 + 目标直接子节点 + 目标小计), 不输出同级分支/总计。
+   */
+  static flattenDrill(
+    root: IPivotTreeNode,
+    pathIds: string[],
+    showSubtotals: boolean
+  ): IPivotFlatRow[] {
+    const result: IPivotFlatRow[] = []
+    const pathNodes: IPivotTreeNode[] = []
+    let cursor = root
+    for (const pid of pathIds) {
+      const child = cursor.children.find(c => c.id === pid)
+      if (!child) return result
+      pathNodes.push(child)
+      cursor = child
+    }
+    const toFlat = (current: IPivotTreeNode): IPivotFlatRow => ({
+      nodeId: current.id,
+      type: current.type,
+      rowType: 'nomal',
+      level: current.level,
+      data: current.aggregatedData,
+      isExpanded: current.isExpanded,
+      rowCount: current.rowCount,
+      groupVale: current.groupValue,
+      parentId: current.id.split('-').slice(0, -1).join('-') || 'root',
+    })
+    for (let d = 0; d < pathNodes.length; d++) {
+      const p = pathNodes[d]
+      result.push(toFlat(p))
+      if (d === pathNodes.length - 1) {
+        for (const child of p.children) {
+          result.push(toFlat(child))
+        }
+        if (showSubtotals) {
+          result.push({
+            ...toFlat(p),
+            nodeId: `${p.id}-subtotal`,
+            rowType: 'subtotal',
+            groupVale: '小计',
+          } as IPivotFlatRow)
+        }
+      }
+    }
+    return result
+  }
+
   static toggleNode(root: IPivotTreeNode, nodeId: string): boolean {
     // 找到目标节点
     if (root.id === nodeId) {

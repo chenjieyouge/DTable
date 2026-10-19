@@ -3070,3 +3070,339 @@
   opacity: 0.7;
   flex-shrink: 0;
 }
+
+/* ============================================================
+ * P1 · 顶部工具条 + 主题系统 + 斑马纹 + 筛选菜单增强
+ * ============================================================ */
+
+/* ===== 顶部工具条 ===== */
+.vt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--vt-bg);
+  border-bottom: 1px solid var(--vt-border-light);
+  box-sizing: border-box;
+}
+.vt-toolbar-filter {
+  position: relative;
+  flex: 1;
+  max-width: 440px;
+  display: flex;
+  align-items: center;
+}
+.vt-toolbar-search-icon {
+  position: absolute;
+  left: 9px;
+  display: flex;
+  color: var(--vt-text-muted);
+  pointer-events: none;
+}
+.vt-quick-filter-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px 0 30px;
+  border: 1px solid var(--vt-border-medium);
+  border-radius: 6px;
+  background: var(--vt-bg-subtle);
+  color: var(--vt-text-primary);
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.vt-quick-filter-input::placeholder { color: var(--vt-text-muted); }
+.vt-quick-filter-input:focus {
+  border-color: var(--vt-primary);
+  box-shadow: 0 0 0 2px var(--vt-primary-bg);
+  background: var(--vt-bg);
+}
+.vt-theme-toggle-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--vt-border);
+  border-radius: 6px;
+  background: var(--vt-bg);
+  color: var(--vt-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.vt-theme-toggle-btn:hover { color: var(--vt-primary); border-color: var(--vt-primary); }
+
+/* ===== 斑马纹 (普通表格, 按行号奇偶) ===== */
+.vt-instance .vt-stripe .vt-virtual-row.vt-row-even:not(.vt-row-group):not(.vt-row-selected) {
+  background-color: var(--vt-bg-subtle);
+}
+.vt-instance .vt-stripe .vt-virtual-row.vt-row-even .vt-cell-frozen {
+  background-color: var(--vt-bg-subtle);
+}
+/* hover 优先级高于斑马纹 */
+.vt-instance .vt-stripe .vt-virtual-row:hover,
+.vt-instance .vt-stripe .vt-virtual-row:hover .vt-cell-frozen {
+  background-color: var(--vt-bg-hover);
+}
+
+/* ===== 选中行: 滚动区透明单元格也透出高亮 ===== */
+.vt-instance .vt-row-selected .vt-scroll-body .vt-table-cell {
+  background-color: transparent;
+}
+
+/* ===== 筛选菜单: 搜索 + 全选/清空 + 列表 ===== */
+.vt-instance .vt-filter-search {
+  margin-bottom: 6px;
+}
+.vt-instance .vt-filter-search-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--vt-border-medium);
+  border-radius: 6px;
+  background: var(--vt-bg-subtle);
+  color: var(--vt-text-primary);
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+}
+.vt-instance .vt-filter-search-input:focus { border-color: var(--vt-primary); }
+.vt-instance .vt-filter-quick-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.vt-instance .vt-filter-mini-btn {
+  flex: 1;
+  padding: 3px 0;
+  font-size: 12px;
+  border: 1px solid var(--vt-border);
+  border-radius: 5px;
+  background: var(--vt-bg);
+  color: var(--vt-text-secondary);
+  cursor: pointer;
+}
+.vt-instance .vt-filter-mini-btn:hover {
+  border-color: var(--vt-primary);
+  color: var(--vt-primary);
+}
+.vt-instance .vt-filter-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+.vt-instance .vt-col-filter-popup.vt-filter-populated {
+  overflow: hidden;
+}
+
+/* ===== 暗色主题 ===== */
+.vt-theme-dark {
+  --vt-primary: #3b82f6;
+  --vt-primary-hover: #60a5fa;
+  --vt-primary-bg: rgba(59, 130, 246, 0.22);
+
+  --vt-text-primary: #e6e8ec;
+  --vt-text-secondary: #a8b0bd;
+  --vt-text-muted: #6b7280;
+  --vt-text-dark: #e6e8ec;
+  --vt-text-darker: #e6e8ec;
+
+  --vt-border: #34363f;
+  --vt-border-light: #2a2c34;
+  --vt-border-medium: #3f424c;
+  --vt-border-panel: #34363f;
+
+  --vt-bg: #1e1f25;
+  --vt-bg-subtle: #262830;
+  --vt-bg-hover: rgba(59, 130, 246, 0.16);
+  --vt-bg-header: #262830;
+  --vt-bg-frozen: #23252c;
+
+  --vt-text-inverse: #f5f7fa;
+  --vt-danger: #f87171;
+  --vt-danger-bg: rgba(220, 38, 38, 0.16);
+  --vt-tooltip-bg: rgba(20, 22, 28, 0.96);
+  --vt-shadow-popup: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --vt-shadow-panel: -2px 0 10px rgba(0, 0, 0, 0.5);
+}
+.vt-theme-dark .vt-virtual-row,
+.vt-theme-dark .vt-quick-filter-input,
+.vt-theme-dark .vt-filter-search-input {
+  color-scheme: dark;
+}
+.vt-theme-dark .vt-checkbox { accent-color: var(--vt-primary); }
+
+/* ============================================================
+ * P2 · 透视表 Power BI 化
+ * 钻取条 / 列总计 / 面板分段控件
+ * ============================================================ */
+
+/* ===== 钻取导航条 ===== */
+.vt-pivot-drillbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 12px;
+  background: var(--vt-primary-bg);
+  border-bottom: 1px solid var(--vt-border-light);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.vt-pivot-drillbar-hint { color: var(--vt-text-secondary); }
+.vt-pivot-drillbar-crumb {
+  color: var(--vt-primary);
+  cursor: pointer;
+  font-weight: 600;
+}
+.vt-pivot-drillbar-crumb:hover { text-decoration: underline; }
+.vt-pivot-drillbar-sep { color: var(--vt-text-muted); }
+.vt-pivot-drillbar-up {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--vt-primary);
+  border-radius: 5px;
+  background: var(--vt-bg);
+  color: var(--vt-primary);
+  cursor: pointer;
+}
+.vt-pivot-drillbar-up:hover { background: var(--vt-primary); color: var(--vt-text-inverse); }
+
+/* ===== 列总计表头/单元格 ===== */
+.vt-pivot-total-header-cell {
+  background: #eef4ff !important;
+  color: #1d4ed8 !important;
+}
+.vt-pivot-scroll-row .vt-table-cell.vt-pivot-col-total-value,
+.vt-pivot-header-cell.vt-pivot-total-header-cell {
+  border-left: 2px solid var(--vt-primary);
+}
+
+/* ===== 条件格式: 单元格去掉 ::after 下边框避免压色, 保持清爽 ===== */
+.vt-pivot-scroll-row .vt-table-cell[style*="rgb(248"],
+.vt-pivot-scroll-row .vt-table-cell[style*="linear-gradient"] {
+  /* 条件格式单元格保持内部右对齐数字 */
+}
+
+/* ===== 面板: 分段控件 + 标签 (条件格式 / 布局预设) ===== */
+.vt-px-cf-label {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vt-text-secondary);
+}
+.vt-px-segment {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.vt-px-seg-btn {
+  flex: 1;
+  padding: 5px 0;
+  font-size: 12px;
+  border: 1px solid var(--vt-border);
+  border-radius: 6px;
+  background: var(--vt-bg);
+  color: var(--vt-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.vt-px-seg-btn:hover { border-color: var(--vt-primary); color: var(--vt-primary); }
+.vt-px-seg-btn.vt-active {
+  background: var(--vt-primary);
+  border-color: var(--vt-primary);
+  color: var(--vt-text-inverse);
+  font-weight: 600;
+}
+
+/* ===== 暗色主题: P2 适配 ===== */
+.vt-theme-dark .vt-pivot-total-header-cell {
+  background: rgba(59, 130, 246, 0.22) !important;
+  color: #93c5fd !important;
+}
+.vt-theme-dark .vt-pivot-drillbar {
+  background: rgba(59, 130, 246, 0.16);
+}
+.vt-theme-dark .vt-px-seg-btn { background: #262830; color: #a8b0bd; }
+
+/* ============================================================
+ * P3 · 普通表格 范围选择 + 右键菜单
+ * ============================================================ */
+
+/* ===== 单元格范围高亮 ===== */
+.vt-table-cell.vt-cell-range {
+  background: rgba(22, 119, 255, 0.14) !important;
+}
+.vt-table-cell.vt-cell-range-active {
+  background: var(--vt-bg) !important;
+  box-shadow: inset 0 0 0 2px var(--vt-primary);
+}
+/* 矩形边缘描边 (ag-grid 风格) */
+.vt-table-cell.vt-range-edge-top { box-shadow: inset 0 1px 0 0 var(--vt-primary); }
+.vt-table-cell.vt-range-edge-bottom { box-shadow: inset 0 -1px 0 0 var(--vt-primary); }
+.vt-table-cell.vt-range-edge-left {
+  box-shadow: inset 1px 0 0 0 var(--vt-primary);
+}
+.vt-table-cell.vt-range-edge-right {
+  box-shadow: inset -1px 0 0 0 var(--vt-primary);
+}
+/* 同时命中多个边缘时叠加 (用 outline 兜底) */
+.vt-table-cell.vt-cell-range-active.vt-range-edge-top,
+.vt-table-cell.vt-cell-range-active.vt-range-edge-bottom,
+.vt-table-cell.vt-cell-range-active.vt-range-edge-left,
+.vt-table-cell.vt-cell-range-active.vt-range-edge-right {
+  box-shadow: inset 0 0 0 2px var(--vt-primary);
+}
+
+/* ===== 右键菜单 ===== */
+.vt-context-menu {
+  min-width: 168px;
+  padding: 6px;
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border-light);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 2000;
+  box-sizing: border-box;
+}
+.vt-context-menu-item {
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--vt-text);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vt-context-menu-item:hover {
+  background: var(--vt-primary-bg);
+  color: var(--vt-primary);
+}
+.vt-context-menu-item.vt-disabled {
+  color: var(--vt-text-muted);
+  cursor: not-allowed;
+}
+.vt-context-menu-item.vt-disabled:hover { background: transparent; }
+.vt-context-menu-divider {
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--vt-border-light);
+}
+
+/* ===== 暗色主题: P3 ===== */
+.vt-theme-dark .vt-context-menu {
+  background: #2b2e37;
+  border-color: #3a3e49;
+}
+.vt-theme-dark .vt-table-cell.vt-cell-range {
+  background: rgba(59, 130, 246, 0.22) !important;
+}
+.vt-theme-dark .vt-table-cell.vt-cell-range-active {
+  background: #2b2e37 !important;
+}
+.vt-theme-dark .vt-context-menu-item:hover {
+  background: rgba(59, 130, 246, 0.2);
+}

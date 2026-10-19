@@ -201,6 +201,14 @@ export interface IConfig extends ITableCallbacks {
   // 底部栏状态
   showStatusBar?: boolean  // 是否显示底部状态, 默认 true
   statusBarHeight?: number // 状态栏高度, 默认 32px
+  // 顶部工具条 (全局快速筛选 + 主题切换)
+  showToolbar?: boolean    // 是否显示顶部工具条, 默认 true
+  // 主题: 浅色 / 暗色
+  theme?: 'light' | 'dark' // 主题, 默认 light
+  // 斑马纹 (普通表格)
+  stripeRows?: boolean     // 是否显示斑马纹, 默认 true
+  // 单元格范围选择 + 复制 (对标 ag-grid Range Selection)
+  enableRangeSelection?: boolean // 默认 true
   // 数据源配置(可选)
   initialData?: Record<string, any>[] // 全量数据
   fetchAllData?: () => Promise<Record<string, any>[]>

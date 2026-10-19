@@ -271,6 +271,16 @@ export class VirtualTable {
       },
       onPivotConfigChange: (config: IPivotConfig) => {
         this.onPivotConfigChange(config)
+      },
+      // 顶部工具条
+      onQuickFilter: (text: string) => {
+        this.filter(text)
+      },
+      onToggleTheme: () => {
+        this.toggleTheme()
+      },
+      getInitialQuickFilter: () => {
+        return this.store.getState().data.query.filterText ?? ''
       }
     }, containerSelector)
 
@@ -284,6 +294,7 @@ export class VirtualTable {
 
     this.bindPlaceholderAction()
     this.updateFilterIndicators()
+    this.applyPersistedTheme() // 恢复并应用上次的主题
     // 创建 TableQueryCoordinator
     this.queryCoordinator = new TableQueryCoordinator({
       config: this.config,
@@ -337,6 +348,58 @@ export class VirtualTable {
         this.dispatch({ type: 'GROUP_TOGGLE', payload: { groupKey: rowData.__key } })
       }
     })
+
+    // P3 右键菜单列动作 + 表头引用
+    this.wireRangeActions()
+    this.viewport.setHeaderRow(this.shell.headerRow)
+  }
+
+  /** 右键菜单: 排序 / 固定 / 自适应 / 隐藏 / 重置 */
+  private wireRangeActions(): void {
+    this.viewport?.setRangeActions({
+      sort: (key, dir) => {
+        if (dir === null) {
+          this.dispatch({ type: 'SORT_SET', payload: { sort: null } })
+        } else {
+          this.sort(key, dir)
+        }
+      },
+      pin: (key) => {
+        const idx = this.config.columns.findIndex(c => c.key === key)
+        this.dispatch({ type: 'FROZEN_COUNT_SET', payload: { count: idx + 1 } })
+      },
+      unpin: (key) => {
+        const idx = this.config.columns.findIndex(c => c.key === key)
+        this.dispatch({ type: 'FROZEN_COUNT_SET', payload: { count: Math.max(0, idx) } })
+      },
+      autoSize: (key) => this.autoSizeColumn(key),
+      hide: (key) => this.dispatch({ type: 'COLUMN_HIDE', payload: { key } }),
+      resetColumns: () => this.dispatch({ type: 'COLUMNS_RESET_VISIBILITY' }),
+    })
+  }
+
+  /** 列宽自适应 (按表头与采样内容测量, CJK 加权) */
+  public autoSizeColumn(key: string): void {
+    const col = this.config.columns.find(c => c.key === key)
+    if (!col) return
+    const measure = (text: string): number => {
+      let w = 0
+      for (const ch of text) {
+        w += /[一-鿿＀-￯]/.test(ch) ? 15 : 8
+      }
+      return w
+    }
+    let maxPx = measure(col.title ?? col.key)
+    const sample = Math.min(this.config.totalRows, 300)
+    for (let i = 0; i < sample; i++) {
+      const r = this.dataStrategy.getRow(i)
+      if (!r) continue
+      const w = measure(String(r[key] ?? ''))
+      if (w > maxPx) maxPx = w
+    }
+    const width = Math.max(60, Math.min(420, maxPx + 28))
+    col.width = width
+    this.dispatch({ type: 'COLUMN_WIDTH_SET', payload: { key, width } })
   }
 
   /** 将 selectionManager 注入 viewport，并绑定回调 */
@@ -520,6 +583,30 @@ export class VirtualTable {
         payload: { text: filterText }
       }
     )
+  }
+
+  // ============ 主题切换 (浅色/暗色) ============
+  private static readonly THEME_KEY = 'dtable.theme'
+
+  /** 设置主题并持久化 */
+  public setTheme(theme: 'light' | 'dark'): void {
+    this.config.theme = theme
+    this.shell?.setThemeClass(theme)
+    try { localStorage.setItem(VirtualTable.THEME_KEY, theme) } catch { /* noop */ }
+  }
+
+  /** 切换浅色/暗色 */
+  public toggleTheme(): void {
+    const next = this.config.theme === 'dark' ? 'light' : 'dark'
+    this.setTheme(next)
+  }
+
+  /** 恢复上次主题: 优先 localStorage, 其次 config.theme */
+  private applyPersistedTheme(): void {
+    let theme: 'light' | 'dark' = this.config.theme ?? 'light'
+    const saved = (() => { try { return localStorage.getItem(VirtualTable.THEME_KEY) } catch { return null } })()
+    if (saved === 'light' || saved === 'dark') theme = saved
+    this.setTheme(theme)
   }
 
   // 将 state 应用到 config (列顺序, 列宽, 冻结列数等)

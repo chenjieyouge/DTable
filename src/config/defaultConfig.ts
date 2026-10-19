@@ -31,6 +31,12 @@ export function createDefaultConfig(): Omit<IConfig, 'columns'> {
     // 底部状态栏
     showStatusBar: true,
     statusBarHeight: 32,
+    // 顶部工具条
+    showToolbar: true,
+    // 主题 / 斑马纹
+    theme: 'light',
+    stripeRows: true,
+  enableRangeSelection: true,
 
     // sidePanel 不提供默认值, 保持 undefined
     // 回调函数不提供默认值, 保持 undefined
