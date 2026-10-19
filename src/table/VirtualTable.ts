@@ -1,7 +1,7 @@
 ﻿import { TableConfig } from '@/config/TableConfig'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
-import type { IConfig, ITableQuery, IUserConfig, IColumn, SortEntry } from '@/types'
+import type { IConfig, ITableQuery, IUserConfig, IColumn, SortEntry, AdvancedFilterModel } from '@/types'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 import type { ITableShell } from '@/table/TableShell'
@@ -281,6 +281,18 @@ export class VirtualTable {
       },
       getInitialQuickFilter: () => {
         return this.store.getState().data.query.filterText ?? ''
+      },
+      // 高级筛选
+      onAdvancedFilterChange: (model: AdvancedFilterModel) => {
+        // 空 join (无任何条件) 视为关闭, 省掉筛选链路
+        const empty = model.filterType === 'join' && model.conditions.length === 0
+        this.store.dispatch({
+          type: 'ADVANCED_FILTER_SET',
+          payload: { model: empty ? null : model },
+        })
+      },
+      getInitialAdvancedFilter: () => {
+        return this.store.getState().data.advancedFilter ?? null
       }
     }, containerSelector)
 

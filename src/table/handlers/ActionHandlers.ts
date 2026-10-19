@@ -28,7 +28,8 @@ export const DATA_EFFECT_ACTIONS = new Set<string>([
   'CLEAR_FILTER_TEXT',
   'CLEAR_ALL_FILTERS',
   'COLUMN_FILTER_SET',
-  'COLUMN_FILTER_CLEAR'
+  'COLUMN_FILTER_CLEAR',
+  'ADVANCED_FILTER_SET'
 ])
 
 /**
@@ -97,6 +98,7 @@ export const actionHandlers = new Map<string, ActionHandler>([
   ['CLEAR_ALL_FILTERS', handleDataChange],
   ['COLUMN_FILTER_SET', handleDataChange],
   ['COLUMN_FILTER_CLEAR', handleDataChange],
+  ['ADVANCED_FILTER_SET', handleDataChange],
   // 行分组
   ['GROUP_TOGGLE', handleGroupChange],
   ['GROUP_EXPAND_ALL', handleGroupChange],
@@ -193,7 +195,8 @@ export function handleDataChange(action: TableAction, ctx: ActionContext): void 
     sortDirection: state.data.sort?.direction,
     sorts: state.data.sorts ?? [],
     filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
-    columnFilters: state.data.columnFilters
+    columnFilters: state.data.columnFilters,
+    advancedFilter: state.data.advancedFilter
   }
 
   void ctx.table['applyQuery'](query)

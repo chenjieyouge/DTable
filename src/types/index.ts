@@ -16,6 +16,48 @@ export type ColumnFilterValue =
   | { kind: 'dateRange', start?: string, end?: string } // yyyy-MM-dd
   | { kind: 'numberRange', min?: number, max?: number }
 
+// ======== 高级筛选 (跨字段 AND/OR 条件树, 对标 ag-grid Advanced Filter) ========
+export type AdvancedFilterJoin = 'AND' | 'OR'
+
+export interface IJoinAdvancedFilter {
+  filterType: 'join'
+  type: AdvancedFilterJoin
+  conditions: AdvancedFilterModel[]
+}
+export type AdvancedTextOperator =
+  | 'contains' | 'notContains' | 'equals' | 'notEqual' | 'startsWith' | 'endsWith'
+export type AdvancedNumberOperator =
+  | 'equals' | 'notEqual' | 'greaterThan' | 'greaterThanOrEqual'
+  | 'lessThan' | 'lessThanOrEqual' | 'inRange'
+export type AdvancedDateOperator =
+  | 'equals' | 'greaterThan' | 'greaterThanOrEqual'
+  | 'lessThan' | 'lessThanOrEqual' | 'inRange'
+export interface ITextAdvancedFilter {
+  filterType: 'text'
+  colId: string
+  type: AdvancedTextOperator
+  filter?: string
+}
+export interface INumberAdvancedFilter {
+  filterType: 'number'
+  colId: string
+  type: AdvancedNumberOperator
+  filter?: number
+  filterTo?: number
+}
+export interface IDateAdvancedFilter {
+  filterType: 'date'
+  colId: string
+  type: AdvancedDateOperator
+  filter?: string
+  filterTo?: string
+}
+export type AdvancedFilterModel =
+  | IJoinAdvancedFilter
+  | ITextAdvancedFilter
+  | INumberAdvancedFilter
+  | IDateAdvancedFilter
+
 // 拓展排序, 筛选参数
 export interface SortFilterParmas {
   sortField?: string
@@ -34,6 +76,7 @@ export interface ITableQuery {
   sorts?: SortEntry[] // 多列排序 (优先级从前到后)
   filterText?: string // 模糊搜索关键词
   columnFilters?: Record<string, ColumnFilterValue> // 列值筛选 (key -> 筛选值结构)
+  advancedFilter?: AdvancedFilterModel // 高级筛选 (跨字段条件树)
 }
 
 // sever模式: 标准分页响应

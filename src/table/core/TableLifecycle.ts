@@ -131,7 +131,8 @@ export class TableLifecycle {
         sortDirection: state.data.sort?.direction,
         sorts: state.data.sorts ?? [],
         filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
-        columnFilters: state.data.columnFilters
+        columnFilters: state.data.columnFilters,
+        advancedFilter: state.data.advancedFilter
     }
       void callbacks.applyQuery(query)
 

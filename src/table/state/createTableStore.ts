@@ -1,4 +1,4 @@
-﻿import type { IColumn, ITableQuery, SortEntry } from "@/types";
+﻿import type { IColumn, ITableQuery, SortEntry, AdvancedFilterModel } from "@/types";
 import type { TableAction, TableState, TableMode, SortValue } from "@/table/state/types";
 
 export type StateListener = (next: TableState, prev: TableState, action: TableAction) => void 
@@ -93,7 +93,8 @@ export function createTableStore(params: {
         const nextQuery: ITableQuery = {
           ...prev.data.query,
           filterText: '',
-          columnFilters: {}
+          columnFilters: {},
+          advancedFilter: undefined
         }
         return {
           ...prev,
@@ -101,7 +102,8 @@ export function createTableStore(params: {
             ...prev.data,
             query: nextQuery,
             clientFilterText: '',
-            columnFilters: {}
+            columnFilters: {},
+            advancedFilter: undefined
           }
         }
       }
@@ -235,6 +237,18 @@ export function createTableStore(params: {
         return {
           ...prev,
           data: { ...prev.data, columnFilters: nextFilters, query: nextQuery }
+        }
+      }
+
+      case 'ADVANCED_FILTER_SET': {
+        const model = (action.payload as { model: AdvancedFilterModel | null }).model
+        const nextQuery: ITableQuery = {
+          ...prev.data.query,
+          advancedFilter: model ?? undefined,
+        }
+        return {
+          ...prev,
+          data: { ...prev.data, advancedFilter: model ?? undefined, query: nextQuery },
         }
       }
 

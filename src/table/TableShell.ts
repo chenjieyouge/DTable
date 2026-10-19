@@ -1,4 +1,4 @@
-﻿import type { IConfig, ColumnFilterValue, IColumn } from "@/types";
+﻿import type { IConfig, ColumnFilterValue, IColumn, AdvancedFilterModel } from "@/types";
 import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { HeaderSortBinder } from "@/table/interaction/HeaderSortBinder";
@@ -14,6 +14,7 @@ import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
 import type { PlaceholderDecision } from "@/table/viewport/emptyState";
 import { bindTooltip } from "@/table/interaction/Tooltip";
 import { TableToolbar } from "@/table/toolbar/TableToolbar";
+import { AdvancedFilterBar } from "@/table/filterbar/AdvancedFilterBar";
 
 
 // 全局弹窗管理器, 弹窗之间互斥出现
@@ -87,6 +88,8 @@ export function mountTableShell(params: {
   // 顶部工具条
   onQuickFilter?: (text: string) => void
   onToggleTheme?: () => void
+  onAdvancedFilterChange?: (model: AdvancedFilterModel) => void // 高级筛选应用
+  getInitialAdvancedFilter?: () => AdvancedFilterModel | null // 恢复高级筛选
   getInitialQuickFilter?: () => string
 
 }): ITableShell {
@@ -157,15 +160,45 @@ export function mountTableShell(params: {
   scrollContainer.style.width = '100%'
   applyContainerStyles(scrollContainer, config)
 
-  // 顶部工具条 (快速筛选 + 主题切换)
+  // 顶部工具条 (快速筛选 + 高级筛选 + 主题切换)
+  const hasAdvanced = !!params.onAdvancedFilterChange
+  // 先创建高级筛选条件条 (detached), 供工具条按钮 toggle 闭包引用
+  let advancedBar: AdvancedFilterBar | null = null
+  if (hasAdvanced) {
+    advancedBar = new AdvancedFilterBar(config.columns, {
+      onApply: (m) => params.onAdvancedFilterChange?.(m),
+    })
+  }
+
   let toolbar: TableToolbar | null = null
-  if (config.showToolbar !== false && (params.onQuickFilter || params.onToggleTheme)) {
+  if (config.showToolbar !== false && (params.onQuickFilter || params.onToggleTheme || hasAdvanced)) {
     toolbar = new TableToolbar({
       onQuickFilter: (text: string) => params.onQuickFilter?.(text),
       onToggleTheme: () => params.onToggleTheme?.(),
+      onToggleAdvanced: hasAdvanced ? () => {
+        const wasOpen = advancedBar!.isOpen()
+        const open = advancedBar!.toggle()
+        // 首次展开且没有任何条件, 自动补一条空条件, 降低上手成本
+        if (open && !wasOpen && advancedBar!.getConditionCount() === 0) {
+          advancedBar!.addCondition()
+        }
+        toolbar?.setAdvancedActive(open)
+      } : undefined,
     }, params.getInitialQuickFilter?.() ?? '', config.theme ?? 'light')
     toolbar.el.style.flex = '0 0 auto'
     portalContainer.appendChild(toolbar.el)
+
+    // 恢复已有高级筛选模型
+    if (advancedBar) {
+      const initialAF = params.getInitialAdvancedFilter?.()
+      if (initialAF) {
+        advancedBar.setModel(initialAF)
+        advancedBar.toggle(true)
+        toolbar.setAdvancedActive(true)
+      }
+      advancedBar.el.style.flex = '0 0 auto'
+      portalContainer.appendChild(advancedBar.el)
+    }
   }
   // 有工具条时滚动区 flex 撑满; 否则保持 100% 高
   if (toolbar) {

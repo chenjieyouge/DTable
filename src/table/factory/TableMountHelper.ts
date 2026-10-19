@@ -32,6 +32,8 @@ export interface MountParams {
   onQuickFilter?: (text: string) => void
   onToggleTheme?: () => void
   getInitialQuickFilter?: () => string
+  onAdvancedFilterChange?: (model: import("@/types").AdvancedFilterModel) => void
+  getInitialAdvancedFilter?: () => import("@/types").AdvancedFilterModel | null
 }
 
 /** 挂载后的布局: 主布局 + 侧边布局 */
@@ -104,6 +106,8 @@ export class MountHelper {
       onQuickFilter: params.onQuickFilter,
       onToggleTheme: params.onToggleTheme,
       getInitialQuickFilter: params.getInitialQuickFilter,
+      onAdvancedFilterChange: params.onAdvancedFilterChange,
+      getInitialAdvancedFilter: params.getInitialAdvancedFilter,
     }
 
     // 判断是否启用右侧面板, 选择不同的布局方式

@@ -7,12 +7,14 @@
 export interface ToolbarCallbacks {
   onQuickFilter: (text: string) => void
   onToggleTheme: () => void
+  onToggleAdvanced?: () => void
 }
 
 export class TableToolbar {
   public el: HTMLDivElement
   private input: HTMLInputElement
   private themeBtn: HTMLButtonElement
+  private advancedBtn?: HTMLButtonElement
   private debounceTimer: number | null = null
   private callbacks: ToolbarCallbacks
 
@@ -48,16 +50,38 @@ export class TableToolbar {
     filterWrap.appendChild(searchIcon)
     filterWrap.appendChild(this.input)
 
-    // 右侧: 主题切换
+    // 右侧按钮组: 高级筛选 + 主题
+    const right = document.createElement('div')
+    right.className = 'vt-toolbar-right'
+
+    // 高级筛选切换
+    if (this.callbacks.onToggleAdvanced) {
+      this.advancedBtn = document.createElement('button')
+      this.advancedBtn.type = 'button'
+      this.advancedBtn.className = 'vt-advanced-filter-toggle-btn'
+      this.advancedBtn.title = '高级筛选'
+      this.advancedBtn.setAttribute('aria-label', '高级筛选')
+      this.advancedBtn.innerHTML = FUNNEL_SVG
+      this.advancedBtn.addEventListener('click', () => this.callbacks.onToggleAdvanced?.())
+      right.appendChild(this.advancedBtn)
+    }
+
+    // 主题切换
     this.themeBtn = document.createElement('button')
     this.themeBtn.type = 'button'
     this.themeBtn.className = 'vt-theme-toggle-btn'
     this.themeBtn.setAttribute('aria-label', '切换主题')
     this.themeBtn.addEventListener('click', () => this.callbacks.onToggleTheme())
     this.setThemeIcon(theme)
+    right.appendChild(this.themeBtn)
 
     this.el.appendChild(filterWrap)
-    this.el.appendChild(this.themeBtn)
+    this.el.appendChild(right)
+  }
+
+  /** 高级筛选展开态高亮 */
+  public setAdvancedActive(active: boolean): void {
+    this.advancedBtn?.classList.toggle('active', active)
   }
 
   /** 主题切换后更新图标与提示 */
@@ -76,6 +100,8 @@ export class TableToolbar {
     this.el.remove()
   }
 }
+
+const FUNNEL_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`
 
 const SEARCH_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
 

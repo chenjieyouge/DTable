@@ -1,4 +1,4 @@
-import type { IColumn, ITableQuery, ColumnFilterValue, SortEntry } from "@/types";
+import type { IColumn, ITableQuery, ColumnFilterValue, SortEntry, AdvancedFilterModel } from "@/types";
 
 export type TableMode = 'client' | 'server'
 export type SortValue = SortEntry | null 
@@ -12,6 +12,7 @@ export interface TableState {
     sort: SortValue  // 排序三态:  desc->asc-null (单列, 兼容旧字段)
     sorts: SortEntry[] // 多列排序 (优先级从前到后, 空数组 = 无排序)
     columnFilters: Record<string, ColumnFilterValue> // 列值筛选 (升级为联合类型)
+    advancedFilter?: AdvancedFilterModel // 高级筛选 (跨字段条件树)
     totalRows: number // 总行数
     currentPage: number // server 模式下的当前页码
     groupCollapsed: string[] // 已折叠的分组 key 数组 (行分组)
@@ -41,6 +42,7 @@ export type TableAction =
   | { type: 'FROZEN_COUNT_SET'; payload: { count: number }}  // 冻结前 N 列设置
   | { type: 'COLUMN_FILTER_SET'; payload: { key: string; filter: ColumnFilterValue } } // 列值筛选
   | { type: 'COLUMN_FILTER_CLEAR'; payload: { key: string } } // 清空筛选
+  | { type: 'ADVANCED_FILTER_SET'; payload: { model: AdvancedFilterModel | null } } // 高级筛选
   | { type: 'COLUMN_HIDE'; payload: { key: string } }  // 隐藏列
   | { type: 'COLUMN_SHOW'; payload: { key: string } }  // 显示列
   | { type: 'COLUMN_BATCH_HIDE'; payload: { keys: string[] } }  // 批量隐藏

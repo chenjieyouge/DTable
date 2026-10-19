@@ -1,4 +1,5 @@
 import type { DataStrategy } from "@/table/data/DataStrategy";
+import { matchAdvancedFilter } from "@/table/interaction/advancedFilter";
 import type { ColumnFilterValue, ITableQuery } from "@/types";
 import type { IColumn } from "@/types";
 
@@ -263,7 +264,12 @@ export class ClientDataStrategy implements DataStrategy {
         return this.matchesColumnFilters(row, query.columnFilters!)
       })
     }
-    
+
+    // 高级筛选 (跨字段 AND/OR 条件树)
+    if (query.advancedFilter) {
+      result = result.filter(row => matchAdvancedFilter(row, query.advancedFilter))
+    }
+
     return result
   }
 
