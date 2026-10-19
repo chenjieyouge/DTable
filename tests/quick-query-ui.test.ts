@@ -40,10 +40,9 @@ describe('快速查询 UI 链路', () => {
     const el = panel.getContainer()
     document.body.appendChild(el)
 
-    // 打开 Pivot 开关 → 渲染四区域配置区
-    const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-    pivotInput.checked = true
-    pivotInput.dispatchEvent(new Event('change', { bubbles: true }))
+    // 切换到「透视表」平铺 tab → 渲染四区域配置区
+    const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+    pivotTab.click()
 
     // 配置区出现「⚡ 快速查询」按钮
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>('.vt-pivot-quick-btn'))
@@ -84,9 +83,8 @@ describe('快速查询 UI 链路', () => {
     const el = panel.getContainer()
     document.body.appendChild(el)
 
-    const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-    pivotInput.checked = true
-    pivotInput.dispatchEvent(new Event('change', { bubbles: true }))
+    const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+    pivotTab.click()
 
     const queryBtn = Array.from(el.querySelectorAll<HTMLButtonElement>('.vt-pivot-quick-btn'))
       .find(b => b.textContent?.includes('快速查询'))!
@@ -126,9 +124,8 @@ describe('快速查询 UI 链路', () => {
     const el = panel.getContainer()
     document.body.appendChild(el)
 
-    const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-    pivotInput.checked = true
-    pivotInput.dispatchEvent(new Event('change', { bubbles: true }))
+    const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+    pivotTab.click()
 
     const queryBtn = Array.from(el.querySelectorAll<HTMLButtonElement>('.vt-pivot-quick-btn'))
       .find(b => b.textContent?.includes('快速查询'))!

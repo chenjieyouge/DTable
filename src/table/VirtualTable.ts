@@ -29,6 +29,7 @@ import { initServerMode, initClientMode } from '@/table/factory/TableInitializer
 import { MountHelper } from '@/table/factory/TableMountHelper'
 import type { IPivotConfig } from '@/types/pivot'
 import { PivotTable } from '@/table/pivot/PivotTable'
+import { buildDefaultPivotConfig } from '@/table/pivot/defaultPivotConfig'
 import { inferColumnTypes } from '@/utils/inferColumnType'
 import { resolvePlaceholder } from '@/table/viewport/emptyState'
 import { getActiveFilterKeys } from '@/table/state/filterState'
@@ -341,6 +342,7 @@ export class VirtualTable {
     // 关键!: Client 模式下需要立即更新可视区, 否则无数据
     if (this.mode === 'client') {
       this.viewport.updateVisibleRows()
+      this.updateStatusBar() // 同步底部状态栏的总行数 (否则常驻显示 0)
     }
 
     // 首次挂载后, 立即更新一次总结行数据, 针对 client 模式
@@ -1004,18 +1006,8 @@ export class VirtualTable {
         console.warn('[VirtaulTable] Pivot 模式需要全量数据, 当前无数据或为 server 模式')
       }
 
-      // 创建默认透视配置
-      const defautConfig: IPivotConfig = {
-        enabled: true,
-        rowGroups: [this.config.columns[1]?.key || this.config.columns[0]?.key || ''],
-        valueFields: this.config.columns
-          .filter(col => col.summaryType && col.summaryType !== 'none')
-          .map(col => ({
-            key: col.key,
-            aggregation: (col.summaryType as any) || 'sum',
-            label: col.title
-          }))
-      }
+      // 创建默认透视配置 (与右侧面板共享同一默认, 避免不一致)
+      const defautConfig = buildDefaultPivotConfig(this.config.columns)
 
       this.pivotTable = new PivotTable(defautConfig, this.config.columns, allData)
       this.pivotTable.mount(pivotContainer)

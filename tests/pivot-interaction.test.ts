@@ -52,7 +52,8 @@ describe('P1 Excel 级交互', () => {
     const { host } = mountPivot(config, columns, data)
 
     const dataRow = Array.from(host.querySelectorAll<HTMLDivElement>('.vt-pivot-frozen-row')).find(isDataRow)!
-    expect(dataRow.textContent).toContain('广东')
+    // 最深分组行(城市)只在"城市"列显示城市, 省列空白 (Excel 树形态: 省在组头行)
+    expect(dataRow.textContent).toContain('广州')
     dataRow.click()
 
     const frozenSel = dataRow.querySelector<HTMLDivElement>('.vt-pivot-cell-selected')
@@ -93,19 +94,20 @@ describe('P1 Excel 级交互', () => {
 
   it('Enter 折叠选中的组行 (键盘路径)', () => {
     const { host } = mountPivot(config, columns, data)
-    expect(host.textContent).toContain('广东广州')
+    expect(host.textContent).toContain('广州')
+    expect(host.textContent).toContain('广东')
 
-    // 选中第一个数据行 (广东广州, flatRows[4]), ArrowUp 到小计行再上到 广州组行 (flatRows[2])
+    // 选中第一个数据行 (广州, 直接挂在广东组头下), ArrowUp 到 广东组头行
     const dataRow = Array.from(host.querySelectorAll<HTMLDivElement>('.vt-pivot-frozen-row')).find(isDataRow)!
     dataRow.click()
 
     const body = host.querySelector<HTMLDivElement>('.vt-pivot-body-container')!
     body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
-    body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
     body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
-    // 广州组折叠 → 广东广州数据行消失
-    expect(host.textContent).not.toContain('广东广州')
+    // 广东组折叠 → 城市叶子行消失, 广东组头保留
+    expect(host.textContent).not.toContain('广州')
+    expect(host.textContent).toContain('广东')
   })
 
   it('Ctrl+C 复制选区为 TSV (扩展两列后)', () => {
@@ -117,7 +119,7 @@ describe('P1 Excel 级交互', () => {
 
     const { host } = mountPivot(config, columns, data)
 
-    // 点选第一个数据行第 1 列 (省), Shift+Right 扩展 1 列 (城市)
+    // 点选第一个数据行 (广州叶子行), Shift+Right 扩展到城市列
     const dataRow = Array.from(host.querySelectorAll<HTMLDivElement>('.vt-pivot-frozen-row')).find(isDataRow)!
     dataRow.click()
 
@@ -127,7 +129,8 @@ describe('P1 Excel 级交互', () => {
 
     expect(clipboardSpy).toHaveBeenCalled()
     const text = clipboardSpy.mock.calls[0]?.[0] as string
-    expect(text).toContain('广东')
+    // 城市叶子行省列空白, 只含城市 (省在组头行; 同 Excel 复制行为)
     expect(text).toContain('广州')
+    expect(text).not.toContain('广东')
   })
 })

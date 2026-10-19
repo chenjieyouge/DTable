@@ -64,10 +64,9 @@ describe('P3 状态持久化', () => {
     const el = panel.getContainer()
     document.body.appendChild(el)
 
-    // 打开 Pivot → 勾选字段
-    const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-    pivotInput.checked = true
-    pivotInput.dispatchEvent(new Event('change', { bubbles: true }))
+    // 切换到「透视表」平铺 tab → 勾选字段
+    const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+    pivotTab.click()
 
     const checkboxes = Array.from(el.querySelectorAll<HTMLInputElement>('.vt-px-checkbox-item input[type="checkbox"]'))
     const 品类Cb = checkboxes.find(c => c.closest('.vt-px-checkbox-item')?.textContent?.includes('省'))!
@@ -100,9 +99,9 @@ describe('P3 状态持久化', () => {
     const el = panel.getContainer()
     document.body.appendChild(el)
 
-    // Pivot 开关自动打开 + 行区/值区恢复
-    const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-    expect(pivotInput.checked).toBe(true)
+    // 配置已恢复但默认停在「列管理」tab; 点开「透视表」tab 后行区/值区联动恢复
+    const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+    pivotTab.click()
     const rowsZone = el.querySelector<HTMLDivElement>('.vt-px-zone-body[data-zone="rows"]')!
     const valuesZone = el.querySelector<HTMLDivElement>('.vt-px-zone-body[data-zone="values"]')!
     expect(rowsZone.textContent).toContain('省')

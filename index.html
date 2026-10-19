@@ -27,22 +27,22 @@
           'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
         background: var(--bg-subtle);
         color: var(--text-primary);
-        padding: 24px;
+        padding: 18px;
         font-size: 14px;
         line-height: 1.5;
       }
 
       .wrap { max-width: 1600px; margin: 0 auto; }
 
-      .page-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
-      .page-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+      .page-title { font-size: 20px; font-weight: 600; margin-bottom: 2px; }
+      .page-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 10px; }
 
       .card {
         background: var(--bg);
         border: 1px solid var(--border);
         border-radius: 8px;
-        padding: 16px 20px;
-        margin-bottom: 16px;
+        padding: 13px 16px;
+        margin-bottom: 12px;
       }
 
       /* ---- 模式切换 ---- */
@@ -51,7 +51,7 @@
       .mode {
         flex: 1;
         text-align: left;
-        padding: 12px 16px;
+        padding: 9px 14px;
         border: 1px solid var(--border);
         border-radius: 6px;
         background: var(--bg);
@@ -162,21 +162,21 @@
         打开即体验：页面自动加载 20 万行真实零售数据。数据源：门店零售明细 <strong>1,048,575 行 × 13 列</strong>，
         Client 模式读本地 CSV，Server 模式连本地 MySQL（<code>server/</code> 目录 <code>go run .</code> 即启）。
       </p>
-      <div class="tip" style="background:var(--primary-bg);border:1px solid rgba(22,119,255,.25);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+      <div style="background:var(--primary-bg);border:1px solid rgba(22,119,255,.25);border-radius:6px;padding:7px 12px;font-size:12px;color:var(--text-secondary);margin-bottom:12px;line-height:1.9;">
         可体验的完整能力：
-        <code>表头点击排序</code>（按住 Shift 多列排序）·
+        <code>表头点击排序</code>（Shift 多列）·
         <code>漏斗筛选</code>·
-        <code>双击单元格编辑</code>·
-        <code>行分组折叠</code>（下方"功能演示"数据）·
-        <code>单元格合并</code>（功能演示数据）·
-        <code>列管理/冻结列</code>（表格右上角）·
-        <code>横向/纵向虚拟化滚动</code>（百万行 60fps）·
-        <code>透视表</code>（bench 页）
+        <code>高级筛选</code>·
+        <code>双击编辑</code>·
+        <code>行分组折叠/合并</code>（功能演示）·
+        <code>列管理/冻结列</code>·
+        <code>百万行 60fps 虚拟化</code>·
+        <code>透视表（Excel/PowerBI 风）</code>
       </div>
 
-      <!-- 模式切换 -->
+      <!-- 模式切换 + 控制条 (合并为一张卡片, 压缩纵向长度) -->
       <div class="card">
-        <div class="modes">
+        <div class="modes" style="margin-bottom:12px;">
           <button class="mode active" data-mode="client">
             <span class="mode-name">Client 模式</span>
             <span class="mode-desc">浏览器内加载 CSV，排序/筛选全在前端内存完成</span>
@@ -186,10 +186,7 @@
             <span class="mode-desc">MySQL 分页查询，排序/筛选/汇总由后端完成</span>
           </button>
         </div>
-      </div>
 
-      <!-- 控制条 -->
-      <div class="card">
         <div class="bar" id="bar-client">
           <span class="bar-label">加载行数</span>
           <select id="client-rows">

@@ -102,37 +102,54 @@ export class PivotTreeNode {
         continue
       }
 
+      // 小计占位标记: 在栈里用特殊 groupValue 标识, 弹出时直接转成小计行
+      const isSubtotalMarker = current.groupValue === '__SUBTOTAL__'
+
+      // 该分组节点是否真有可展开的子节点:
+      //  - 已构建出子节点
+      //  - 或懒加载未展开、且后面确实还有更深分组 (canHaveChildren)
+      const hasChildren = current.type === 'group' && (
+        current.children.length > 0 ||
+        (current.childrenLoaded === false && current.canHaveChildren === true)
+      )
+
+      // 最深分组节点(聚合行)在渲染语义上是"数据行": 可选中、斑马纹、条件格式、无展开、无小计。
+      // (Excel 透视表的叶子行就是如此; 它在树节点上是 group, 但展示出来就是一行数据)
+      const isLeafAggregate = current.type === 'group' && current.level >= 0
+        && !hasChildren && !isSubtotalMarker
+      const emitType: NodeType = isLeafAggregate ? 'data' : current.type
+
       // 添加当前节点到结果集
       result.push({
         nodeId: current.id,
-        type: current.type,
-        rowType: 'nomal', // 普通行
+        type: emitType,
+        rowType: isSubtotalMarker ? 'subtotal' : 'nomal',
         level: current.level,
         data: current.aggregatedData,
         isExpanded: current.isExpanded,
         rowCount: current.rowCount,
-        groupVale: current.groupValue,
-        parentId: current.id.split('-').slice(0, -1).join('-') || 'root'
+        groupVale: isSubtotalMarker ? '小计' : current.groupValue,
+        parentId: current.id.split('-').slice(0, -1).join('-') || 'root',
+        hasChildren
       })
 
-      // 若是分组节点且展开, 则处理子节点
-      if (current.type === 'group' && current.isExpanded) {
-        // 子节点逆序
-        for (let i = current.children.length -1; i >= 0; i--) {
-          stack.push(current.children[i])
-        }
-
-        // 根据配置, 决定是否在子节点后面插入小计行
-        // 注意: 这里用一个特殊的标记 (__SUBTOTAL__), 作为占位用, 等所有子节点处理完后在插入
+      // 若是分组节点且展开、且真有子节点, 则按"组头 → 子节点 → 小计"顺序压栈
+      if (current.type === 'group' && current.isExpanded && hasChildren) {
+        // LIFO: 先把小计压到最底部(子节点处理完后才弹出, 即小计在子节点之后)
         if (showSubtotals) {
-            stack.push({
+          stack.push({
             ...current,
             id: `${current.id}-subtotal`,
             type: 'group' as NodeType,
             children: [], // 小计没有子节点
             isExpanded: false,  // 强制设置 false, 避免无限递归
-            groupValue: '__SUBTOTAL__',  // 添加一个特殊的标记
+            canHaveChildren: false,
+            groupValue: '__SUBTOTAL__',  // 小计占位标记
           } as IPivotTreeNode)
+        }
+        // 再压子节点 (逆序, 使第一个子节点在栈顶最先弹出)
+        for (let i = current.children.length -1; i >= 0; i--) {
+          stack.push(current.children[i])
         }
       }
     }
@@ -151,17 +168,12 @@ export class PivotTreeNode {
         isExpanded: false,
         rowCount: node.rowCount,
         groupVale: '总计',
-        parentId: 'root'
+        parentId: 'root',
+        hasChildren: false
       })
     }
 
-    // 后处理: 将标记为 "小计" 的行转换为真正的 "小计行"
-    return result.map(row => {
-      if (row.groupVale === '__SUBTOTAL__') {
-        return { ...row,rowType: 'subtotal',groupVale: '小计' }
-      }
-      return row 
-    })
+    return result
   }
 
   /**

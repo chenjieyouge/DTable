@@ -172,6 +172,7 @@ export class DOMRenderer {
     for (let i = 0; i < frozen; i++) {
       const col = this.config.columns[i]
       const cell = this.createDataCell(col, null, rowIndex, i)
+      cell.style.left = `${this.prefixWidth(i)}px`
       row.appendChild(cell)
       cellsMap.set(col.key, cell)
     }
@@ -224,23 +225,32 @@ export class DOMRenderer {
     }
     if (fragment.children.length > 0) scrollBody.appendChild(fragment)
 
-    // 3. 更新 scroll-body 位置 (冻结区宽度可能因列宽变化而变)
-    const frozenW = this.frozenWidth()
-    scrollBody.style.left = `${frozenW}px`
+    // 3. 更新 scroll-body 位置: 起点 = 第一个渲染列的绝对偏移 prefix[startCol]
+    //    (startCol 可能大于冻结列数, 中间的列不渲染但必须留空, 否则数据列会前移串列)
+    scrollBody.style.left = `${this.prefixWidth(Math.max(startCol, this.frozenCount))}px`
   }
 
   /** 冻结列总宽 (按当前配置列宽) */
   private frozenWidth(): number {
+    return this.prefixWidth(this.frozenCount)
+  }
+
+  /** 第 colIndex 列前的累计宽度 prefix[colIndex] (按当前配置列宽) */
+  private prefixWidth(colIndex: number): number {
     let w = 0
-    const n = Math.min(this.frozenCount, this.config.columns.length)
+    const n = Math.min(colIndex, this.config.columns.length)
     for (let i = 0; i < n; i++) w += this.config.columns[i].width || 120
     return w
   }
 
-  /** 应用横向位移: scroll-body translateX */
-  public applyScrollX(rowEl: HTMLDivElement, scrollLeft: number): void {
+  /**
+   * 横向滚动同步: 行与 scroll-body 都随容器原生横向滚动,
+   * 此处不再 translateX (translateX 会与原生位移叠加, 导致数据相对表头双倍位移、串列)。
+   * scroll-body 的起点由 syncVisibleCols 用 prefix[startCol] 固定。
+   */
+  public applyScrollX(rowEl: HTMLDivElement, _scrollLeft?: number): void {
     const scrollBody = rowEl.querySelector<HTMLDivElement>('.vt-scroll-body')
-    if (scrollBody) scrollBody.style.transform = `translateX(${-scrollLeft}px)`
+    if (scrollBody) scrollBody.style.transform = ''
   }
 
   /** 设置行高 (可变行高) */
@@ -308,6 +318,10 @@ export class DOMRenderer {
 
     cell.classList.add('vt-table-cell')
     this.markFrozen(cell, colIndex)
+    // 数据冻结列必须显式给 left, sticky 才能在横向滚动时钉住
+    if (colIndex < this.frozenCount) {
+      cell.style.left = `${this.prefixWidth(colIndex)}px`
+    }
 
     // 默认渲染 / 自定义渲染器 (支持组件生命周期)
     this.renderCellContent(cell, col, value, row, rowIndex)

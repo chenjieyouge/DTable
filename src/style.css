@@ -999,6 +999,37 @@
   background-color: var(--vt-bg);
 }
 
+/* 顶部平铺 Tab: 列管理 / 透视表 (单层面板) */
+.vt-instance .vt-column-panel-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  background: var(--vt-bg-subtle);
+  border: 1px solid var(--vt-border-light);
+  border-radius: 8px;
+}
+.vt-instance .vt-column-panel-tab {
+  flex: 1;
+  text-align: center;
+  padding: 7px 0;
+  font-size: 13px;
+  color: var(--vt-text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s ease, color .15s ease;
+}
+.vt-instance .vt-column-panel-tab:hover {
+  color: var(--vt-text);
+}
+.vt-instance .vt-column-panel-tab--active {
+  background: #fff;
+  color: var(--vt-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+
 .vt-instance .vt-column-panel-pivot-config {
   flex: 1;
   display: flex;
@@ -1645,64 +1676,7 @@
   cursor: not-allowed;
 }
 
-/* ========== 17. Pivot Mode 开关 ========== */
-
-.vt-instance .vt-pivot-mode-title {
-  display: inline-block;
-  margin-right: 10px;
-  margin-bottom: 10px;
-  font-size: 14px;
-  color: var(--vt-text-secondary);
-  font-weight: 500;
-  line-height: 20px;
-}
-
-.vt-instance .vt-pivot-switch {
-  position: relative;
-  display: inline-block;
-  width: 32px;
-  height: 18px;
-  cursor: pointer;
-}
-
-.vt-instance .vt-pivot-switch-input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.vt-instance .vt-pivot-switch-slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--vt-border-medium);
-  border-radius: 18px;
-  transition: 0.3s;
-}
-
-.vt-instance .vt-pivot-switch-slider::before {
-  content: '';
-  position: absolute;
-  height: 14px;
-  width: 14px;
-  left: 2px;
-  bottom: 2px;
-  background-color: var(--vt-bg);
-  border-radius: 50%;
-  transition: 0.3s;
-}
-
-.vt-instance .vt-pivot-switch-input:checked + .vt-pivot-switch-slider {
-  background-color: var(--vt-primary);
-}
-
-.vt-instance .vt-pivot-switch-input:checked + .vt-pivot-switch-slider::before {
-  transform: translateX(14px);
-}
-
-/* ========== 18. 透视表面板 ========== */
+/* ========== 17. 透视表面板 ========== */
 
 .vt-instance .vt-pivot-panel {
   padding: 0;

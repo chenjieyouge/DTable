@@ -78,6 +78,8 @@ export interface IPivotTreeNode {
   rawRows?: Record<string, any>[]
   childrenLoaded?: boolean             // 懒加载标记：子节点是否已加载
   lazyLoadData?: Record<string, any>[] // 懒加载数据：用于延迟构建子树
+  /** 懒加载下该节点是否可展开 (后面还有更深分组); 最深分组节点为 false */
+  canHaveChildren?: boolean
 }
 
 // 展平后的行 (用于虚拟滚动)
@@ -91,6 +93,8 @@ export interface IPivotFlatRow {
   rowCount?: number
   isExpanded?: boolean
   parentId?: string
+  /** 是否真有可展开的子节点 (最深分组节点为 false, 此时不显示展开箭头、不出小计) */
+  hasChildren?: boolean
 }
 
 /**

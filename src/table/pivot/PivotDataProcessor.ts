@@ -401,8 +401,11 @@ export class PivotDataProcessor {
     // 行方向的代价是线性的: 每层把所有行分一遍组, 总工作量 O(行数 × 层数 × 数值字段),
     // 与分组数量无关; 渲染侧有虚拟滚动兜着。真正会爆炸的是列方向(见 colMaxLeafCols)。
     if (level >= rowGroups.length) {
-      // 有列分组时不创建数据行, 分组汇总行已足够
-      if (this.config.colGroups?.length) return []
+      // 只要存在行分组, 最深分组节点自身就是聚合行 —— 从不渲染逐行明细。
+      // (Excel 透视表行为: 每个最末分组一行, 不会把明细行铺出来; 之前给每个
+      //  明细行创建一个 data 节点, 导致一个品牌渲染出几十行重复的"品牌")
+      if (rowGroups.length > 0) return []
+      // 无任何行分组(透视表只有值、列分组): 退化为明细行列表
       return data.map((row, i) =>
         PivotTreeNode.createDataNode(`${parentId}-data-${i}`, level, row)
       )
@@ -440,6 +443,8 @@ export class PivotDataProcessor {
         groupNode.childrenLoaded = false
         groupNode.lazyLoadData = rows
         groupNode.children = []
+        // 后面还有更深分组时才允许展开; 最深分组是叶子
+        groupNode.canHaveChildren = level < rowGroups.length - 1
       } else {
         // 立即构建子树
         groupNode.childrenLoaded = true

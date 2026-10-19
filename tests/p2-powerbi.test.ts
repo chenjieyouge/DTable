@@ -154,10 +154,9 @@ describe('P2: 布局预设 (面板)', () => {
     const el = panel.getContainer()
     document.body.appendChild(el)
 
-    // 开启 pivot
-    const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-    pivotInput.checked = true
-    pivotInput.dispatchEvent(new Event('change', { bubbles: true }))
+    // 切换到「透视表」平铺 tab
+    const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+    pivotTab.click()
 
     // 勾选 省(文本→行) + 金额(数值→值)
     const fieldCbs = Array.from(el.querySelectorAll<HTMLInputElement>('.vt-px-checkbox-item input[type="checkbox"]'))
@@ -182,9 +181,8 @@ describe('P2: 布局预设 (面板)', () => {
     const panel = createColumnPanel(store, columns, data, undefined, (c) => { captured = c })
     const el = panel.getContainer()
     document.body.appendChild(el)
-    const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-    pivotInput.checked = true
-    pivotInput.dispatchEvent(new Event('change', { bubbles: true }))
+    const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+    pivotTab.click()
 
     // 勾选 省(文本→行) + 金额(数值→值)
     const fieldCbs = Array.from(el.querySelectorAll<HTMLInputElement>('.vt-px-checkbox-item input[type="checkbox"]'))

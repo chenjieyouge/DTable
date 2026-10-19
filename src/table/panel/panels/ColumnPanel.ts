@@ -3,6 +3,7 @@ import type { TableStore } from "@/table/state/createTableStore";
 import type { IColumn } from "@/types";
 import type { IPivotConfig, AggregationType, ValueFieldFormat } from "@/types/pivot";
 import { QuickQueryPanel } from "@/table/pivot/QuickQueryPanel";
+import { buildDefaultPivotConfig } from "@/table/pivot/defaultPivotConfig";
 
 // 四个区域的名称
 type ZoneName = 'filters' | 'columns' | 'rows' | 'values'
@@ -47,7 +48,6 @@ export class ColumnPanel implements IPanel {
 
   // 透视配置持久化 (localStorage)
   private static readonly CONFIG_STORAGE_KEY = 'dtable.pivot.config'
-  private pivotInputRef: HTMLInputElement | null = null
 
   /** 数值字段判定: 显式 dataType=number, 或带 sum/avg/count 汇总语义 */
   private isNumericField(col?: IColumn): boolean {
@@ -86,63 +86,29 @@ export class ColumnPanel implements IPanel {
     const container = document.createElement('div')
     container.className = 'vt-column-panel'
 
-    // Pivot Mode 开关
-    const pivotToggleRow = document.createElement('div')
-    pivotToggleRow.className = 'vt-column-panel-pivot-toggle'
+    // 顶部平铺 Tab: 一层直接切换「列管理 / 透视表」, 替代原先埋在面板里的 Pivot 开关
+    // (之前要先开面板、再拨 Pivot 开关才看到透视配置, 是两层; 现在打开面板即可平铺切换)
+    const tabHeader = document.createElement('div')
+    tabHeader.className = 'vt-column-panel-tabs'
+    const tabs = [
+      { id: 'columns', label: '列管理' },
+      { id: 'pivot', label: '透视表' },
+    ]
+    for (const t of tabs) {
+      const btn = document.createElement('div')
+      btn.className = 'vt-column-panel-tab'
+      btn.textContent = t.label
+      btn.dataset.tab = t.id
+      btn.addEventListener('click', () => this.switchTab(t.id))
+      tabHeader.appendChild(btn)
+    }
+    container.appendChild(tabHeader)
 
-    const pivotLable = document.createElement('span')
-    pivotLable.className = 'vt-pivot-mode-title'
-    pivotLable.textContent = 'Pivot'
-    
-    const pivotSwitch = document.createElement('label')
-    pivotSwitch.className = 'vt-pivot-switch'
-
-    const pivotInput = document.createElement('input')
-    pivotInput.className = 'vt-pivot-switch-input'
-    pivotInput.type = 'checkbox'
-
-    const pivotSlider = document.createElement('span')
-    pivotSlider.className = 'vt-pivot-switch-slider'
-
-    pivotSwitch.appendChild(pivotInput)
-    pivotSwitch.appendChild(pivotSlider)
-    this.pivotInputRef = pivotInput
-    pivotToggleRow.appendChild(pivotLable)
-    pivotToggleRow.appendChild(pivotSwitch)
-    container.appendChild(pivotToggleRow)
-
-    // Pivot 配置区, 默认隐藏
+    // Pivot 配置区 (透视表 tab 内容), 默认隐藏
     this.pivotConfgSection = document.createElement('div')
     this.pivotConfgSection.className = 'vt-column-panel-pivot-config'
     this.pivotConfgSection.style.display = 'none'
     container.appendChild(this.pivotConfgSection)
-
-    // 开关事件
-    pivotInput.addEventListener('change', () => {
-      const enabled = pivotInput.checked
-      this.onPivotModeToggle?.(enabled)
-      this.pivotConfgSection!.style.display = enabled ? 'flex': 'none'
-
-      // 透视模式下, 隐藏列管理列表等相关元素
-      if (this.searchBox) {
-        this.searchBox.style.display = enabled ? 'none' : 'block'
-      }
-      if (this.listContainer) {
-        this.listContainer.style.display = enabled ? 'none' : 'block'
-      }
-      if (this.footerEl) {
-        this.footerEl.style.display = enabled ? 'none' : 'flex'
-      }
-
-      // 透视模式下移除 container padding，让四区域撑满高度
-      container.style.padding = enabled ? '0' : ''
-      // 开关行保留 padding
-      pivotToggleRow.style.padding = enabled ? '10px 12px 8px' : ''
-
-      if (enabled) {
-        this.renderPivotConfig()
-      }
-    })
 
 
     // 搜索框 (暂时保留, 后续实现)
@@ -188,7 +154,63 @@ export class ColumnPanel implements IPanel {
 
     // 绑定事件
     this.bindEvents(btnShowAll, btnHideAll, btnReset)
+
+    // 先把 container 赋给 this (构造函数里要等 render 返回才赋值, 这里提前赋值以便 switchTab 使用)
+    this.container = container
+    // 默认进入「列管理」tab
+    this.switchTab('columns')
     return container
+  }
+
+  /** 平铺切换 tab: 一层直接在「列管理 / 透视表」间切换 */
+  private switchTab(tabId: string): void {
+    const isPivot = tabId === 'pivot'
+
+    // 高亮当前 tab
+    this.container.querySelectorAll<HTMLDivElement>('.vt-column-panel-tab').forEach(btn => {
+      btn.classList.toggle('vt-column-panel-tab--active', btn.dataset.tab === tabId)
+    })
+
+    // 列管理内容
+    if (this.searchBox) this.searchBox.style.display = isPivot ? 'none' : 'block'
+    if (this.listContainer) this.listContainer.style.display = isPivot ? 'none' : 'block'
+    if (this.footerEl) this.footerEl.style.display = isPivot ? 'none' : 'flex'
+
+    // 透视表内容
+    if (this.pivotConfgSection) this.pivotConfgSection.style.display = isPivot ? 'flex' : 'none'
+
+    // 通知表格主体切换 普通 / 透视 模式
+    this.onPivotModeToggle?.(isPivot)
+    if (isPivot) {
+      // 首次进入且四区域为空时, 套用与表格一致的默认透视配置 (开箱即用)
+      this.ensureDefaultZones()
+      this.renderPivotConfig()
+    }
+  }
+
+  /** 清空透视配置, 回到空白四区域 (供用户"重置", 也供测试从空白态起步) */
+  public clearPivotFields(): void {
+    this.zones = { filters: [], columns: [], rows: [], values: [] }
+    this.filters = {}
+    this.renderPivotConfig()
+  }
+
+  /** 四区域全空时, 用默认透视配置填充 (与表格主体默认一致), 保证面板与表格同步 */
+  private ensureDefaultZones(): void {
+    const total = Object.values(this.zones).reduce((sum, arr) => sum + arr.length, 0)
+    if (total > 0) return
+    const def = buildDefaultPivotConfig(this.originalColumns)
+    this.zones = {
+      filters: [],
+      columns: (def.colGroups ?? []).map(k => ({ key: k })),
+      rows: (def.rowGroups ?? []).map(k => ({ key: k })),
+      values: (def.valueFields ?? []).map(f => ({
+        key: f.key,
+        label: f.label,
+        aggregation: f.aggregation,
+        format: f.format,
+      })),
+    }
   }
 
   // 绑定事件
@@ -1649,11 +1671,8 @@ export class ColumnPanel implements IPanel {
     this.layoutMode = saved.flatMode ? 'compact' : (saved.showSubtotals === false ? 'outline' : 'standard')
     this.filters = saved.filters ? { ...saved.filters } : {}
 
-    // 恢复 Pivot 开关与配置区显示
-    if (this.pivotInputRef) {
-      this.pivotInputRef.checked = true
-      this.pivotInputRef.dispatchEvent(new Event('change', { bubbles: true }))
-    }
+    // 只恢复字段配置, 不自动进入透视表 —— 刷新后默认仍是普通表(列管理 tab),
+    // 用户点开「透视表」tab 时即可看到上次的配置。这样避免"开关 ON 但表格仍是普通表"的脏状态。
   }
 
   /** 快速透视：智能识别维度和度量 */

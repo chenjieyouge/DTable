@@ -1294,8 +1294,9 @@ export class PivotTable {
           }
         }
 
-        // 分组行绑定 展开 / 折叠（两侧都绑定）; 小计行(rowType=subtotal) 不参与
-        if (flatRow.type === 'group' && flatRow.rowType !== 'subtotal') {
+        // 分组行绑定 展开 / 折叠（两侧都绑定）; 小计行(rowType=subtotal) 与
+        // 最深分组聚合行(hasChildren=false) 不参与展开/折叠
+        if (flatRow.type === 'group' && flatRow.rowType !== 'subtotal' && flatRow.hasChildren) {
           const nodeId = flatRow.nodeId
           frozenCellEl.style.cursor = 'pointer'
           frozenCellEl.addEventListener('click', () => this.toggleNode(nodeId))

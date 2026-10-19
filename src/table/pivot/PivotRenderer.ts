@@ -314,10 +314,14 @@ export class PivotRenderer {
     firstCell.className = 'vt-table-cell vt-pivot-group-cell'
     firstCell.style.paddingLeft = `${indent + 8}px`
 
-    const expandIcon = document.createElement('span')
-    expandIcon.className = 'vt-pivot-expand-icon'
-    expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
-    firstCell.appendChild(expandIcon)
+    if (flatRow.hasChildren) {
+      const expandIcon = document.createElement('span')
+      expandIcon.className = 'vt-pivot-expand-icon'
+      expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
+      firstCell.appendChild(expandIcon)
+    } else {
+      firstCell.style.paddingLeft = `${indent + 16}px`
+    }
 
     const groupLabel = document.createElement('span')
     groupLabel.className = 'vt-pivot-group-label'
@@ -673,10 +677,15 @@ export class PivotRenderer {
         if (colIdx === flatRow.level) {
           cell.classList.add('vt-pivot-group-cell')
           cell.style.paddingLeft = '8px'
-          const expandIcon = document.createElement('span')
-          expandIcon.className = 'vt-pivot-expand-icon'
-          expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
-          cell.appendChild(expandIcon)
+          // 只有真有子节点的分组才显示展开箭头; 最深分组节点(聚合行)是叶子, 无箭头
+          if (flatRow.hasChildren) {
+            const expandIcon = document.createElement('span')
+            expandIcon.className = 'vt-pivot-expand-icon'
+            expandIcon.textContent = flatRow.isExpanded ? '▼' : '▶'
+            cell.appendChild(expandIcon)
+          } else {
+            cell.style.paddingLeft = '16px'
+          }
           const groupLabel = document.createElement('span')
           groupLabel.className = 'vt-pivot-group-label'
           groupLabel.textContent = String(flatRow.data[key] ?? '(空)')

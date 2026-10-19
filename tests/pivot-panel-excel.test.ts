@@ -16,9 +16,11 @@ function openPivotPanel(columns: IColumn[], data: Record<string, any>[], onConfi
   const panel = createColumnPanel(store, columns, data, undefined, onConfig)
   const el = panel.getContainer()
   document.body.appendChild(el)
-  const pivotInput = el.querySelector<HTMLInputElement>('.vt-pivot-switch-input')!
-  pivotInput.checked = true
-  pivotInput.dispatchEvent(new Event('change', { bubbles: true }))
+  // 切换到「透视表」平铺 tab
+  const pivotTab = el.querySelector<HTMLDivElement>('.vt-column-panel-tab[data-tab="pivot"]')!
+  pivotTab.click()
+  // 测试字段池机制, 从空白四区域起步
+  panel.clearPivotFields()
   return { panel, el }
 }
 
