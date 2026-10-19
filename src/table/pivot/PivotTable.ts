@@ -1777,6 +1777,17 @@ export class PivotTable {
     this.refresh()
   }
 
+  /**
+   * 容器尺寸变化后重新布局 (供 VirtualTable 的 ResizeObserver 调用)
+   * 重置可见列缓存, 让列/行按新视口重新计算
+   */
+  public relayout(): void {
+    this.visibleColStartIndex = -1
+    this.visibleColEndIndex = -1
+    this.updateVisibleColumns()
+    this.updateVisibleRows()
+  }
+
   /** 更新数据 (外部调用) */
   public updateData(data: Record<string, any>[]): void {
     this.data = data 

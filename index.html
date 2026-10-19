@@ -143,7 +143,7 @@
       .note.ok { border-left-color: var(--success); background: rgba(0, 180, 42, 0.08); color: var(--text-secondary); }
 
       /* ---- 表格容器 ---- */
-      #table-container { min-height: 560px; }
+      #table-container { min-height: 320px; }
 
       .tip { color: var(--text-muted); font-size: 12px; margin-top: 16px; }
       .tip code {
@@ -152,6 +152,37 @@
         border-radius: 3px;
         padding: 1px 5px;
         font-size: 12px;
+      }
+
+      /* ========== 响应式适配 ========== */
+
+      /* 中等宽度笔记本: 指标间距收紧 */
+      @media (max-width: 1400px) {
+        .stats { gap: 22px; }
+      }
+
+      /* 偏窄屏: 标题缩小、模式卡竖向堆叠、控制条换行 */
+      @media (max-width: 1100px) {
+        body { padding: 12px; }
+        .page-title { font-size: 18px; }
+        .modes { flex-direction: column; gap: 8px; }
+        .mode { padding: 8px 12px; }
+        .stats { gap: 16px 22px; }
+        .stat-value { font-size: 16px; }
+      }
+
+      /* 平板及更窄: 卡片更紧凑, 能力条允许换行不撑高 */
+      @media (max-width: 900px) {
+        .card { padding: 11px 12px; }
+        .bar { gap: 8px; }
+        .bar-label { font-size: 12px; }
+        .tip { line-height: 1.7; }
+      }
+
+      /* 低高度屏: 进一步压缩顶部留白 */
+      @media (max-height: 760px) {
+        .page-sub { margin-bottom: 8px; }
+        .card { margin-bottom: 10px; }
       }
     </style>
   </head>

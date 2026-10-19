@@ -23,6 +23,32 @@ const PAGE_SIZE_DEFAULT = 200
 let currentTable: VirtualTable | null = null
 let currentMode: 'client' | 'server' = 'client'
 
+/**
+ * 表格高度随视口自适应: 占满首屏可用高度, 避免页面整体过长
+ * 上方标题/能力条/模式/控制/指标约占 470px, 留出底部余量; 小屏兜底 320
+ */
+function computeTableHeight(): number {
+  return Math.max(320, Math.min(840, window.innerHeight - 470))
+}
+
+/** 右侧面板宽度随视口自适应: 约占视口 27%, 夹在 300~380 之间 */
+function computePanelWidth(): number {
+  return Math.max(300, Math.min(380, Math.round(window.innerWidth * 0.27)))
+}
+
+/** 视口尺寸变化 (防抖) 后同步当前表格高度/面板宽度 */
+let viewportResizeTimer: number | null = null
+function onViewportResize(): void {
+  if (viewportResizeTimer !== null) clearTimeout(viewportResizeTimer)
+  viewportResizeTimer = window.setTimeout(() => {
+    viewportResizeTimer = null
+    if (!currentTable) return
+    currentTable.setTableHeight(computeTableHeight())
+    currentTable.setSidePanelWidth(computePanelWidth())
+  }, 150)
+}
+window.addEventListener('resize', onViewportResize)
+
 // ============================================================
 // 列定义
 // ============================================================
@@ -328,11 +354,11 @@ const DEMO_COLUMNS: IColumn[] = [
 function buildDemoConfig(): IUserConfig {
   return {
     container: '#table-container',
-    tableHeight: 560,
+    tableHeight: computeTableHeight(),
     initialData: genDemoRows(),
     columns: DEMO_COLUMNS,
     groupBy: ['类别'],
-    sidePanel: { enabled: true, defaultOpen: true, width: 380, defaultPanel: 'columns', panels: [] },
+    sidePanel: { enabled: true, defaultOpen: true, width: computePanelWidth(), defaultPanel: 'columns', panels: [] },
     onCellValueChange: (key, _rowIndex, newValue, oldValue) => {
       note(`单元格已编辑：${key} ${JSON.stringify(oldValue)} → ${JSON.stringify(newValue)}`, 'ok')
     },
@@ -376,14 +402,14 @@ function baseConfig(): Pick<IUserConfig, 'container' | 'columns' | 'sidePanel'> 
   return {
     container: '#table-container',
     columns: RETAIL_COLUMNS,
-    sidePanel: { enabled: true, defaultOpen: true, width: 380, defaultPanel: 'columns', panels: [] },
+    sidePanel: { enabled: true, defaultOpen: true, width: computePanelWidth(), defaultPanel: 'columns', panels: [] },
   }
 }
 
 function buildClientConfig(rows: Record<string, unknown>[]): IUserConfig {
   return {
     ...baseConfig(),
-    tableHeight: 560,
+    tableHeight: computeTableHeight(),
     initialData: rows,
   }
 }
@@ -395,7 +421,7 @@ function buildServerConfig(
 ): IUserConfig {
   return {
     ...baseConfig(),
-    tableHeight: 560,
+    tableHeight: computeTableHeight(),
     pageSize,
     onPageChange,
 

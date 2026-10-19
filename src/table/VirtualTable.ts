@@ -62,6 +62,11 @@ export class VirtualTable {
   private sidePanelManager: SidePanelManager | null = null 
   private scrollStopTimer?: number // 滚动停止检测定时器
 
+  // 容器尺寸自动响应 (响应式适配)
+  private resizeObserver: ResizeObserver | null = null
+  private onWindowResize: (() => void) | null = null
+  private autoResizeRAF = 0
+
   private pivotTable: PivotTable | null = null
   private isPivotMode = false
   // server 模式首批数据是否已到达 (到达前 totalRows=0 代表"未加载"而非"无数据")
@@ -366,6 +371,68 @@ export class VirtualTable {
     // P3 右键菜单列动作 + 表头引用
     this.wireRangeActions()
     this.viewport.setHeaderRow(this.shell.headerRow)
+
+    // 容器尺寸变化时自动重新布局 (响应式适配)
+    this.bindAutoResize()
+  }
+
+  /** 绑定容器尺寸自动响应: ResizeObserver 为主, 窗口 resize 兜底 */
+  private bindAutoResize(): void {
+    // 观察布局容器 (有侧边栏时) 或表格根容器, 拿到尺寸变化
+    const observeTarget =
+      this.layoutManager?.getLayoutContainer?.() ??
+      this.shell?.portalContainer ??
+      undefined
+
+    this.autoResizeRAF = 0
+    const fire = (): void => {
+      if (this.autoResizeRAF) cancelAnimationFrame(this.autoResizeRAF)
+      this.autoResizeRAF = requestAnimationFrame(() => {
+        this.autoResizeRAF = 0
+        this.applyAutoResize()
+      })
+    }
+
+    if (observeTarget && typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => fire())
+      this.resizeObserver.observe(observeTarget)
+    }
+    // 窗口 resize 兜底 (也覆盖无 ResizeObserver 的环境)
+    this.onWindowResize = (): void => fire()
+    window.addEventListener('resize', this.onWindowResize)
+  }
+
+  /** 尺寸变化后: 切布局模式 + 重排当前视图 */
+  private applyAutoResize(): void {
+    const widthEl =
+      this.layoutManager?.getLayoutContainer?.() ??
+      this.shell?.portalContainer
+    const width = widthEl?.clientWidth ?? window.innerWidth
+
+    // 切换 desktop/tablet/mobile 布局模式
+    this.layoutManager?.onResize(width)
+
+    if (this.isPivotMode && this.pivotTable) {
+      this.pivotTable.relayout()
+    } else {
+      this.viewport?.updateVisibleRows()
+    }
+  }
+
+  /** 动态调整表格高度 (响应式: 视口高度变化时调用) */
+  public setTableHeight(height: number): void {
+    if (!Number.isFinite(height) || height <= 0) return
+    this.config.tableHeight = height
+    const layoutEl = this.layoutManager?.getLayoutContainer?.()
+    if (layoutEl) layoutEl.style.height = `${height}px`
+    this.applyAutoResize()
+  }
+
+  /** 动态调整右侧面板宽度 (响应式: 视口宽度变化时调用) */
+  public setSidePanelWidth(width: number): void {
+    if (!Number.isFinite(width) || width <= 0) return
+    if (this.config.sidePanel) this.config.sidePanel.width = width
+    this.layoutManager?.setSideWidth(width)
   }
 
   /** 右键菜单: 排序 / 固定 / 自适应 / 隐藏 / 重置 */
@@ -1039,6 +1106,17 @@ export class VirtualTable {
   public destroy() {
     this.unsubscribleStore?.()
     this.unsubscribleStore = null // 解绑 store 订阅
+    // 清理容器尺寸自动响应
+    this.resizeObserver?.disconnect()
+    this.resizeObserver = null
+    if (this.onWindowResize) {
+      window.removeEventListener('resize', this.onWindowResize)
+      this.onWindowResize = null
+    }
+    if (this.autoResizeRAF) {
+      cancelAnimationFrame(this.autoResizeRAF)
+      this.autoResizeRAF = 0
+    }
     this.shell?.destroy()
     this.viewport?.destroy()
     // 清空布局管理器

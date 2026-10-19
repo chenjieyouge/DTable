@@ -68,6 +68,20 @@ export class LayoutManager {
     this.sideArea.style.width = `${width}px`
   }
 
+  /** 动态更新侧边栏宽度 (响应式: 面板内容容器也同步) */
+  public setSideWidth(width: number): void {
+    if (!this.layoutConfig.sidePanel) return
+    this.layoutConfig.sidePanel.width = width
+    if (!this.sideArea?.classList.contains('vt-collapsed')) {
+      this.applySideWidth()
+    }
+  }
+
+  /** 获取最外层布局容器 (供 ResizeObserver 观察) */
+  public getLayoutContainer(): HTMLDivElement | null {
+    return this.container
+  }
+
   // 获取主表格区域容器
   public getMainArea(): HTMLDivElement | null {
     return this.mainArea
