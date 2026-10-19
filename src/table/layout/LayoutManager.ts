@@ -92,10 +92,16 @@ export class LayoutManager {
     return this.sideArea
   }
 
-  // 切换显示/隐藏, 右侧面板
+  // 切换显示/隐藏, 右侧面板 (由 SidePanelManager 打开/关闭时回调, 同步实体占位宽度)
   public toggleSidePanel(show?: boolean): void {
-    // 面板的显示, 隐藏都由 SidePanelManager 通过 css 类控制
-    // 这里不操作 dom, 保持接口兼容性
+    if (!this.sideArea) return
+    const shouldShow = show ?? this.sideArea.classList.contains('vt-collapsed')
+    if (shouldShow) {
+      this.sideArea.classList.remove('vt-collapsed')
+    } else {
+      this.sideArea.classList.add('vt-collapsed')
+    }
+    this.applySideWidth()
   }
 
   // 响应式调整

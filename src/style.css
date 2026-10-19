@@ -90,6 +90,27 @@
   width: 40px;
 }
 
+/* 收起态: 整条 40px 小图标, 不显示竖排标题, 干净贴右 */
+.vt-instance .vt-layout-side.vt-collapsed .vt-side-tab {
+  padding: 0;
+  height: 100%;
+  justify-content: center;
+  gap: 0;
+  border-bottom: none;
+  color: var(--vt-text-secondary);
+}
+.vt-instance .vt-layout-side.vt-collapsed .vt-side-tab .vt-tab-title {
+  display: none;
+}
+.vt-instance .vt-layout-side.vt-collapsed .vt-side-tab .vt-tab-icon {
+  margin: 0;
+  font-size: 19px;
+}
+.vt-instance .vt-layout-side.vt-collapsed .vt-side-tab:hover {
+  color: var(--vt-primary);
+  background: var(--vt-bg-hover);
+}
+
 .vt-instance .vt-layout-container[data-layout-mode="mobile"] {
   width: 100% !important;
   border-left: none;
@@ -183,7 +204,8 @@
 .vt-instance .vt-table-container {
   position: relative;
   overflow: auto;
-  border: 1px solid var(--vt-border-medium);
+  border: 1px solid var(--vt-border);
+  border-radius: 4px;
   scrollbar-width: thin;
   scrollbar-color: var(--vt-border-medium) var(--vt-bg-subtle);
   height: 100%;
@@ -261,15 +283,18 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: var(--vt-bg-header);
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--vt-border-light);
 }
 
 .vt-instance .vt-header-cell {
   position: relative;
   user-select: none;
-  background-color: var(--vt-bg-header);
-  font-weight: bold;
-  height: var(--header-height, 32px);
+  background-color: #ffffff;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--vt-text-secondary);
+  height: var(--header-height, 36px);
 }
 
 .vt-instance .vt-col-resize-handle {
@@ -355,9 +380,11 @@
 
 .vt-instance .vt-sticky-summary {
   position: sticky;
-  top: var(--header-height, 30px);
-  background-color: var(--vt-bg);
-  font-weight: bold;
+  top: var(--header-height, 40px);
+  background-color: var(--vt-bg-subtle);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--vt-text-primary);
   z-index: 99;
 }
 
@@ -369,11 +396,12 @@
 .vt-instance .vt-table-cell {
   box-sizing: border-box;
   overflow: hidden;
-  border-right: 1px solid var(--vt-border);
-  padding: 10px;
+  border-right: none;
+  padding: 8px 10px;
   display: flex;
   align-items: center;
-  font-size: 16px;
+  font-size: 14px;
+  color: var(--vt-text-primary);
   position: relative;
 }
 
@@ -384,12 +412,12 @@
   left: 0;
   right: 0;
   height: 1px;
-  background-color: var(--vt-border);
+  background-color: var(--vt-border-light);
 }
 
 .vt-instance .vt-cell-frozen {
   position: sticky;
-  background-color: var(--vt-bg-frozen);
+  background-color: #ffffff;
   z-index: 10;
 }
 
@@ -2794,6 +2822,27 @@
   width: 100%;
   border-left: none;
   box-shadow: none;
+}
+/* 顶部栏右侧收起按钮 */
+.vt-layout-side:not(.vt-collapsed) .vt-side-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  cursor: pointer;
+  color: var(--vt-text-secondary);
+  font-size: 12px;
+  border-left: 1px solid var(--vt-border-light);
+  transition: color 0.15s, background 0.15s;
+}
+.vt-layout-side:not(.vt-collapsed) .vt-side-collapse-btn:hover {
+  color: var(--vt-primary);
+  background: var(--vt-bg-hover);
+}
+/* 收起态隐藏该按钮 (由整条小图标接管) */
+.vt-layout-side.vt-collapsed .vt-side-collapse-btn {
+  display: none;
 }
 /* 快速查询: 查询按钮吸底, 列表区域限高内滚 */
 .vt-quick-query-submit {

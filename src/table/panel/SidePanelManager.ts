@@ -92,9 +92,26 @@ export class SidePanelManager {
           tab.style.background = '#f5f5f5'
         }
       }
-      
+
       this.tabsContainer.appendChild(tab)
     })
+
+    // 展开态顶部栏右侧: 弹开占位 + 收起按钮
+    const spacer = document.createElement('div')
+    spacer.style.flex = '1'
+    this.tabsContainer.appendChild(spacer)
+
+    const collapseBtn = document.createElement('div')
+    collapseBtn.className = 'vt-side-collapse-btn'
+    collapseBtn.title = '收起面板'
+    collapseBtn.textContent = '❚❚'
+    collapseBtn.onclick = (e) => {
+      e.stopPropagation()
+      if (this.activePanel) {
+        this.hideCurrentPanel()
+      }
+    }
+    this.tabsContainer.appendChild(collapseBtn)
   }
 
   /** 切换指定面板, 支持传参 */

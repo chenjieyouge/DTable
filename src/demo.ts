@@ -402,7 +402,8 @@ function baseConfig(): Pick<IUserConfig, 'container' | 'columns' | 'sidePanel'> 
   return {
     container: '#table-container',
     columns: RETAIL_COLUMNS,
-    sidePanel: { enabled: true, defaultOpen: true, width: computePanelWidth(), defaultPanel: 'columns', panels: [] },
+    // 普通模式默认收起, 仅保留右侧小图标, 点击弹出 (首屏表格更干净)
+    sidePanel: { enabled: true, defaultOpen: false, width: computePanelWidth(), defaultPanel: 'columns', panels: [] },
   }
 }
 
