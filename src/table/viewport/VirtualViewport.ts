@@ -896,13 +896,20 @@ export class VirtualViewport {
   }
 
   private scrollCellIntoView(row: number, col: number): void {
-    const rowH = this.scroller.getRowHeight(row)
-    const top = this.scroller.getRowOffset(row)
+    const rowH = this.scroller.getRowHeight(row) // 逻辑行高
+    const top = this.scroller.getRowOffset(row)  // 逻辑偏移
     const fixedTop = this.config.headerHeight + (this.config.showSummary ? this.config.summaryHeight : 0)
-    const viewTop = this.scrollContainer.scrollTop - fixedTop
-    const viewBottom = viewTop + this.scrollContainer.clientHeight
-    if (top < viewTop) this.scrollContainer.scrollTop += top - viewTop
-    else if (top + rowH > viewBottom) this.scrollContainer.scrollTop += (top + rowH) - viewBottom
+    // 数据区高度 (真实像素), 行在该区域按真实行高排布
+    const visibleDataH = this.scrollContainer.clientHeight - fixedTop
+    // 可见数据窗口的逻辑顶/底 (浏览器 scrollTop 是压缩过的, 需 ×scale)
+    const scale = this.scroller.getScrollScale()
+    const viewLogicalTop = this.scrollContainer.scrollTop * scale
+    const viewLogicalBottom = viewLogicalTop + visibleDataH
+    if (top < viewLogicalTop) {
+      this.scrollContainer.scrollTop += (top - viewLogicalTop) / scale
+    } else if (top + rowH > viewLogicalBottom) {
+      this.scrollContainer.scrollTop += (top + rowH - viewLogicalBottom) / scale
+    }
   }
 
   // ===== TSV / 复制 =====

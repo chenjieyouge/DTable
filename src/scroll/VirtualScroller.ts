@@ -131,14 +131,17 @@ export class VirtualScroller {
     this.recalc()
   }
 
-  /** 第 rowIndex 行的实际渲染高度 (含缩放) */
+  // 第 rowIndex 行的实际渲染高度 (逻辑行高, 不压缩)。
+  //
+  // 滚动条压缩(scale)只用于让 dataContainer 总高度不超过浏览器上限(决定滚动条),
+  // 可见行本身必须保持真实行高; 否则百万行时每行被压到 1/scale(约 10px), 文字重叠。
   getRowHeight(rowIndex: number): number {
-    return this.metrics.getHeight(rowIndex) / this.scrollScale
+    return this.metrics.getHeight(rowIndex)
   }
 
-  /** 第 rowIndex 行的顶部偏移 (含缩放) */
+  /** 第 rowIndex 行的顶部偏移 (逻辑/真实高度, 不压缩) */
   getRowOffset(rowIndex: number): number {
-    return this.metrics.getOffset(rowIndex) / this.scrollScale
+    return this.metrics.getOffset(rowIndex)
   }
 
   // 获取滚动信息: 开始行, 结束行, 内容高, 元素位移值等
@@ -165,9 +168,11 @@ export class VirtualScroller {
     }
 
     const visibleStart = Math.max(0, startRow - bufferRows)
+    // translateY 是 virtualContent 在"被压缩的 dataContainer"内的位置, 仍要 /scale
     const translateY = this.metrics.getOffset(visibleStart) / this.scrollScale
+    // contentHeight 是可见行(真实行高)的总高度, 不压缩, 否则行内文本重叠
     const contentHeight =
-      (this.metrics.getOffset(visibleEnd + 1) - this.metrics.getOffset(visibleStart)) / this.scrollScale
+      this.metrics.getOffset(visibleEnd + 1) - this.metrics.getOffset(visibleStart)
 
     return {
       startRow: visibleStart,

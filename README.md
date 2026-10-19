@@ -5,14 +5,14 @@
 DTable 是一个纯 TypeScript + DOM 实现的轻量级虚拟滚动表格库，专为"大数据量 + 极致流畅"而生。
 没有框架绑定、没有运行时依赖、没有构建包袱 —— 一个 `<script>` 或一行 import，百万行数据即刻起飞。
 
-**ag-grid 商业版的核心能力，这里免费内置**：全局快速筛选、**高级筛选（跨字段 AND/OR 条件）**、
+**ag-grid 商业版的核心能力，这里免费内置**：全局快速筛选、**高级筛选（嵌套分组构建器，跨字段 AND/OR 无限分组）**、
 明暗主题、行/单元格范围选择、自定义右键菜单、Excel 级透视表（钻取 / 条件格式 / 列总计 / 布局预设），
 全部 MIT 免费商用。
 
 [![npm](https://img.shields.io/npm/v/@youge/dtable)](https://www.npmjs.com/package/@youge/dtable)
 [![license](https://img.shields.io/npm/l/@youge/dtable)](./LICENSE)
 ![bundle](https://img.shields.io/badge/gzip-%3C%2050KB-00b42a)
-![tests](https://img.shields.io/badge/tests-156%20passed-165dff)
+![tests](https://img.shields.io/badge/tests-162%20passed-165dff)
 
 ---
 
@@ -37,11 +37,11 @@ DTable 是一个纯 TypeScript + DOM 实现的轻量级虚拟滚动表格库，�
 
 | 能力 | 说明 |
 |---|---|
-| 🚀 **双轴虚拟化** | 纵向行虚拟化 + **横向列虚拟化**（仅渲染可见列 ± 缓冲），横向/纵向滚动都只动必要 DOM |
+| 🚀 **双轴虚拟化** | 纵向行虚拟化 + **横向列虚拟化**（仅渲染可见列 ± 缓冲），横向/纵向滚动都只动必要 DOM。百万行总高度超过浏览器上限时，自动压缩滚动条但**可见行始终保持真实行高**（对标 ag-grid 归一化滚动），绝不压扁文字 |
 | 🔁 **行池化复用** | 滚动时行 DOM 节点回收复用，滚动 100 万行也不会无限累积节点 |
 | 🔍 **全局快速筛选** | 顶部 Quick Filter，空格拆词、**每词都要命中（AND）**，不区分大小写，对标 ag-grid Quick Filter |
 | 📋 **列筛选菜单** | ag-grid 化：搜索框 + 全选/清空快捷行 + 可滚动勾选列表 + 确定/取消 |
-| 🧮 **高级筛选** | 对标 ag-grid 企业版 Advanced Filter：工具条平铺条件条，每行 `字段 + 操作符 + 值`，全局 AND/OR 分段，输入即筛（300ms 防抖），与列筛选共存叠加；模型为树形 join，为嵌套分组预留 |
+| 🧮 **高级筛选** | 对标 ag-grid 企业版 **Advanced Filter Builder**：分组下可继续嵌套分组，每组独立 AND/OR，条件 `字段 + 操作符 + 值`（文本/数值/日期全套操作符），输入即筛（300ms 防抖、Enter 立即应用）；与列筛选共存叠加。**Client 全在内存求值；Server 模式整棵树随分页请求发后端，递归翻译成参数化 SQL WHERE** |
 | 🎨 **明暗主题** | 浅色 / 暗色一键切换，CSS 变量驱动，刷新自动恢复（`localStorage`） |
 | 🖱️ **行选择** | 点击行单选整行、**Shift 区间批量选中**；复选框整行勾选，状态带锚点 |
 | 🧩 **单元格范围选择** | 按下拖拽 / Shift 点击框选矩形区域，矩形边缘描边、活动单元格高亮，**Ctrl+C 一键复制 TSV** |
@@ -150,30 +150,32 @@ pnpm dev        # 打开 http://localhost:5173
 
 打开首页**自动加载 20 万行真实零售数据**，右侧列管理面板默认展开，无需任何操作即可体验：
 
-- **普通表格**：全局快速筛选、**高级筛选（跨字段 AND/OR）**、列筛选菜单、明暗主题、点击行 / Shift 区间选择、**框选复制**、右键菜单、双击编辑、列管理/冻结列、双轴虚拟化滚动。
+- **普通表格**：全局快速筛选、**高级筛选（嵌套分组构建器，分组 AND/OR 无限嵌套）**、列筛选菜单、明暗主题、点击行 / Shift 区间选择、**框选复制**、右键菜单、双击编辑、列管理/冻结列、双轴虚拟化滚动。
 - **透视表**：打开 Pivot 开关 → 双击钻取、色阶/数据条条件格式、列总计、标准/大纲/紧凑布局、四区拖拽、导出 Excel。
 
 点绿色 **"功能演示"** 按钮可一键切换到分组/编辑/合并/多列排序的完整演示数据集。
 
 - **百万行实测**：下拉选"全部 104 万"或切换 **Server 模式**（连本地 MySQL）。
-- **Server 后端**：`server/` 目录（Go + Gin），本地 MySQL 建库导入 `server/db.sql` 后 `go run .` 即启，默认 `:8080`，`/api/table/page` 分页接口。
+- **Server 后端**：`server/` 目录（Go + Gin），本地 MySQL 建库导入 `server/db.sql` 后 `go run .` 即启，默认 `:8080`，`/api/table/page` 分页接口；排序、列筛选、**高级筛选（递归翻译为参数化 SQL）** 均由后端完成。
 - **性能基准**：`http://localhost:5173/bench.html?rows=500000&cols=8`，末尾自动跑 ag-grid A/B。
 
 ---
 
 ## QA 与测试
 
-自动化测试基于 vitest + happy-dom，共 **136 个用例**全绿，覆盖：
+自动化测试基于 vitest + happy-dom，共 **162 个用例**全绿，覆盖：
 
 - 虚拟化、行池复用、可变行高、渲染器生命周期、多列排序、行分组、内联编辑、单元格合并、列配置变化；
-- 50 万行 Client / 100 万行 Server 大数据场景；
+- 50 万行 Client / 100 万行 Server 大数据场景（**含百万行可见行高不被压缩的回归断言**）；
+- **高级筛选**：扁平条件、嵌套分组、26 个条件求值/构建器用例；
 - **P1**：全局快速筛选（拆词 AND）、明暗主题、行选择增强、ag-grid 化筛选菜单；
 - **P2**：透视表钻取、条件格式（色阶/数据条）、列总计、布局预设；
 - **P3**：普通表格单元格范围选择、右键菜单、TSV 复制；
 - **透视表专项**：值列命名、字段面板勾选/值字段设置、右键菜单、展开状态记忆、键盘导航、状态持久化、导出。
 
 ```bash
-pnpm test                                  # 全部 136 个测试
+pnpm test                                  # 全部 162 个测试
+pnpm vitest run tests/advanced-filter.test.ts   # 高级筛选/嵌套分组构建器
 pnpm vitest run tests/p2-powerbi.test.ts    # 透视钻取/条件格式/列总计
 pnpm vitest run tests/p3-range-context.test.ts # 范围选择/右键菜单
 pnpm build                                 # tsc + vite 构建

@@ -311,6 +311,8 @@ describe('QA: 大数据灵活渲染', () => {
     const initialRows = getDataRows(host)
     expect(initialRows.length).toBeGreaterThan(0)
     expect(initialRows.length).toBeLessThan(40)
+    // 回归: 百万行总高度超浏览器上限时, 可见行仍保持真实行高(不能被 1/scale 压缩)
+    expect(parseFloat(initialRows[0].style.height)).toBe(28)
     const fetchAfterInit = fetchCount
 
     scroller.scrollTop = 28 * 500_000
@@ -321,6 +323,8 @@ describe('QA: 大数据灵活渲染', () => {
     expect(midRows.length).toBeLessThanOrEqual(45)
     const midIndex = parseInt(midRows[0].dataset.rowIndex!, 10)
     expect(midIndex).toBeGreaterThan(450_000)
+    // 深滚动后, 行依旧是真实行高而非压缩行高
+    expect(parseFloat(midRows[0].style.height)).toBe(28)
     expect(fetchCount).toBeLessThan(fetchAfterInit + 10)
   })
 })

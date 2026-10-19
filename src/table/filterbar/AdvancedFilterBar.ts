@@ -1,16 +1,20 @@
 /**
- * 高级筛选条件条 (对标 ag-grid Advanced Filter Builder 的平铺版)
+ * 高级筛选构建器 (对标 ag-grid 企业版 Advanced Filter Builder)
  *
  * - 平铺在工具条与表格之间, 可展开/收起
- * - 每行: 字段 + 操作符 + 值(区间为两个) + 移除
- * - 全局 AND/OR 分段
- * - 值输入 300ms 防抖后实时生效; 字段/操作符变化即时生效
- * - 零依赖, 纯 DOM
+ * - 树形结构: 根分组下可放叶子条件, 也可嵌套分组
+ * - 每个分组独立 AND/OR 分段, 支持 "+ 条件" / "+ 分组"
+ * - 叶子: 字段 + 操作符 + 值(区间为两个) + 移除
+ * - 值输入 300ms 防抖后实时生效; 字段/操作符/分组变化即时生效
+ * - 数据模型直接产出树形 join; 零依赖, 纯 DOM
  */
 import type {
   IColumn,
   AdvancedFilterModel,
   IJoinAdvancedFilter,
+  ITextAdvancedFilter,
+  INumberAdvancedFilter,
+  IDateAdvancedFilter,
   AdvancedFilterJoin,
 } from '@/types'
 import {
@@ -20,13 +24,21 @@ import {
 } from '@/table/interaction/advancedFilter'
 import type { AdvancedKind } from '@/table/interaction/advancedFilter'
 
-interface RowState {
+// ---- UI 树 ----
+interface GroupNode {
+  nodeType: 'group'
+  join: AdvancedFilterJoin
+  children: FilterNode[]
+}
+interface LeafNode {
+  nodeType: 'leaf'
   colId: string
   kind: AdvancedKind
   op: string
   value: string
   valueTo: string
 }
+type FilterNode = GroupNode | LeafNode
 
 export interface AdvancedFilterBarCallbacks {
   /** 应用条件模型 */
@@ -37,21 +49,22 @@ export class AdvancedFilterBar {
   public el: HTMLDivElement
   private columns: IColumn[]
   private callbacks: AdvancedFilterBarCallbacks
-  private joinType: AdvancedFilterJoin = 'AND'
-  private rows: RowState[] = []
-  private rowsContainer: HTMLDivElement
+  private root: GroupNode
+  private treeContainer: HTMLDivElement
   private debounceTimer: number | null = null
 
   constructor(columns: IColumn[], callbacks: AdvancedFilterBarCallbacks) {
     this.columns = columns
     this.callbacks = callbacks
+    this.root = { nodeType: 'group', join: 'AND', children: [] }
     this.el = document.createElement('div')
     this.el.className = 'vt-advanced-filter-bar'
     this.el.style.display = 'none'
-    this.rowsContainer = document.createElement('div')
-    this.rowsContainer.className = 'vt-af-rows'
-    this.el.appendChild(this.buildHeader())
-    this.el.appendChild(this.rowsContainer)
+    this.treeContainer = document.createElement('div')
+    this.treeContainer.className = 'vt-af-tree'
+    this.el.appendChild(this.buildChromeHeader())
+    this.el.appendChild(this.treeContainer)
+    this.renderTree()
   }
 
   /** 可筛选的列 (有 filter 配置) */
@@ -59,7 +72,8 @@ export class AdvancedFilterBar {
     return this.columns.filter(c => c.filter)
   }
 
-  private buildHeader(): HTMLDivElement {
+  /** 顶部固定行: 标题 + 清空 */
+  private buildChromeHeader(): HTMLDivElement {
     const header = document.createElement('div')
     header.className = 'vt-af-header'
 
@@ -68,26 +82,10 @@ export class AdvancedFilterBar {
     title.textContent = '高级筛选'
     header.appendChild(title)
 
-    // AND / OR 分段
-    const seg = document.createElement('div')
-    seg.className = 'vt-af-segment'
-    seg.appendChild(this.segBtn('AND', '满足全部'))
-    seg.appendChild(this.segBtn('OR', '满足任一'))
-    header.appendChild(seg)
-
     const spacer = document.createElement('div')
     spacer.style.flex = '1'
     header.appendChild(spacer)
 
-    // 添加条件
-    const addBtn = document.createElement('button')
-    addBtn.type = 'button'
-    addBtn.className = 'vt-af-add'
-    addBtn.textContent = '+ 添加条件'
-    addBtn.addEventListener('click', () => this.addCondition())
-    header.appendChild(addBtn)
-
-    // 清空
     const clearBtn = document.createElement('button')
     clearBtn.type = 'button'
     clearBtn.className = 'vt-af-clear'
@@ -98,61 +96,138 @@ export class AdvancedFilterBar {
     return header
   }
 
-  private segBtn(value: AdvancedFilterJoin, label: string): HTMLButtonElement {
+  // =====================================================
+  // 树节点工厂
+  // =====================================================
+
+  private makeLeaf(colId?: string): LeafNode | null {
+    const cols = this.filterableColumns()
+    if (cols.length === 0) return null
+    const id = colId ?? cols[0].key
+    const col = this.columns.find(c => c.key === id)!
+    const kind = inferColumnKind(col)
+    return {
+      nodeType: 'leaf',
+      colId: id,
+      kind,
+      op: getOperators(kind)[0].value,
+      value: '',
+      valueTo: '',
+    }
+  }
+
+  private makeGroup(): GroupNode {
+    return { nodeType: 'group', join: 'AND', children: [] }
+  }
+
+  // =====================================================
+  // 渲染
+  // =====================================================
+
+  /** 从模型重建整棵树 */
+  private renderTree(): void {
+    this.treeContainer.replaceChildren()
+    this.treeContainer.appendChild(this.renderGroup(this.root, true))
+  }
+
+  private renderGroup(node: GroupNode, isRoot: boolean): HTMLDivElement {
+    const box = document.createElement('div')
+    box.className = 'vt-af-group' + (isRoot ? ' vt-af-group--root' : ' vt-af-group--nested')
+
+    // 组头: AND/OR 分段 (+ 非根分组可移除)
+    const groupHeader = document.createElement('div')
+    groupHeader.className = 'vt-af-group-header'
+
+    const seg = document.createElement('div')
+    seg.className = 'vt-af-segment'
+    seg.appendChild(this.groupSegBtn(node, 'AND', '满足全部'))
+    seg.appendChild(this.groupSegBtn(node, 'OR', '满足任一'))
+    groupHeader.appendChild(seg)
+
+    if (!isRoot) {
+      const rm = document.createElement('button')
+      rm.type = 'button'
+      rm.className = 'vt-af-group-remove'
+      rm.title = '移除分组'
+      rm.textContent = '×'
+      rm.addEventListener('click', () => {
+        this.removeNode(node)
+        this.emitNow()
+      })
+      groupHeader.appendChild(rm)
+    }
+    box.appendChild(groupHeader)
+
+    // 子节点
+    const childrenWrap = document.createElement('div')
+    childrenWrap.className = 'vt-af-group-children'
+    if (node.children.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'vt-af-group-empty'
+      empty.textContent = '暂无条件, 添加一个条件或分组'
+      childrenWrap.appendChild(empty)
+    }
+    node.children.forEach(child => {
+      if (child.nodeType === 'leaf') {
+        childrenWrap.appendChild(this.renderLeaf(child))
+      } else {
+        childrenWrap.appendChild(this.renderGroup(child, false))
+      }
+    })
+    box.appendChild(childrenWrap)
+
+    // 组尾: 添加条件 / 添加分组
+    const footer = document.createElement('div')
+    footer.className = 'vt-af-group-footer'
+    const addCond = document.createElement('button')
+    addCond.type = 'button'
+    addCond.className = 'vt-af-add'
+    addCond.textContent = '+ 条件'
+    addCond.addEventListener('click', () => {
+      const leaf = this.makeLeaf()
+      if (leaf) {
+        node.children.push(leaf)
+        this.renderTree()
+        this.emitNow()
+      }
+    })
+    footer.appendChild(addCond)
+
+    const addGroup = document.createElement('button')
+    addGroup.type = 'button'
+    addGroup.className = 'vt-af-add-group'
+    addGroup.textContent = '+ 分组'
+    addGroup.addEventListener('click', () => {
+      const g = this.makeGroup()
+      // 新分组默认带一条空条件, 避免又是空组
+      const leaf = this.makeLeaf()
+      if (leaf) g.children.push(leaf)
+      node.children.push(g)
+      this.renderTree()
+      this.emitNow()
+    })
+    footer.appendChild(addGroup)
+    box.appendChild(footer)
+
+    return box
+  }
+
+  private groupSegBtn(node: GroupNode, value: AdvancedFilterJoin, label: string): HTMLButtonElement {
     const btn = document.createElement('button')
     btn.type = 'button'
-    btn.className = 'vt-af-seg-btn' + (this.joinType === value ? ' active' : '')
+    btn.className = 'vt-af-seg-btn' + (node.join === value ? ' active' : '')
     btn.textContent = label
     btn.dataset.value = value
     btn.addEventListener('click', () => {
-      if (this.joinType === value) return
-      this.joinType = value
-      // 更新分段高亮
-      const seg = btn.parentElement
-      if (seg) {
-        seg.querySelectorAll('.vt-af-seg-btn').forEach(b => {
-          b.classList.toggle('active', (b as HTMLElement).dataset.value === value)
-        })
-      }
+      if (node.join === value) return
+      node.join = value
+      this.renderTree()
       this.emitNow()
     })
     return btn
   }
 
-  /** 添加一条条件 (默认第一列) */
-  public addCondition(presetColId?: string): void {
-    const cols = this.filterableColumns()
-    if (cols.length === 0) return
-    const colId = presetColId ?? cols[0].key
-    const col = this.columns.find(c => c.key === colId)!
-    const kind = inferColumnKind(col)
-    const op = getOperators(kind)[0].value
-    this.rows.push({ colId, kind, op, value: '', valueTo: '' })
-    this.renderRows()
-    this.emitNow()
-  }
-
-  private removeRow(index: number): void {
-    this.rows.splice(index, 1)
-    this.renderRows()
-    this.emitNow()
-  }
-
-  private clear(): void {
-    this.rows = []
-    this.renderRows()
-    this.emitNow()
-  }
-
-  /** 重新渲染所有条件行 */
-  private renderRows(): void {
-    this.rowsContainer.replaceChildren()
-    this.rows.forEach((rs, i) => {
-      this.rowsContainer.appendChild(this.renderRow(rs, i))
-    })
-  }
-
-  private renderRow(rs: RowState, index: number): HTMLDivElement {
+  private renderLeaf(node: LeafNode): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'vt-af-row'
 
@@ -163,17 +238,17 @@ export class AdvancedFilterBar {
       const opt = document.createElement('option')
       opt.value = c.key
       opt.textContent = c.title ?? c.key
-      if (c.key === rs.colId) opt.selected = true
+      if (c.key === node.colId) opt.selected = true
       field.appendChild(opt)
     })
     field.addEventListener('change', () => {
       const col = this.columns.find(c => c.key === field.value)!
-      rs.colId = col.key
-      rs.kind = inferColumnKind(col)
-      rs.op = getOperators(rs.kind)[0].value
-      rs.value = ''
-      rs.valueTo = ''
-      this.renderRows()
+      node.colId = col.key
+      node.kind = inferColumnKind(col)
+      node.op = getOperators(node.kind)[0].value
+      node.value = ''
+      node.valueTo = ''
+      this.renderTree()
       this.emitNow()
     })
     row.appendChild(field)
@@ -181,19 +256,17 @@ export class AdvancedFilterBar {
     // 操作符
     const opSel = document.createElement('select')
     opSel.className = 'vt-af-operator'
-    getOperators(rs.kind).forEach(o => {
+    getOperators(node.kind).forEach(o => {
       const opt = document.createElement('option')
       opt.value = o.value
       opt.textContent = o.label
-      if (o.value === rs.op) opt.selected = true
+      if (o.value === node.op) opt.selected = true
       opSel.appendChild(opt)
     })
     opSel.addEventListener('change', () => {
-      rs.op = opSel.value
-      const wasRange = isRangeOperator(rs.kind, rs.op)
-      // 切换区间时清理无关值
-      if (!wasRange) rs.valueTo = ''
-      this.renderRows()
+      node.op = opSel.value
+      if (!isRangeOperator(node.kind, node.op)) node.valueTo = ''
+      this.renderTree()
       this.emitNow()
     })
     row.appendChild(opSel)
@@ -201,14 +274,14 @@ export class AdvancedFilterBar {
     // 值
     const valuesWrap = document.createElement('div')
     valuesWrap.className = 'vt-af-values'
-    const inputType = rs.kind === 'number' ? 'number' : rs.kind === 'date' ? 'date' : 'text'
-    valuesWrap.appendChild(this.valueInput(rs, inputType, false))
-    if (isRangeOperator(rs.kind, rs.op)) {
+    const inputType = node.kind === 'number' ? 'number' : node.kind === 'date' ? 'date' : 'text'
+    valuesWrap.appendChild(this.valueInput(node, inputType, false))
+    if (isRangeOperator(node.kind, node.op)) {
       const sep = document.createElement('span')
       sep.className = 'vt-af-to-sep'
       sep.textContent = '至'
       valuesWrap.appendChild(sep)
-      valuesWrap.appendChild(this.valueInput(rs, inputType, true))
+      valuesWrap.appendChild(this.valueInput(node, inputType, true))
     }
     row.appendChild(valuesWrap)
 
@@ -218,57 +291,138 @@ export class AdvancedFilterBar {
     remove.className = 'vt-af-remove'
     remove.textContent = '×'
     remove.title = '移除条件'
-    remove.addEventListener('click', () => this.removeRow(index))
+    remove.addEventListener('click', () => {
+      this.removeNode(node)
+      this.emitNow()
+    })
     row.appendChild(remove)
 
     return row
   }
 
-  private valueInput(rs: RowState, type: string, isTo: boolean): HTMLInputElement {
+  private valueInput(node: LeafNode, type: string, isTo: boolean): HTMLInputElement {
     const input = document.createElement('input')
     input.type = type
     input.className = 'vt-af-value'
-    input.value = isTo ? rs.valueTo : rs.value
+    input.value = isTo ? node.valueTo : node.value
     input.placeholder = isTo ? '结束值' : '值'
     input.addEventListener('input', () => {
-      if (isTo) rs.valueTo = input.value
-      else rs.value = input.value
+      if (isTo) node.valueTo = input.value
+      else node.value = input.value
       this.scheduleEmit()
     })
-    // Enter 立即应用
     input.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter') this.emitNow()
     })
     return input
   }
 
-  /** 构造条件模型 */
-  public buildModel(): IJoinAdvancedFilter {
-    const conditions: AdvancedFilterModel[] = []
-    for (const rs of this.rows) {
-      if (!rs.colId) continue
-      if (rs.kind === 'text') {
-        conditions.push({
-          filterType: 'text', colId: rs.colId, type: rs.op as any,
-          filter: rs.value || undefined,
-        })
-      } else if (rs.kind === 'number') {
-        const f = rs.value === '' ? undefined : Number(rs.value)
-        const t = rs.valueTo === '' ? undefined : Number(rs.valueTo)
-        conditions.push({
-          filterType: 'number', colId: rs.colId, type: rs.op as any,
-          filter: f, filterTo: t,
-        })
-      } {
-        if (rs.kind === 'date') {
-          conditions.push({
-            filterType: 'date', colId: rs.colId, type: rs.op as any,
-            filter: rs.value || undefined, filterTo: rs.valueTo || undefined,
-          })
-        }
+  // =====================================================
+  // 树操作
+  // =====================================================
+
+  /** 在树中查找并删除指定节点 */
+  private removeNode(target: FilterNode): void {
+    const walk = (parent: GroupNode): boolean => {
+      const idx = parent.children.indexOf(target)
+      if (idx >= 0) {
+        parent.children.splice(idx, 1)
+        return true
+      }
+      return parent.children.some(c => c.nodeType === 'group' && walk(c))
+    }
+    walk(this.root)
+    this.renderTree()
+  }
+
+  /** 递归统计叶子条件数 */
+  private countLeaves(node: FilterNode = this.root): number {
+    if (node.nodeType === 'leaf') return 1
+    return node.children.reduce((sum, c) => sum + this.countLeaves(c), 0)
+  }
+
+  // =====================================================
+  // 模型互转
+  // =====================================================
+
+  private nodeToModel(node: FilterNode): AdvancedFilterModel {
+    if (node.nodeType === 'group') {
+      return {
+        filterType: 'join',
+        type: node.join,
+        conditions: node.children.map(c => this.nodeToModel(c)),
       }
     }
-    return { filterType: 'join', type: this.joinType, conditions }
+    const l = node
+    if (l.kind === 'text') {
+      const m: ITextAdvancedFilter = {
+        filterType: 'text', colId: l.colId, type: l.op as any,
+        filter: l.value || undefined,
+      }
+      return m
+    }
+    if (l.kind === 'number') {
+      const m: INumberAdvancedFilter = {
+        filterType: 'number', colId: l.colId, type: l.op as any,
+        filter: l.value === '' ? undefined : Number(l.value),
+        filterTo: l.valueTo === '' ? undefined : Number(l.valueTo),
+      }
+      return m
+    }
+    const m: IDateAdvancedFilter = {
+      filterType: 'date', colId: l.colId, type: l.op as any,
+      filter: l.value || undefined,
+      filterTo: l.valueTo || undefined,
+    }
+    return m
+  }
+
+  /** 构造条件模型 */
+  public buildModel(): IJoinAdvancedFilter {
+    const m = this.nodeToModel(this.root) as IJoinAdvancedFilter
+    return m
+  }
+
+  /** 模型转 UI 树节点 */
+  private modelToNode(model: AdvancedFilterModel): FilterNode {
+    if (model.filterType === 'join') {
+      return {
+        nodeType: 'group',
+        join: model.type,
+        children: model.conditions.map(c => this.modelToNode(c)),
+      }
+    }
+    const leaf = model as any
+    const col = this.columns.find(x => x.key === leaf.colId)
+    const kind: AdvancedKind = col ? inferColumnKind(col) : (leaf.filterType as AdvancedKind)
+    return {
+      nodeType: 'leaf',
+      colId: leaf.colId,
+      kind,
+      op: leaf.type,
+      value: leaf.filter !== undefined && leaf.filter !== null ? String(leaf.filter) : '',
+      valueTo: leaf.filterTo !== undefined && leaf.filterTo !== null ? String(leaf.filterTo) : '',
+    }
+  }
+
+  // =====================================================
+  // 对外 API
+  // =====================================================
+
+  /** 添加一条条件到根分组 (首次展开用) */
+  public addCondition(presetColId?: string): void {
+    const leaf = this.makeLeaf(presetColId)
+    if (leaf) {
+      this.root.children.push(leaf)
+      this.renderTree()
+      this.emitNow()
+    }
+  }
+
+  private clear(): void {
+    this.root = { nodeType: 'group', join: this.root.join, children: [] }
+    this.renderTree()
+    this.emitNow()
   }
 
   private scheduleEmit(): void {
@@ -286,30 +440,12 @@ export class AdvancedFilterBar {
 
   /** 外部设置模型 (恢复/重置) */
   public setModel(model?: AdvancedFilterModel | null): void {
-    const join: IJoinAdvancedFilter =
+    const joinModel: IJoinAdvancedFilter =
       model && model.filterType === 'join'
         ? model
         : { filterType: 'join', type: 'AND', conditions: model ? [model] : [] }
-    this.joinType = join.type
-    this.rows = join.conditions
-      .filter(c => c.filterType !== 'join')
-      .map(c => {
-        const leaf = c as any
-        const col = this.columns.find(x => x.key === leaf.colId)
-        const kind = col ? inferColumnKind(col) : (leaf.filterType as AdvancedKind)
-        return {
-          colId: leaf.colId,
-          kind,
-          op: leaf.type,
-          value: leaf.filter !== undefined && leaf.filter !== null ? String(leaf.filter) : '',
-          valueTo: leaf.filterTo !== undefined && leaf.filterTo !== null ? String(leaf.filterTo) : '',
-        }
-      })
-    this.renderRows()
-    // 刷新分段高亮
-    this.el.querySelectorAll('.vt-af-seg-btn').forEach(b => {
-      b.classList.toggle('active', (b as HTMLElement).dataset.value === this.joinType)
-    })
+    this.root = this.modelToNode(joinModel) as GroupNode
+    this.renderTree()
   }
 
   public getModel(): IJoinAdvancedFilter {
@@ -318,7 +454,7 @@ export class AdvancedFilterBar {
 
   public setColumns(columns: IColumn[]): void {
     this.columns = columns
-    this.renderRows()
+    this.renderTree()
   }
 
   /** 展开/收起 */
@@ -332,9 +468,9 @@ export class AdvancedFilterBar {
     return this.el.style.display !== 'none'
   }
 
-  /** 当前条件条数 */
+  /** 当前条件(叶子)条数 */
   public getConditionCount(): number {
-    return this.rows.length
+    return this.countLeaves()
   }
 
   public destroy(): void {

@@ -408,6 +408,7 @@ function buildServerConfig(
           pageSize,
           sort: query?.sortKey && query?.sortDirection ? `${query.sortKey}:${query.sortDirection}` : '',
           filters: buildServerFilters(query),
+          advancedFilter: query?.advancedFilter ?? null,
         }),
       })
 

@@ -3576,3 +3576,63 @@
 .vt-theme-dark .vt-af-seg-btn + .vt-af-seg-btn { border-left-color: #3a3e49; }
 .vt-theme-dark .vt-af-title { color: #e6e8ec; }
 .vt-theme-dark .vt-af-add { color: var(--vt-primary-hover); border-color: var(--vt-primary-hover); }
+
+/* ===== 方案B: 嵌套分组构建器 ===== */
+.vt-af-tree { display: flex; flex-direction: column; }
+.vt-af-group { display: flex; flex-direction: column; gap: 8px; }
+.vt-af-group--nested {
+  padding: 10px;
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-border-light);
+  border-left: 3px solid var(--vt-primary);
+  border-radius: 8px;
+}
+.vt-af-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.vt-af-group-children { display: flex; flex-direction: column; gap: 8px; }
+.vt-af-group--nested .vt-af-group-children,
+.vt-af-group--nested .vt-af-group-footer { padding-left: 14px; }
+.vt-af-group-empty { font-size: 12px; color: var(--vt-text-muted); padding: 2px 0; }
+.vt-af-group-footer { display: flex; align-items: center; gap: 8px; }
+
+.vt-af-add-group {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px dashed var(--vt-border-medium);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vt-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.vt-af-add-group:hover {
+  color: var(--vt-primary);
+  border-color: var(--vt-primary);
+  background: var(--vt-primary-bg);
+}
+.vt-af-group-remove {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 1px solid var(--vt-border-medium);
+  border-radius: 6px;
+  background: var(--vt-bg);
+  color: var(--vt-text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.vt-af-group-remove:hover { color: var(--vt-danger, #f53f3f); border-color: var(--vt-danger, #f53f3f); }
+
+/* ===== 暗色主题: 嵌套分组 ===== */
+.vt-theme-dark .vt-af-group--nested { background: #2b2e37; border-color: #3a3e49; border-left-color: var(--vt-primary); }
+.vt-theme-dark .vt-af-add-group { color: #c3cad6; border-color: #3a3e49; }
+.vt-theme-dark .vt-af-add-group:hover { color: var(--vt-primary-hover); border-color: var(--vt-primary-hover); background: transparent; }
+.vt-theme-dark .vt-af-group-remove { background: #2b2e37; color: #c3cad6; border-color: #3a3e49; }
+.vt-theme-dark .vt-af-group-empty { color: #8a93a5; }

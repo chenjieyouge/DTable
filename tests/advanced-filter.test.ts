@@ -258,6 +258,119 @@ describe('高级筛选: 条件条 UI', () => {
 })
 
 // =====================================================
+// 4b. 方案 B: 嵌套分组构建器
+// =====================================================
+describe('高级筛选: 嵌套分组 (方案B)', () => {
+  function createBar() {
+    const onApply = vi.fn()
+    const bar = new AdvancedFilterBar(columns, { onApply })
+    document.body.appendChild(bar.el)
+    bar.toggle(true)
+    return { bar, onApply }
+  }
+
+  it('添加分组后模型出现嵌套 join, 且默认带一条空条件', () => {
+    const { bar } = createBar()
+    // 根分组有 "+ 分组" 按钮, 点击新增嵌套分组
+    bar.el.querySelector<HTMLButtonElement>('.vt-af-add-group')!.click()
+    const model = bar.getModel()
+    expect(model.conditions.length).toBe(1)
+    const nested = model.conditions[0]
+    expect(nested.filterType).toBe('join')
+    // 嵌套分组默认带一条空条件
+    expect((nested as IJoinAdvancedFilter).conditions.length).toBe(1)
+    // DOM 中存在嵌套分组容器
+    expect(bar.el.querySelectorAll('.vt-af-group--nested').length).toBe(1)
+  })
+
+  it('嵌套分组独立切换 AND/OR, 不影响根分组', () => {
+    const { bar } = createBar()
+    bar.el.querySelector<HTMLButtonElement>('.vt-af-add-group')!.click()
+    let model = bar.getModel()
+    const nested = model.conditions[0] as IJoinAdvancedFilter
+    expect(nested.type).toBe('AND')
+    expect(model.type).toBe('AND')
+    // 找到嵌套分组的 OR 分段按钮 (嵌套组内的第二个 seg-btn)
+    const nestedBox = bar.el.querySelector<HTMLDivElement>('.vt-af-group--nested')!
+    const nestedBtns = nestedBox.querySelectorAll<HTMLButtonElement>('.vt-af-seg-btn')
+    nestedBtns[1].click() // OR
+    model = bar.getModel()
+    expect((model.conditions[0] as IJoinAdvancedFilter).type).toBe('OR')
+    // 根分组仍为 AND
+    expect(model.type).toBe('AND')
+  })
+
+  it('移除嵌套分组', () => {
+    const { bar } = createBar()
+    bar.el.querySelector<HTMLButtonElement>('.vt-af-add-group')!.click()
+    expect(bar.getModel().conditions.length).toBe(1)
+    const nestedBox = bar.el.querySelector<HTMLDivElement>('.vt-af-group--nested')!
+    nestedBox.querySelector<HTMLButtonElement>('.vt-af-group-remove')!.click()
+    expect(bar.getModel().conditions.length).toBe(0)
+    expect(bar.el.querySelectorAll('.vt-af-group--nested').length).toBe(0)
+  })
+
+  it('getConditionCount 递归统计全部叶子', () => {
+    const { bar } = createBar()
+    // 根叶子 1 条
+    bar.addCondition()
+    expect(bar.getConditionCount()).toBe(1)
+    // 嵌套分组默认带 1 条叶子
+    bar.el.querySelector<HTMLButtonElement>('.vt-af-add-group')!.click()
+    expect(bar.getConditionCount()).toBe(2)
+  })
+
+  it('setModel 恢复嵌套分组结构', () => {
+    const { bar } = createBar()
+    const model: IJoinAdvancedFilter = {
+      filterType: 'join',
+      type: 'AND',
+      conditions: [
+        {
+          filterType: 'join',
+          type: 'OR',
+          conditions: [
+            { filterType: 'text', colId: 'region', type: 'contains', filter: '华东' },
+            { filterType: 'number', colId: 'amount', type: 'greaterThan', filter: 400 },
+          ],
+        },
+      ],
+    }
+    bar.setModel(model)
+    expect(bar.el.querySelectorAll('.vt-af-group--nested').length).toBe(1)
+    const restored = bar.getModel()
+    expect(restored.type).toBe('AND')
+    const nested = restored.conditions[0] as IJoinAdvancedFilter
+    expect(nested.type).toBe('OR')
+    expect(nested.conditions.length).toBe(2)
+  })
+
+  it('混合: 根 AND 下 (region=华东 AND (金额>200 OR 日期>=2024-03-01))', () => {
+    const model: IJoinAdvancedFilter = {
+      filterType: 'join',
+      type: 'AND',
+      conditions: [
+        { filterType: 'text', colId: 'region', type: 'equals', filter: '华东' },
+        {
+          filterType: 'join',
+          type: 'OR',
+          conditions: [
+            { filterType: 'number', colId: 'amount', type: 'greaterThan', filter: 200 },
+            { filterType: 'date', colId: 'date', type: 'greaterThanOrEqual', filter: '2024-03-01' },
+          ],
+        },
+      ],
+    }
+    // 华东 + 张三(100,1-05) -> 金额不>200 且日期早于3-01 -> 不满足
+    expect(matchAdvancedFilter(rows[0], model)).toBe(false)
+    // 华东 + 赵六(500,4-01) -> 金额>200 -> 满足
+    expect(matchAdvancedFilter(rows[3], model)).toBe(true)
+    // 华南 李四 -> region 不是华东 -> 不满足
+    expect(matchAdvancedFilter(rows[1], model)).toBe(false)
+  })
+})
+
+// =====================================================
 // 5. 端到端: 打开条件条 → 输入条件 → 数据筛选
 // =====================================================
 describe('高级筛选: 端到端', () => {
